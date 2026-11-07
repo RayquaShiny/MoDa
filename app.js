@@ -295,10 +295,18 @@ if("serviceWorker" in navigator&&location.protocol==="https:"){
   document.addEventListener("visibilitychange",()=>{if(!document.hidden)check()});
   setInterval(check,10*60*1000);setTimeout(check,4000);
   $("updbtn").onclick=async()=>{
-    $("updbtn").disabled=true;$("updbtn").textContent="Mise à jour…";
-    try{(await navigator.serviceWorker.getRegistrations()).forEach(r=>r.unregister());await Promise.all((await caches.keys()).map(k=>caches.delete(k)))}catch{}
+    const b=$("updbtn");b.disabled=true;b.textContent="Mise à jour…";
+    const purge=(async()=>{
+      try{await Promise.all((await navigator.serviceWorker.getRegistrations()).map(r=>r.unregister()))}catch{}
+      try{await Promise.all((await caches.keys()).map(k=>caches.delete(k)))}catch{}
+      // GitHub Pages garde les fichiers 10 min dans le cache HTTP : on force leur re-téléchargement
+      await Promise.all(["app.js","index.html"].map(f=>fetch(f,{cache:"reload"}).catch(()=>{})));
+    })();
+    await Promise.race([purge,new Promise(r=>setTimeout(r,4000))]); // jamais bloqué sur « Mise à jour… »
     location.replace(location.pathname+"?u="+Date.now());
   };
+  // Après une mise à jour, on retire le ?u=… de l'adresse
+  if(/[?&]u=\d+/.test(location.search))history.replaceState(null,"",location.pathname+location.hash);
 }
 (function(){
   const btn=$("inst"),help=$("iosHelp");

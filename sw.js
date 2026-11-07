@@ -105,6 +105,7 @@ self.addEventListener('fetch', (event) => {
 
   if (url.origin === self.location.origin) {
     if (url.pathname.endsWith('/sw.js')) return;
+    if (url.pathname.indexOf('/__/') === 0) return; // pages d'authentification Firebase
     staleWhileRevalidate(event, SHELL, isWatched(url));
     return;
   }

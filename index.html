@@ -51,6 +51,7 @@ canvas{touch-action:none;-webkit-user-select:none;user-select:none;width:100%;ma
 #upd button{white-space:nowrap;flex-shrink:0}
 #upd[hidden],#iosHelp[hidden],#adm[hidden],#inst[hidden]{display:none}
 #toast:empty{display:none}
+#pass2[hidden]{display:none}
 </style></head><body>
 <header><div class="logo">Mo<b>Da</b></div><div id="who"></div>
 <button id="inst" hidden>📲 Installer</button>
@@ -62,6 +63,7 @@ canvas{touch-action:none;-webkit-user-select:none;user-select:none;width:100%;ma
   <input id="pseudo" placeholder="Pseudo (inscription seulement, 3-16 lettres/chiffres)" autocomplete="nickname">
   <input id="email" type="text" placeholder="Email (owners : ton pseudo)" autocomplete="username">
   <input id="pass" type="password" placeholder="Mot de passe (6 caractères min.)" autocomplete="current-password">
+  <input id="pass2" type="password" placeholder="Confirme ton code (première connexion)" autocomplete="new-password" hidden>
   <div class="row"><button id="login">Se connecter</button><button class="alt" id="signup">Créer un compte</button><button class="alt" id="google">Continuer avec Google</button></div>
  </section>
  <section id="home" hidden>

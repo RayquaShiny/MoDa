@@ -1,9 +1,9 @@
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-import {getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signInWithPopup,GoogleAuthProvider,signOut} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import {getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signInWithPopup,signInWithRedirect,getRedirectResult,GoogleAuthProvider,signOut} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import {getDatabase,ref,get,set,update,remove,onValue,onDisconnect,serverTimestamp,increment} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
 
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
-const cfg={apiKey:"A_REMPLACER",authDomain:"TON_PROJET.firebaseapp.com",databaseURL:"https://TON_PROJET-default-rtdb.europe-west1.firebasedatabase.app",projectId:"TON_PROJET",appId:"A_REMPLACER"};
+const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
 const $=i=>document.getElementById(i);
 const h=(t,txt,fn)=>{const e=document.createElement(t);if(txt!=null)e.textContent=txt;if(fn)e.onclick=fn;return e};
@@ -19,33 +19,88 @@ let tt;const toast=m=>{$("toast").textContent=m;clearTimeout(tt);tt=setTimeout((
 const clean=s=>(s||"joueur").replace(/[^A-Za-z0-9_]/g,"").slice(0,16).padEnd(3,"x");
 
 // ---------- Comptes ----------
-const err=e=>toast({"auth/invalid-credential":"Email ou mot de passe incorrect","auth/email-already-in-use":"Email déjà utilisé","auth/weak-password":"Mot de passe trop court"}[e.code]||e.message);
-$("login").onclick=()=>{
-  const id=$("email").value.trim(),low=id.toLowerCase().replace(/@moda\.owner$/,"");
-  if(OW.includes(low))return ownerLogin(low);
-  signInWithEmailAndPassword(auth,id,$("pass").value).catch(err);
+const MSG={
+  "auth/invalid-credential":"Email ou mot de passe incorrect","auth/wrong-password":"Email ou mot de passe incorrect","auth/user-not-found":"Email ou mot de passe incorrect",
+  "auth/invalid-email":"Adresse email invalide","auth/missing-email":"Entre ton email","auth/missing-password":"Entre ton mot de passe",
+  "auth/email-already-in-use":"Email déjà utilisé : connecte-toi plutôt","auth/weak-password":"Mot de passe trop court (6 caractères min.)",
+  "auth/too-many-requests":"Trop d'essais, réessaie dans quelques minutes","auth/network-request-failed":"Pas de connexion internet",
+  "auth/user-disabled":"Ce compte est désactivé","auth/operation-not-allowed":"Ce mode de connexion n'est pas activé dans Firebase (Authentication > Sign-in method)",
+  "auth/unauthorized-domain":"Domaine non autorisé : ajoute-le dans Firebase > Authentication > Paramètres > Domaines autorisés",
+  "auth/invalid-api-key":"Clé Firebase invalide : vérifie la config en haut de app.js","auth/api-key-not-valid":"Clé Firebase invalide : vérifie la config en haut de app.js",
+  "auth/popup-closed-by-user":"","auth/cancelled-popup-request":"",
+  "PERMISSION_DENIED":"Accès refusé par les règles Firebase"
 };
-async function ownerLogin(n){
-  const pw=$("pass").value;if(pw.length<6)return toast("Code : 6 caractères minimum");
-  const mail=ownerMail(n),claimed=(await get(R(`ownerSetup/${n}`))).val();
-  if(claimed)return signInWithEmailAndPassword(auth,mail,pw).catch(err);
-  const c=prompt(`Première connexion de ${n} : confirme ton code`);
-  if(c!==pw)return toast("Les deux codes sont différents");
-  createUserWithEmailAndPassword(auth,mail,pw).catch(e=>e.code==="auth/email-already-in-use"?signInWithEmailAndPassword(auth,mail,pw).catch(err):err(e));
+const err=e=>{console.error(e);const m=MSG[e&&e.code];if(m==="")return;toast(m||("Erreur : "+((e&&e.message)||e)))};
+if(cfg.apiKey==="A_REMPLACER")setTimeout(()=>toast("Config Firebase manquante dans app.js"),500);
+
+// Anti double-clic : les boutons sont bloqués pendant toute la connexion (appel Firebase + création du profil)
+let busy=false;
+const setBusy=v=>{busy=v;["login","signup","google"].forEach(i=>$(i).disabled=v)};
+const guard=fn=>async()=>{
+  if(busy)return;setBusy(true);
+  try{await fn()}catch(e){err(e)}
+  finally{if(!auth.currentUser)setBusy(false)} // si connecté, c'est onAuthStateChanged qui débloque une fois le profil prêt
+};
+const resetAuthForm=()=>{$("pass").value="";$("pass2").value="";$("pass2").hidden=true};
+
+$("login").onclick=guard(async()=>{
+  const id=$("email").value.trim(),pw=$("pass").value,low=id.toLowerCase().replace(/@moda\.owner$/,"");
+  if(!id)return toast("Entre ton email");
+  if(!pw)return toast("Entre ton mot de passe");
+  if(OW.includes(low))return ownerLogin(low,pw);
+  await signInWithEmailAndPassword(auth,id,pw);
+});
+async function ownerLogin(n,pw){
+  if(pw.length<6)return toast("Code : 6 caractères minimum");
+  const mail=ownerMail(n);
+  // On tente d'abord la connexion (marche aussi si la lecture de ownerSetup est refusée avant connexion)
+  try{return await signInWithEmailAndPassword(auth,mail,pw)}
+  catch(e){if(e.code!=="auth/invalid-credential"&&e.code!=="auth/user-not-found")throw e}
+  let claimed=null;
+  try{claimed=(await get(R(`ownerSetup/${n}`))).val()}catch{}
+  if(claimed)return toast("Email ou mot de passe incorrect");
+  // Première connexion de l'owner : confirmation du code dans la page (plus de prompt(), bloqué sur certains mobiles)
+  if($("pass2").hidden){$("pass2").hidden=false;$("pass2").focus();return toast(`Première connexion de ${n} : confirme ton code puis reclique`)}
+  if($("pass2").value!==pw)return toast("Les deux codes sont différents");
+  try{await createUserWithEmailAndPassword(auth,mail,pw)}
+  catch(e){throw e.code==="auth/email-already-in-use"?{code:"auth/invalid-credential"}:e}
 }
-$("signup").onclick=()=>{const n=$("pseudo").value.trim();if(!/^[A-Za-z0-9_]{3,16}$/.test(n))return toast("Pseudo : 3 à 16 lettres, chiffres ou _");if(OW.includes(n.toLowerCase()))return toast("Ce pseudo est réservé");pending=n;createUserWithEmailAndPassword(auth,$("email").value,$("pass").value).catch(e=>{pending=null;err(e)})};
-$("google").onclick=()=>signInWithPopup(auth,new GoogleAuthProvider()).catch(err);
-$("out").onclick=()=>{leaveLobby();signOut(auth)};
+$("signup").onclick=guard(async()=>{
+  const n=$("pseudo").value.trim(),mail=$("email").value.trim(),pw=$("pass").value;
+  if(!/^[A-Za-z0-9_]{3,16}$/.test(n))return toast("Pseudo : 3 à 16 lettres, chiffres ou _");
+  if(OW.includes(n.toLowerCase()))return toast("Ce pseudo est réservé");
+  if(!mail)return toast("Entre ton email");
+  if(/@moda\.owner$/i.test(mail))return toast("Cette adresse est réservée");
+  if(pw.length<6)return toast("Mot de passe : 6 caractères minimum");
+  pending=n;
+  try{await createUserWithEmailAndPassword(auth,mail,pw)}catch(e){pending=null;throw e}
+});
+$("google").onclick=guard(async()=>{
+  const p=new GoogleAuthProvider();
+  try{await signInWithPopup(auth,p)}
+  catch(e){ // popup bloquée / appli installée sur iPhone : on passe par une redirection
+    if(e.code==="auth/popup-blocked"||e.code==="auth/operation-not-supported-in-this-environment"){await signInWithRedirect(auth,p);return}
+    throw e;
+  }
+});
+getRedirectResult(auth).catch(err);
+$("out").onclick=async()=>{await leaveLobby();try{if(me)await set(R(`presence/${me.uid}`),false)}catch{}signOut(auth)};
 
 async function ensureProfile(u){
-  const s=await get(R(`users/${u.uid}/name`));if(s.exists())return s.val();
-  const own=ownerOf(u);
-  const base=own||clean(pending||u.displayName||u.email.split("@")[0]);pending=null;
-  for(let i=0;i<5;i++){
-    let n=i?base.slice(0,12)+Math.floor(Math.random()*1000):base;
-    if(!own&&OW.includes(n.toLowerCase()))n=base.slice(0,12)+Math.floor(Math.random()*1000);
-    if(!(await get(R(`usernames/${n.toLowerCase()}`))).exists()){
-      try{await set(R(`usernames/${n.toLowerCase()}`),u.uid);await set(R(`users/${u.uid}`),{name:n,createdAt:serverTimestamp()});return n}catch{}
+  const s=await get(R(`users/${u.uid}/name`));if(s.exists()){pending=null;return s.val()}
+  const own=ownerOf(u),want=pending;
+  const base=own||clean(want||u.displayName||(u.email||"").split("@")[0]);pending=null;
+  for(let i=0;i<6;i++){
+    const n=i?base.slice(0,12)+Math.floor(Math.random()*1000):base,k=n.toLowerCase();
+    if(!own&&OW.includes(k))continue;
+    const holder=(await get(R(`usernames/${k}`))).val();
+    if(holder===null||holder===u.uid){ // libre, ou déjà à nous (profil interrompu lors d'un essai précédent)
+      try{
+        if(holder===null)await set(R(`usernames/${k}`),u.uid);
+        await set(R(`users/${u.uid}`),{name:n,createdAt:serverTimestamp()});
+        if(want&&n!==want)toast(`Le pseudo « ${want} » était pris : tu es ${n}`);
+        return n;
+      }catch{}
     }
     if(own)break;
   }
@@ -55,17 +110,28 @@ async function ensureOwner(u,n){
   if(!(await get(R(`owners/${u.uid}`))).exists())await set(R(`owners/${u.uid}`),true);
   if(!(await get(R(`ownerSetup/${n}`))).exists())await set(R(`ownerSetup/${n}`),true);
 }
+let seq=0;
 onAuthStateChanged(auth,async u=>{
+  const my=++seq;
   presUn.forEach(f=>f());presUn=[];
-  if(!u){me=null;stopStats();$("adm").hidden=true;$("who").textContent="";$("out").hidden=true;return show("auth")}
-  const name=await ensureProfile(u),own=ownerOf(u);
-  if(own)await ensureOwner(u,own).catch(()=>{});
-  const isOwner=(await get(R(`owners/${u.uid}`))).exists();
-  me={uid:u.uid,name,owner:isOwner};
-  $("adm").hidden=!isOwner;$("sw").setAttribute("aria-checked",String(adm&&isOwner));
-  $("who").textContent=name+(isOwner?" ★":"");$("out").hidden=false;showHome();
-  onValue(R(".info/connected"),s=>{if(s.val()){onDisconnect(R(`presence/${me.uid}`)).set(false);set(R(`presence/${me.uid}`),true)}});
-  watchSocial();
+  if(!u){me=null;stopStats();$("adm").hidden=true;$("who").textContent="";$("out").hidden=true;setBusy(false);return show("auth")}
+  setBusy(true);
+  try{
+    const name=await ensureProfile(u),own=ownerOf(u);
+    if(my!==seq)return;
+    if(own)await ensureOwner(u,own).catch(()=>{});
+    const isOwner=(await get(R(`owners/${u.uid}`))).exists();
+    if(my!==seq)return;
+    me={uid:u.uid,name,owner:isOwner};
+    $("adm").hidden=!isOwner;$("sw").setAttribute("aria-checked",String(adm&&isOwner));
+    $("who").textContent=name+(isOwner?" ★":"");$("out").hidden=false;resetAuthForm();showHome();
+    presUn.push(onValue(R(".info/connected"),s=>{if(s.val()){onDisconnect(R(`presence/${u.uid}`)).set(false);set(R(`presence/${u.uid}`),true)}}));
+    watchSocial();
+  }catch(e){
+    if(my!==seq)return;
+    err(e);                       // on affiche la vraie raison...
+    signOut(auth).catch(()=>{});  // ...et on déconnecte pour que l'utilisateur ne reste pas bloqué sur l'écran de connexion
+  }finally{if(my===seq)setBusy(false)}
 });
 
 // ---------- Amis & invitations ----------
@@ -76,16 +142,16 @@ $("fadd").onclick=async()=>{
   await set(R(`friendRequests/${t}/${me.uid}`),{name:me.name});$("fname").value="";toast("Demande envoyée");
 };
 function watchSocial(){
-  onValue(R(`friendRequests/${me.uid}`),s=>{const b=$("reqs");b.replaceChildren();
+  presUn.push(onValue(R(`friendRequests/${me.uid}`),s=>{const b=$("reqs");b.replaceChildren();
     Object.entries(s.val()||{}).forEach(([f,d])=>{const r=h("div",d.name+" veut être ami ");
       r.append(h("button","Accepter",async()=>{await set(R(`friends/${me.uid}/${f}`),true);await set(R(`friends/${f}/${me.uid}`),true);await remove(R(`friendRequests/${me.uid}/${f}`))}),
                h("button","Refuser",()=>remove(R(`friendRequests/${me.uid}/${f}`))));
-      r.querySelectorAll("button").forEach(x=>x.className="mini");b.append(r)})});
-  onValue(R(`invites/${me.uid}`),s=>{const b=$("invs");b.replaceChildren();
+      r.querySelectorAll("button").forEach(x=>x.className="mini");b.append(r)})}));
+  presUn.push(onValue(R(`invites/${me.uid}`),s=>{const b=$("invs");b.replaceChildren();
     Object.entries(s.val()||{}).forEach(([f,d])=>{const r=h("div",d.name+" t'invite ");
-      const j=h("button","Rejoindre",async()=>{await remove(R(`invites/${me.uid}/${f}`));joinLobby(d.code)});j.className="mini";r.append(j);b.append(r)})});
-  let un=[];
-  onValue(R(`friends/${me.uid}`),async s=>{
+      const j=h("button","Rejoindre",async()=>{await remove(R(`invites/${me.uid}/${f}`));joinLobby(d.code)});j.className="mini";r.append(j);b.append(r)})}));
+  let un=[];presUn.push(()=>un.forEach(f=>f()));
+  presUn.push(onValue(R(`friends/${me.uid}`),async s=>{
     un.forEach(f=>f());un=[];const box=$("friends");box.replaceChildren();
     for(const f of Object.keys(s.val()||{})){
       const n=(await get(R(`users/${f}/name`))).val()||"?";
@@ -93,7 +159,7 @@ function watchSocial(){
       const inv=h("button","Inviter",async()=>{if(!code)return toast("Crée d'abord un lobby");await set(R(`invites/${f}/${me.uid}`),{code,name:me.name});toast("Invitation envoyée")});inv.className="mini";
       row.append(dot,n+" ",inv);box.append(row);
       un.push(onValue(R(`presence/${f}`),p=>dot.classList.toggle("on",!!p.val())));
-    }});
+    }}));
 }
 
 // ---------- Lobby ----------
@@ -221,7 +287,7 @@ if("serviceWorker" in navigator&&location.protocol==="https:"){
   navigator.serviceWorker.addEventListener("message",e=>{
     if(!e.data||e.data.type!=="sw-update"||notified)return;
     notified=true;
-    const typing=/^(INPUT|TEXTAREA)$/.test(document.activeElement&&document.activeElement.tagName);
+    const typing=/^(INPUT|TEXTAREA)$/.test(document.activeElement&&document.activeElement.tagName)||busy||["pseudo","email","pass","pass2"].some(i=>$(i).value);
     if(!typing&&(cur==="home"||cur==="stats"||cur==="auth")){location.reload();return}
     $("upd").hidden=false;
   });

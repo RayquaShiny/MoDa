@@ -3,7 +3,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#14102b">
-<meta name="moda-v" content="5">
+<meta name="moda-v" content="6">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -38,6 +38,7 @@ input{font:inherit;padding:9px 12px;border-radius:10px;border:2px solid #3a3068;
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}.row input{flex:1;min-width:120px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;margin-top:14px}
 .tile{aspect-ratio:1;border-radius:var(--r);display:flex;align-items:flex-end;padding:12px;font:800 20px 'Bricolage Grotesque';background:#2c2358;color:var(--mute)}
+.tile.surv{background:linear-gradient(135deg,#c0392b,#ff9f1c);color:#2b0a00;cursor:pointer}
 .tile.snake{background:linear-gradient(135deg,#0b8f78,var(--b));color:#06231d;cursor:pointer}
 .code{font:800 44px 'Bricolage Grotesque';letter-spacing:6px;color:var(--a)}
 .pl{display:flex;align-items:center;gap:10px;padding:6px 0}.sw{width:18px;height:18px;border-radius:5px}
@@ -85,7 +86,7 @@ section:not([hidden]){animation:fade .28s ease backwards}
  <section id="home" hidden>
   <div class="panel"><h2>Jouer avec tes potes</h2>
    <div class="row"><button id="create">Créer un lobby Snake</button><input id="joincode" placeholder="Code du lobby" maxlength="5" style="max-width:160px;text-transform:uppercase"><button class="alt" id="join">Rejoindre</button></div></div>
-  <div class="grid"><div class="tile snake" id="tsnake">Snake</div><div class="tile">Bientôt</div><div class="tile">Bientôt</div><div class="tile">Bientôt</div></div>
+  <div class="grid"><div class="tile snake" id="tsnake">Snake</div><div class="tile surv" id="tsurv">Survie coop</div><div class="tile">Bientôt</div><div class="tile">Bientôt</div></div>
  </section>
  <section id="stats" hidden>
   <div class="panel"><h2>Statistiques</h2><div class="stgrid" id="stgrid"></div></div>

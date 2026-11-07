@@ -7,7 +7,7 @@
 :root{--bg:#14102b;--card:#211a44;--ink:#f3f0ff;--mute:#9d94c9;--a:#ffd23f;--b:#3ee6c4;--r:14px}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 'DM Sans',sans-serif}
 h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0}
-header{display:flex;align-items:center;gap:16px;padding:14px 24px;background:#0e0a22}
+header{flex-wrap:wrap;display:flex;align-items:center;gap:16px;padding:14px 24px;background:#0e0a22}
 .logo{font-size:30px;font-weight:800;letter-spacing:-1px}.logo b{color:var(--a)}
 #who{margin-left:auto;color:var(--mute)}
 #adm{display:flex;align-items:center;gap:8px;color:var(--mute);font-size:14px}
@@ -33,7 +33,11 @@ input{font:inherit;padding:9px 12px;border-radius:10px;border:2px solid #3a3068;
 .pl{display:flex;align-items:center;gap:10px;padding:6px 0}.sw{width:18px;height:18px;border-radius:5px}
 .dot{color:#4b4380;margin-right:4px}.dot.on{color:var(--b)}
 #friends>div,#reqs>div{padding:4px 0}
-canvas{width:100%;max-width:800px;border-radius:var(--r);display:block;background:#0e0a22}
+canvas{touch-action:none;-webkit-user-select:none;user-select:none;width:100%;max-width:800px;border-radius:var(--r);display:block;background:#0e0a22}
+#pad{display:none;grid-template-columns:repeat(3,72px);grid-template-rows:repeat(2,72px);gap:8px;justify-content:center;margin:14px auto;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+#pad button{font-size:28px;padding:0;background:#3a3068;color:var(--ink)}
+@media(pointer:coarse){#pad{display:grid}button.mini{padding:8px 12px}}
+@media(max-width:500px){header{padding:10px 14px}main{padding:14px 12px}.code{font-size:36px}}
 #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--a);color:#241a00;padding:10px 18px;border-radius:10px;font-weight:600}
 #toast:empty{display:none}
 </style></head><body>
@@ -66,6 +70,7 @@ canvas{width:100%;max-width:800px;border-radius:var(--r);display:block;backgroun
  <section id="game" hidden>
   <div style="position:relative;max-width:800px"><canvas id="cv" width="800" height="560"></canvas>
   <div id="ov" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:800 56px 'Bricolage Grotesque';text-shadow:0 2px 12px #000;text-align:center"></div></div>
+  <div id="pad"><span></span><button data-d="U" aria-label="Haut">▲</button><span></span><button data-d="L" aria-label="Gauche">◀</button><button data-d="D" aria-label="Bas">▼</button><button data-d="R" aria-label="Droite">▶</button></div>
   <div id="score" class="row"></div><p style="color:var(--mute)">Flèches ou ZQSD / WASD. Sur mobile : glisse le doigt.</p>
  </section>
 </div>

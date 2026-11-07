@@ -5,7 +5,7 @@ import {getDatabase,ref,get,set,update,remove,onValue,onDisconnect,serverTimesta
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="8";
+const VER="9";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -429,7 +429,7 @@ function solidAt(m,x,y,rad){
   return false;
 }
 
-let mapC=null,lootC=[],mpos=null,brFire=0,ptrDown=0,spDown=0,brK="",brA="",brT=0,meScr={x:400,y:280};
+let lastAim=0,mapC=null,lootC=[],mpos=null,brFire=0,ptrDown=0,spDown=0,brK="",brA="",brT=0,meScr={x:400,y:280};
 function gameSetup(){
   mapC=null;lootC=[];ptrDown=spDown=brFire=0;brK=brA="";brT=0;mpos=null;
   $("cv").style.cursor=gk==="br"?"crosshair":"";
@@ -457,8 +457,10 @@ function onBr(n){
 function brSend(){
   if(cur!=="game"||gk!=="br"||!code||!me)return;
   const dx=(held.has("R")?1:0)-(held.has("L")?1:0),dy=(held.has("D")?1:0)-(held.has("U")?1:0),
-    a=(mpos?Math.atan2(mpos.y-meScr.y,mpos.x-meScr.x):0).toFixed(2),k=`${dx},${dy},${brFire}`,t=performance.now();
-  if(k===brK&&(a===brA||t-brT<100))return;
+    k=`${dx},${dy},${brFire}`,t=performance.now();
+  if(!mpos&&(dx||dy))lastAim=Math.atan2(dy,dx);
+  const a=(mpos?Math.atan2(mpos.y-meScr.y,mpos.x-meScr.x):lastAim).toFixed(2);
+  if(k===brK&&(a===brA||t-brT<50))return;
   brK=k;brA=a;brT=t;set(R(`games/${code}/inputs/${me.uid}`),`${dx},${dy},${a},${brFire},${++seqN}`).catch(()=>{});
 }
 function drawBr(now){
@@ -486,7 +488,8 @@ function drawBr(now){
   st.b.forEach(b=>{const bx=b[0]+b[2]*p,by=b[1]+b[3]*p;x.beginPath();x.moveTo(bx-b[2]*.5,by-b[3]*.5);x.lineTo(bx,by);x.stroke()});x.shadowBlur=0;
   x.textBaseline="alphabetic";
   Object.keys(Q).forEach(u=>{const q=Q[u];if(!q[4])return;
-    const[px,py]=pos(u),a=u===mu&&mpos?Math.atan2(mpos.y-meScr.y,mpos.x-meScr.x):q[7],w=WP[q[8]]||WP[0];
+    const[px,py]=pos(u),a=u===mu?(mpos?Math.atan2(mpos.y-meScr.y,mpos.x-meScr.x):lastAim):q[7],w=WP[q[8]]||WP[0];
+    if(u===mu&&mq[4]){x.save();x.setLineDash([4,8]);x.strokeStyle="#ffffff55";x.lineWidth=1.5;x.beginPath();x.moveTo(px+Math.cos(a)*20,py+Math.sin(a)*20);x.lineTo(px+Math.cos(a)*280,py+Math.sin(a)*280);x.stroke();x.restore()}
     x.save();x.globalAlpha=q[10]?.55+.25*Math.sin(now/70):1;
     x.fillStyle="#0006";x.beginPath();x.ellipse(px,py+11,13,5,0,0,7);x.fill();
     x.translate(px,py);x.save();x.rotate(a);x.fillStyle=w[8];x.fillRect(6,-3,q[8]===4?26:16,6);x.restore();

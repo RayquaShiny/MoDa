@@ -5,7 +5,7 @@ import {getDatabase,ref,get,set,update,remove,onValue,onDisconnect,serverTimesta
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="6";
+const VER="7";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -248,7 +248,7 @@ const muteUI=()=>$("mute").textContent=mute?"🔇":"🔊";muteUI();
 $("mute").onclick=()=>{mute=!mute;try{localStorage.setItem("moda.mute",mute?"1":"0")}catch{}muteUI()};
 const burst=(a,b,c,n)=>{for(let i=0;i<n;i++){const r=Math.random()*6.28,v=2+Math.random()*5;parts.push({x:a+.5,y:b+.5,vx:Math.cos(r)*v,vy:Math.sin(r)*v,l:1,c})}};
 function enterGame(c){
-  show("game");lastDir=null;st=pv=null;parts=[];gk=lobby&&lobby.game==="surv"?"surv":"snake";held.clear();lastMv="";$("ov").style.fontSize=gk==="surv"?"34px":"56px";
+  show("game");lastDir=null;st=pv=null;parts=[];gk=lobby&&lobby.game==="surv"?"surv":"snake";held.clear();lastMv="";$("ov").style.fontSize=gk==="surv"?"34px":"56px";mine=-1;vk="";vbox.style.display="none";
   unState=onValue(R(`games/${c}/state`),s=>{if(s.val())onState(JSON.parse(s.val()))});
   if(!raf)raf=requestAnimationFrame(frame);
 }
@@ -265,28 +265,64 @@ function onState(n){
   $("score").replaceChildren(...Object.values(n.s).sort((a,b)=>b.p-a.p).map(s=>{const d=h("div",`${s.n} : ${s.p}${s.sh>0?" 🛡":""}${s.a?"":" ✖"}`);d.style.color=s.c;d.style.fontWeight=600;return d}));
   $("ov").textContent=n.cd?n.cd:n.o?(n.w?`${n.w} gagne !`:"Fin de partie"):"";
 }
+let mine=-1,vk="",shk=0;const aim={};
+const vbox=document.createElement("div");vbox.style.cssText="position:absolute;left:0;right:0;bottom:14px;display:none;gap:8px;justify-content:center;flex-wrap:wrap;padding:0 8px";
+if($("ov").parentElement)$("ov").parentElement.append(vbox);
+const vote=i=>{if(cur!=="game"||gk!=="surv"||vbox.style.display!=="flex")return;mine=i;set(R(`games/${code}/inputs/${me.uid}`),`v,${i},${++seqN}`)};
+addEventListener("keydown",e=>{if(/^[123]$/.test(e.key))vote(+e.key-1)});
+const sb=(x,y,c,n,v=160)=>{for(let i=0;i<n;i++){const r=Math.random()*6.28,q=v*(.3+Math.random()*.7);parts.push({x,y,vx:Math.cos(r)*q,vy:Math.sin(r)*q,l:1,c})}};
+const MC=["#e63946","#ff9f1c","#9d4edd"];
+function showVote(n){
+  const on=n.br&&n.vt&&n.vt.length;vbox.style.display=on?"flex":"none";if(!on){vk="";return}
+  const key=n.wv+"|"+n.vt.join("|");
+  if(key!==vk){vk=key;mine=-1;vbox.replaceChildren(...n.vt.map((t,i)=>h("button",t,()=>vote(i))))}
+  [...vbox.children].forEach((bt,i)=>{bt.textContent=`${i+1}. ${n.vt[i]} (${n.vc[i]||0})`;bt.className=i===mine?"":"alt"});
+}
 function onSurv(n){
   const now=performance.now();if(st)tDt=Math.min(250,Math.max(60,tDt*.6+(now-tAt)*.4));
-  pv=st;st=n;tAt=now;const a=me&&pv&&pv.p[me.uid],b=me&&n.p[me.uid];
-  if(pv&&pv.wv!==n.wv)beep(440,.15,"triangle",.05,880);
-  if(a&&b&&b[2]<a[2]){beep(150,.2,"sawtooth",.05,70);if(navigator.vibrate)navigator.vibrate(50)}
+  pv=st;st=n;tAt=now;
+  if(pv){
+    if(pv.wv!==n.wv)beep(440,.15,"triangle",.05,880);
+    const live=new Set(n.m.map(m=>m[0]));let kd=0;
+    pv.m.forEach(m=>{if(!live.has(m[0])){kd++;sb(m[1],m[2],MC[m[4]],m[4]===2?18:8,m[4]===2?220:140)}});
+    if(kd)beep(500+Math.random()*300,.05,"square",.025);
+    Object.entries(n.p).forEach(([u,q])=>{const o=pv.p[u];if(!o)return;
+      if(q[2]<o[2]){sb(q[0],q[1],"#ff4d6d",10);if(me&&u===me.uid){shk=now+220;beep(150,.2,"sawtooth",.05,70);if(navigator.vibrate)navigator.vibrate(50)}}
+      if(o[4]&&!q[4]){sb(q[0],q[1],q[6],30,260);beep(180,.4,"sawtooth",.05,50)}});
+  }
   $("score").replaceChildren(...Object.values(n.p).sort((x,y)=>y[3]-x[3]).map(q=>{const d=h("div",`${q[5]} : ${q[3]} ☠ ${"♥".repeat(Math.max(0,q[2]))}${q[4]?"":" ✖"}`);d.style.color=q[6];d.style.fontWeight=600;return d}));
-  $("ov").textContent=n.o||n.br?n.msg:"";
+  $("ov").textContent=n.o||n.br?n.msg:"";showVote(n);
 }
 function drawSurv(now){
-  const x=$("cv").getContext("2d"),p=Math.min(1,(now-tAt)/tDt),L=(a,b)=>a+(b-a)*p;
-  x.fillStyle="#0e0a22";x.fillRect(0,0,800,560);x.fillStyle="#2a2150";for(let i=0;i<800;i+=40)for(let j=0;j<560;j+=40)x.fillRect(i,j,2,2);
+  const x=$("cv").getContext("2d"),p=Math.min(1,(now-tAt)/tDt),L=(a,b)=>a+(b-a)*p,dt=Math.min(.05,(now-(drawSurv.t||now))/1000);drawSurv.t=now;
+  x.save();if(now<shk)x.translate((Math.random()-.5)*8,(Math.random()-.5)*8);
+  x.fillStyle="#0e0a22";x.fillRect(-10,-10,820,580);x.fillStyle="#1a1438";for(let i=0;i<800;i+=40)for(let j=0;j<560;j+=40)if((i+j)%80===0)x.fillRect(i,j,40,40);
   const pm=new Map(pv?pv.m.map(m=>[m[0],m]):[]);
-  st.m.forEach(m=>{const o=pm.get(m[0])||m,r=[12,9,20][m[4]],mx=L(o[1],m[1]),my=L(o[2],m[2]);
-    x.fillStyle=["#e63946","#ff9f1c","#9d4edd"][m[4]];x.beginPath();x.arc(mx,my,r,0,7);x.fill();
-    x.fillStyle="#fff";x.fillRect(mx-r*.5,my-r*.3,r*.3,r*.3);x.fillRect(mx+r*.2,my-r*.3,r*.3,r*.3)});
-  x.fillStyle="#ffe66d";st.b.forEach(b=>{x.beginPath();x.arc(b[0]+b[2]*p,b[1]+b[3]*p,4,0,7);x.fill()});
+  const P=Object.entries(st.p).filter(([,q])=>q[4]).map(([u,q])=>{const o=(pv&&pv.p[u])||q;return{u,q,x:L(o[0],q[0]),y:L(o[1],q[1])}});
+  st.m.forEach(m=>{const o=pm.get(m[0])||m,r=[12,9,20][m[4]]*(1+.07*Math.sin(now/110+m[0])),mx=L(o[1],m[1]),my=L(o[2],m[2]);
+    let t=null,bd=1e12;P.forEach(q=>{const d=(q.x-mx)**2+(q.y-my)**2;if(d<bd){bd=d;t=q}});
+    const g=t?Math.atan2(t.y-my,t.x-mx):0;
+    x.fillStyle="#0006";x.beginPath();x.ellipse(mx,my+r*.8,r*.9,r*.35,0,0,7);x.fill();
+    x.fillStyle=o[3]>m[3]?"#fff":MC[m[4]];x.shadowColor=MC[m[4]];x.shadowBlur=10;x.beginPath();x.arc(mx,my,r,0,7);x.fill();x.shadowBlur=0;x.strokeStyle="#0005";x.lineWidth=2;x.stroke();
+    [-1,1].forEach(sd=>{const ex=mx+Math.cos(g)*r*.35-Math.sin(g)*r*.4*sd,ey=my+Math.sin(g)*r*.35+Math.cos(g)*r*.4*sd;
+      x.fillStyle="#fff";x.beginPath();x.arc(ex,ey,r*.26,0,7);x.fill();x.fillStyle="#14102b";x.beginPath();x.arc(ex+Math.cos(g)*r*.1,ey+Math.sin(g)*r*.1,r*.13,0,7);x.fill()})});
+  x.lineCap="round";x.strokeStyle="#ffe66d";x.shadowColor="#ffe66d";x.shadowBlur=8;x.lineWidth=4;
+  st.b.forEach(b=>{const bx=b[0]+b[2]*p,by=b[1]+b[3]*p;x.beginPath();x.moveTo(bx-b[2]*.6,by-b[3]*.6);x.lineTo(bx,by);x.stroke()});x.shadowBlur=0;
   x.textAlign="center";
-  Object.entries(st.p).forEach(([u,q])=>{if(!q[4])return;const o=(pv&&pv.p[u])||q,px=L(o[0],q[0]),py=L(o[1],q[1]);
-    x.save();x.globalAlpha=q[7]?.5+.3*Math.sin(now/60):1;if(me&&u===me.uid){x.shadowColor=q[6];x.shadowBlur=14}
-    x.fillStyle=q[6];x.beginPath();x.arc(px,py,14,0,7);x.fill();x.restore();
-    x.fillStyle="#fff";x.font="12px sans-serif";x.fillText(q[5],px,py-24);
-    x.fillStyle="#ff4d6d";for(let i=0;i<q[2];i++)x.fillRect(px-17+i*7,py+19,5,4)});
+  P.forEach(({u,q,x:px,y:py})=>{
+    let t=null,bd=360*360;st.m.forEach(m=>{const d=(m[1]-px)**2+(m[2]-py)**2;if(d<bd){bd=d;t=m}});
+    if(t)aim[u]=Math.atan2(t[2]-py,t[1]-px);const a=aim[u]||0;
+    x.save();x.globalAlpha=q[7]?.5+.3*Math.sin(now/60):1;
+    x.fillStyle="#0006";x.beginPath();x.ellipse(px,py+12,13,5,0,0,7);x.fill();
+    x.translate(px,py);x.save();x.rotate(a);x.fillStyle="#cfd3ff";x.fillRect(6,-3,16,6);x.restore();
+    x.fillStyle=q[6];if(me&&u===me.uid){x.shadowColor=q[6];x.shadowBlur=16}
+    x.beginPath();x.arc(0,0,14,0,7);x.fill();x.shadowBlur=0;
+    [-1,1].forEach(sd=>{x.fillStyle="#fff";x.beginPath();x.arc(Math.cos(a)*6-Math.sin(a)*4*sd,Math.sin(a)*6+Math.cos(a)*4*sd,3.2,0,7);x.fill()});
+    x.restore();
+    x.fillStyle="#fff";x.font="12px sans-serif";x.fillText(q[5],px,py-24);x.fillStyle="#ff4d6d";x.font="11px sans-serif";x.fillText("♥".repeat(Math.max(0,q[2])),px,py+28)});
+  parts=parts.filter(q=>(q.l-=dt*1.8)>0);parts.forEach(q=>{q.x+=q.vx*dt;q.y+=q.vy*dt;x.globalAlpha=q.l;x.fillStyle=q.c;x.fillRect(q.x-3,q.y-3,6,6)});x.globalAlpha=1;
+  x.restore();
+  const g=x.createRadialGradient(400,280,220,400,280,520);g.addColorStop(0,"#0000");g.addColorStop(1,"#0009");x.fillStyle=g;x.fillRect(0,0,800,560);
   x.fillStyle="#fff";x.font="700 18px sans-serif";x.textAlign="left";x.fillText(`Vague ${st.wv}   ☠ ${st.kl}`,12,24);
 }
 function frame(now){
@@ -388,24 +424,24 @@ $("start").onclick=async()=>{
 async function startSurv(){
   const c=code,players=lobby.players,ids=Object.keys(players),W=800,H=560,SPD=[3.2,5,2],RAD=[12,9,20];
   await remove(R(`games/${c}`));await update(R(`lobbies/${c}`),{status:"playing"});
-  const P={},want={},seen={},up={fr:5,dm:1,sp:1,pr:0};let M=[],B=[],nid=1,wv=0,left=0,brk=40,tk=0,kills=0,msg="Préparez-vous !";
+  const P={},want={},seen={},up={fr:5,dm:1,sp:1,pr:0};let opts=[],votes={},M=[],B=[],nid=1,wv=0,left=0,brk=40,tk=0,kills=0,msg="Préparez-vous !";
   ids.forEach((u,i)=>{P[u]={n:players[u].name,c:players[u].color,x:200+i*60,y:280,hp:5,k:0,inv:0,cd:0,a:1};want[u]=[0,0]});
-  const un=onValue(R(`games/${c}/inputs`),s=>Object.entries(s.val()||{}).forEach(([u,v])=>{if(!P[u]||seen[u]===v)return;seen[u]=v;const[a,b]=String(v).split(",").map(Number);if(a===a&&b===b)want[u]=[Math.max(-1,Math.min(1,a)),Math.max(-1,Math.min(1,b))]}));
+  const un=onValue(R(`games/${c}/inputs`),s=>Object.entries(s.val()||{}).forEach(([u,v])=>{if(!P[u]||seen[u]===v)return;seen[u]=v;const sp=String(v).split(",");if(sp[0]==="v"){if(opts[+sp[1]])votes[u]=+sp[1];return}const[a,b]=sp.map(Number);if(a===a&&b===b)want[u]=[Math.max(-1,Math.min(1,a)),Math.max(-1,Math.min(1,b))]}));
   const UPG=[["⚡ Cadence +",()=>up.fr=Math.max(2,up.fr-1)],["💥 Dégâts +",()=>up.dm++],["👟 Vitesse +",()=>up.sp+=.12],["🎯 Balles perforantes",()=>up.pr++]];
-  const pub=(x={})=>set(R(`games/${c}/state`),JSON.stringify({k:"surv",W,H,wv,msg,kl:kills,br:brk>0?1:0,
+  const pub=(x={})=>set(R(`games/${c}/state`),JSON.stringify({k:"surv",W,H,wv,msg,kl:kills,br:brk>0?1:0,vt:brk>0&&opts.length?opts.map(o=>o[0]):0,vc:opts.map((_,i)=>Object.values(votes).filter(v=>v===i).length),
     p:Object.fromEntries(ids.map(u=>{const q=P[u];return[u,[Math.round(q.x),Math.round(q.y),q.hp,q.k,q.a,q.n,q.c,q.inv>0?1:0]]})),
     m:M.map(m=>[m[0],Math.round(m[1]),Math.round(m[2]),m[3],m[4]]),b:B.map(b=>[Math.round(b[0]),Math.round(b[1]),b[2],b[3]]),...x}));
   const startWave=()=>{wv++;left=4+wv*3;msg="Vague "+wv;
-    if(wv>1){const u=UPG[Math.floor(Math.random()*UPG.length)];u[1]();msg+=" · "+u[0]}
+    if(opts.length){const cnt=opts.map((_,i)=>Object.values(votes).filter(v=>v===i).length),mx=Math.max(...cnt),top=cnt.map((n,i)=>n===mx?i:-1).filter(i=>i>=0),u=opts[top[Math.floor(Math.random()*top.length)]];u[1]();msg+=" · "+u[0];opts=[];votes={}}
     ids.forEach(u=>{const q=P[u];if(!q.a){q.a=1;q.hp=3}else q.hp=Math.min(5,q.hp+1);q.inv=20})}; // les morts reviennent à chaque vague
   const step=()=>{
     if(code!==c){un();return}
     tk++;const alive=ids.filter(u=>P[u].a);
-    if(brk>0){brk--;if(!brk)startWave()}
+    if(brk>0){if(opts.length&&brk>8&&ids.filter(u=>P[u].a).every(u=>votes[u]!=null))brk=8;brk--;if(!brk)startWave()}
     else{
       if(left>0&&tk%3===0){const e=Math.floor(Math.random()*4),r=Math.random(),q=Math.random(),t=wv>2&&q<.15?2:wv>1&&q<.4?1:0;
         M.push([nid++,e<2?r*W:(e===2?-10:W+10),e<2?(e?H+10:-10):r*H,t===2?6+wv:t?1:2,t]);left--}
-      if(left===0&&!M.length){brk=40;msg="Vague "+wv+" terminée !"}
+      if(left===0&&!M.length){brk=70;msg="Vague "+wv+" terminée ! Vote :";opts=[...UPG].sort(()=>Math.random()-.5).slice(0,3);votes={}}
     }
     alive.forEach(u=>{const q=P[u],[a,b]=want[u],n=a&&b?.707:1,s=9*up.sp;
       q.x=Math.max(14,Math.min(W-14,q.x+a*n*s));q.y=Math.max(14,Math.min(H-14,q.y+b*n*s));if(q.inv>0)q.inv--;

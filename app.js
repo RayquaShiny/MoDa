@@ -5,7 +5,10 @@ import {getDatabase,ref,get,set,update,remove,onValue,onDisconnect,serverTimesta
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const $=i=>document.getElementById(i);
+const VER="5";
+const $=i=>document.getElementById(i)||document.createElement("div");
+{const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
+ if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
 const h=(t,txt,fn)=>{const e=document.createElement(t);if(txt!=null)e.textContent=txt;if(fn)e.onclick=fn;return e};
 const R=p=>ref(db,p);
 const COLORS=["#ff4d6d","#3ee6c4","#ffd23f","#6c8cff","#ff9f1c","#c77dff","#80ed99","#f8f9fa"];
@@ -269,7 +272,7 @@ function frame(now){
   st.f.forEach(([a,b,t,l])=>{const cx=(a+.5)*k,cy=(b+.5)*k,pu=1+.12*Math.sin(now/180+a);
     if(t&&l<25&&Math.floor(now/140)%2)return;
     if(!t){x.fillStyle="#fff";x.beginPath();x.arc(cx,cy,k*.3*pu,0,7);x.fill()}
-    else{x.font=`${k*.95*pu}px sans-serif`;x.fillText(t===1?"⭐":"🛡️",cx,cy)}});
+    else{x.fillStyle=t===1?"#ffd23f55":"#3ee6c455";x.beginPath();x.arc(cx,cy,k*.7*pu,0,7);x.fill();x.font=`${k*.95*pu}px sans-serif`;x.fillText(t===1?"⭐":"🛡️",cx,cy)}});
   Object.entries(st.s).forEach(([u,s])=>{
     if(!s.b.length)return;
     const o=pv&&pv.s[u],ob=o&&o.b.length?o.b:s.b;
@@ -312,7 +315,9 @@ $("start").onclick=async()=>{
   const pub=(x={})=>set(R(`games/${c}/state`),JSON.stringify({W,H,f:food,s:snakes,...x}));
   for(let i=0;i<Math.max(3,ids.length+2);i++)food.push([...free(),0,0]); // [x,y,type(0 pomme,1 étoile,2 bouclier),durée]
   for(let n=3;n>0;n--){await pub({cd:n});await new Promise(r=>setTimeout(r,1000))}
+  let tk=0;
   const step=()=>{
+    tk++;
     if(code!==c){un();return} // l'hôte a quitté : on arrête tout
     const alive=Object.keys(snakes).filter(u=>snakes[u].a),heads={},occ=new Set(),hc={};
     alive.forEach(u=>{const s=snakes[u];
@@ -330,7 +335,7 @@ $("start").onclick=async()=>{
       if(s.g>0)s.g--;else s.b.pop()});
     food.forEach(f=>{if(f[2])f[3]--});
     for(let i=food.length;i--;)if(food[i][2]&&food[i][3]<=0)food.splice(i,1);
-    if(bonus&&food.filter(f=>f[2]).length<2&&Math.random()<.025)food.push([...free(),Math.random()<.65?1:2,100]);
+    if(bonus&&food.filter(f=>f[2]).length<2&&(tk===20||Math.random()<.04))food.push([...free(),Math.random()<.65?1:2,100]);
     const left=Object.keys(snakes).filter(u=>snakes[u].a);
     if(ids.length>1?left.length<=1:left.length===0){
       un();set(R("stats/gamesPlayed"),increment(1)).catch(()=>{});pub({o:1,w:left[0]?snakes[left[0]].n:null});

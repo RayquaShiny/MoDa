@@ -35,7 +35,9 @@ if(cfg.apiKey==="A_REMPLACER")setTimeout(()=>toast("Config Firebase manquante da
 
 // Anti double-clic : les boutons sont bloqués pendant toute la connexion (appel Firebase + création du profil)
 let busy=false;
-const setBusy=v=>{busy=v;["login","signup","google"].forEach(i=>$(i).disabled=v)};
+const setBusy=v=>{busy=v;["login","signup","google"].forEach(i=>$(i).disabled=v);$("auth").classList.toggle("busy",v)};
+// Entrée valide le formulaire (inscription si un pseudo est rempli, sinon connexion)
+["pseudo","email","pass","pass2"].forEach(i=>$(i).addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();($("pseudo").value.trim()?$("signup"):$("login")).click()}}));
 const guard=fn=>async()=>{
   if(busy)return;setBusy(true);
   try{await fn()}catch(e){err(e)}
@@ -111,28 +113,45 @@ async function ensureOwner(u,n){
   if(!(await get(R(`ownerSetup/${n}`))).exists())await set(R(`ownerSetup/${n}`),true);
 }
 let seq=0;
-onAuthStateChanged(auth,async u=>{
-  const my=++seq;
+const unboot=()=>$("boot").classList.add("off");
+setTimeout(()=>{if(!auth.currentUser)unboot()},5000);
+const transient=e=>!navigator.onLine||/offline|network|timeout|unavailable/i.test((e&&(e.message||e.code))||"");
+async function run(u){
+  const my=++seq;let hold=false;
   presUn.forEach(f=>f());presUn=[];
-  if(!u){me=null;stopStats();$("adm").hidden=true;$("who").textContent="";$("out").hidden=true;setBusy(false);return show("auth")}
+  if(!u){me=null;stopStats();$("adm").hidden=true;$("who").textContent="";$("out").hidden=true;$("net").hidden=true;setBusy(false);show("auth");return unboot()}
   setBusy(true);
   try{
-    const name=await ensureProfile(u),own=ownerOf(u);
+    const own=ownerOf(u);
+    // profil et statut owner lus en parallèle : ouverture plus rapide
+    const[name,ow]=await Promise.all([ensureProfile(u),get(R(`owners/${u.uid}`)).then(x=>x.exists())]);
     if(my!==seq)return;
-    if(own)await ensureOwner(u,own).catch(()=>{});
-    const isOwner=(await get(R(`owners/${u.uid}`))).exists();
-    if(my!==seq)return;
+    let isOwner=ow;
+    if(own){await ensureOwner(u,own).catch(()=>{});isOwner=(await get(R(`owners/${u.uid}`))).exists();if(my!==seq)return}
     me={uid:u.uid,name,owner:isOwner};
     $("adm").hidden=!isOwner;$("sw").setAttribute("aria-checked",String(adm&&isOwner));
-    $("who").textContent=name+(isOwner?" ★":"");$("out").hidden=false;resetAuthForm();showHome();
-    presUn.push(onValue(R(".info/connected"),s=>{if(s.val()){onDisconnect(R(`presence/${u.uid}`)).set(false);set(R(`presence/${u.uid}`),true)}}));
+    $("who").textContent=name+(isOwner?" ★":"");$("out").hidden=false;$("net").hidden=true;resetAuthForm();showHome();
+    let was=false,nt;
+    presUn.push(onValue(R(".info/connected"),x=>{
+      clearTimeout(nt);
+      if(x.val()){
+        onDisconnect(R(`presence/${u.uid}`)).set(false);set(R(`presence/${u.uid}`),true).catch(()=>{});
+        if(code&&lobby)onDisconnect(R(lobby.host===u.uid?`lobbies/${code}`:`lobbies/${code}/players/${u.uid}`)).remove(); // ré-armé après une coupure
+        $("net").hidden=true;if(was)toast("Reconnecté ✅");was=true;
+      }else if(was)nt=setTimeout(()=>{$("net").hidden=false},1200);
+    }));
     watchSocial();
   }catch(e){
     if(my!==seq)return;
-    err(e);                       // on affiche la vraie raison...
-    signOut(auth).catch(()=>{});  // ...et on déconnecte pour que l'utilisateur ne reste pas bloqué sur l'écran de connexion
-  }finally{if(my===seq)setBusy(false)}
-});
+    if(transient(e)){ // hors ligne : on garde la session et on réessaie, sans repasser par l'écran de connexion
+      hold=true;$("bootmsg").textContent="Hors ligne : reconnexion…";$("boot").classList.remove("off");
+      setTimeout(()=>{const c=auth.currentUser;if(c&&!me)run(c)},4000);return;
+    }
+    err(e);signOut(auth).catch(()=>{});
+  }finally{if(my===seq){setBusy(false);if(!hold)unboot()}}
+}
+onAuthStateChanged(auth,run);
+addEventListener("online",()=>{const u=auth.currentUser;if(u&&!me)run(u)});
 
 // ---------- Amis & invitations ----------
 $("fadd").onclick=async()=>{
@@ -184,7 +203,10 @@ function enter(c){
   code=c;stopStats();show("lobby");$("lcode").textContent=c;
   unLobby=onValue(R(`lobbies/${c}`),s=>{
     const l=s.val();if(!l){if(code){local();toast("Le lobby a été fermé")}return}
-    lobby=l;renderLobby();
+    lobby=l;
+    if(l.status==="lobby"&&l.host!==me.uid&&!(l.players&&l.players[me.uid])){ // coupure puis retour : on se réinscrit
+      set(R(`lobbies/${c}/players/${me.uid}`),{name:me.name,color:firstColor(l.players),ready:false});onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();return}
+    renderLobby();
     if(l.status==="playing"&&cur!=="game")enterGame(c);
     if(l.status==="lobby"&&cur==="game"){unState&&unState();unState=null;show("lobby")}
   });

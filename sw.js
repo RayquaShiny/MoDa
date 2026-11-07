@@ -3,7 +3,7 @@
    - Mises à jour rapides : à chaque ouverture, index.html et app.js sont re-téléchargés en contournant
      tous les caches ; s'ils ont changé, la page est prévenue et se recharge (sans jamais couper une partie).
    - Les appels Firebase ne sont jamais mis en cache (aucune donnée de jeu n'est stockée ici). */
-const VERSION = 'moda-v2';
+const VERSION = 'moda-v3';
 const SHELL = 'shell-' + VERSION;
 const LIBS = 'libs-' + VERSION;
 const FILES = ['./', 'index.html', 'app.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png'];
@@ -49,8 +49,14 @@ async function revalidate(req) {
       changed = a !== b;
     }
     await cache.put(req, res.clone());
-    if (changed) await notifyClients();
-  } catch (err) { /* hors ligne : on garde la version en cache */ }
+    return changed;
+  } catch (err) { return false; /* hors ligne : on garde la version en cache */ }
+}
+
+// Met à jour TOUS les fichiers surveillés, puis prévient la page une seule fois (évite de recharger un app.js périmé)
+async function refreshAll(force) {
+  const res = await Promise.all(['./', ...WATCHED].map((f) => revalidate(new Request(new URL(f, self.registration.scope).href))));
+  if (force || res.some(Boolean)) await notifyClients();
 }
 
 const isWatched = (url) => url.origin === self.location.origin &&
@@ -63,7 +69,7 @@ function staleWhileRevalidate(event, cacheName, watched) {
     caches.open(cacheName).then(async (cache) => {
       const cached = await cache.match(req);
       if (watched) {
-        const refresh = revalidate(req);
+        const refresh = revalidate(req).then((ch) => (ch ? refreshAll(true) : null));
         if (cached) { event.waitUntil(refresh); return cached; }
         await refresh;
         return (await cache.match(req)) || fetch(req).catch(() => Response.error());
@@ -112,6 +118,6 @@ self.addEventListener('fetch', (event) => {
 // La page peut demander une vérification (retour au premier plan, vérification périodique)
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'check') {
-    event.waitUntil(Promise.all(['./', ...WATCHED].map((f) => revalidate(new Request(new URL(f, self.registration.scope).href)))));
+    event.waitUntil(refreshAll(false));
   }
 });

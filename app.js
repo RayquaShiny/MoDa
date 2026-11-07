@@ -228,7 +228,11 @@ if("serviceWorker" in navigator&&location.protocol==="https:"){
   const check=()=>{navigator.serviceWorker.controller&&navigator.serviceWorker.controller.postMessage({type:"check"});navigator.serviceWorker.getRegistration().then(r=>r&&r.update()).catch(()=>{})};
   document.addEventListener("visibilitychange",()=>{if(!document.hidden)check()});
   setInterval(check,10*60*1000);setTimeout(check,4000);
-  $("updbtn").onclick=()=>location.reload();
+  $("updbtn").onclick=async()=>{
+    $("updbtn").disabled=true;$("updbtn").textContent="Mise à jour…";
+    try{(await navigator.serviceWorker.getRegistrations()).forEach(r=>r.unregister());await Promise.all((await caches.keys()).map(k=>caches.delete(k)))}catch{}
+    location.replace(location.pathname+"?u="+Date.now());
+  };
 }
 (function(){
   const btn=$("inst"),help=$("iosHelp");

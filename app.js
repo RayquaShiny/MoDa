@@ -5,7 +5,7 @@ import {getDatabase,ref,get,set,update,remove,onValue,onDisconnect,serverTimesta
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="11";
+const VER="12";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -223,7 +223,7 @@ const mkLobby=game=>async()=>{
   await set(R(`lobbies/${c}`),{host:me.uid,game,status:"lobby",opts:{sp:1,wr:0,bo:1},players:{[me.uid]:{name:me.name,color:COLORS[0],ready:true}}});
   onDisconnect(R(`lobbies/${c}`)).remove();enter(c);
 };
-$("tsnake").onclick=mkLobby("snake");$("tsurv").onclick=mkLobby("surv");$("tbr").onclick=mkLobby("br");
+$("tsnake").onclick=mkLobby("snake");$("tsurv").onclick=mkLobby("surv");$("tbr").onclick=mkLobby("br");$("tlab").onclick=mkLobby("lab");
 $("join").onclick=()=>joinLobby($("joincode").value.trim().toUpperCase());
 $("joincode").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();$("join").click()}});
 async function joinLobby(c){
@@ -252,7 +252,7 @@ function renderLobby(){
   Object.entries(pl).forEach(([u,p])=>{const r=h("div",null);r.className="pl";const sw=h("span");sw.className="sw";sw.style.background=p.color;
     r.append(sw,h("span",p.name+(u===lobby.host?" (hôte)":"")+(p.wins?` 🏆${p.wins}`:"")),h("span",p.ready?"✔ prêt":"…"));b.append(r)});
   $("ready").hidden=host;$("ready").textContent=pl[me.uid]?.ready?"Pas prêt":"Prêt";
-  $("ltitle").textContent={snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale"}[lobby.game]||"Lobby";
+  $("ltitle").textContent={snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",lab:"🗝️ Évasion coop"}[lobby.game]||"Lobby";
   $("opts").style.display=lobby.game==="snake"?"":"none";
   const op=lobby.opts||{};$("oSp").textContent="⚡ Vitesse : "+["lente","normale","rapide"][op.sp??1];
   $("oWr").textContent=op.wr?"🌀 Murs : traversables":"🧱 Murs : mortels";$("oBo").textContent=op.bo===0?"🎁 Bonus : non":"🎁 Bonus : oui";
@@ -312,7 +312,7 @@ function setOv(t){t=String(t);const e=$("ov");if(e.textContent!==t)e.textContent
 // Prédiction locale : mon personnage bouge tout de suite à l'écran (sans attendre l'aller-retour avec l'hôte),
 // puis se recale en douceur sur la position officielle. Même vitesse et mêmes murs que la simulation de l'hôte.
 function predict(dt,sx,sy,spd,x0,x1,y0,y1,blocked){
-  const a=(held.has("R")?1:0)-(held.has("L")?1:0),b=(held.has("D")?1:0)-(held.has("U")?1:0),mvg=(a||b)&&!st.cd&&!st.o;
+  const a=(held.has("R")?1:0)-(held.has("L")?1:0),b=(held.has("D")?1:0)-(held.has("U")?1:0),mvg=(a||b)&&!st.cd&&!st.o&&!st.fz;
   if(!pred||Math.hypot(pred.x-sx,pred.y-sy)>140)pred={x:sx,y:sy};
   if(mvg){const n=a&&b?.707:1,nx=pred.x+a*n*spd*dt,ny=pred.y+b*n*spd*dt;
     if(!blocked||!blocked(nx,pred.y))pred.x=Math.max(x0,Math.min(x1,nx));
@@ -330,13 +330,14 @@ function unwake(){try{wl&&wl.release()}catch{}wl=null}
 let hinted=0;
 function orientHint(){if(!TOUCH||hinted||gk==="snake")return;if(matchMedia("(orientation:portrait)").matches){hinted=1;setTimeout(()=>{if(cur==="game")toast("📱 Astuce : tourne ton téléphone en paysage pour une vue plus grande")},1600)}}
 function enterGame(c){
-  show("game");lastDir=null;st=pv=null;parts=[];gk=lobby&&(lobby.game==="surv"||lobby.game==="br")?lobby.game:"snake";held.clear();lastMv="";$("ov").style.fontSize=gk==="snake"?"min(56px,11vw)":"min(34px,6.5vw)";mine=-1;vk="";vbox.style.display="none";
+  show("game");lastDir=null;st=pv=null;parts=[];gk=lobby&&["surv","br","lab"].includes(lobby.game)?lobby.game:"snake";held.clear();lastMv="";$("ov").style.fontSize=gk==="snake"?"min(56px,11vw)":"min(34px,6.5vw)";mine=-1;vk="";vbox.style.display="none";
   pred=null;scoreKey="";document.body.dataset.g=gk;ctlUI();calcVs();wake();orientHint();gameSetup();
   unState=onValue(R(`games/${c}/state`),s=>{if(s.val())onState(JSON.parse(s.val()))});
   if(!raf)raf=requestAnimationFrame(frame);
 }
 function onState(n){
   if(n.k==="surv")return onSurv(n);
+  if(n.k==="lab")return onLab(n);
   if(n.k==="br")return onBr(n);
   const now=performance.now();if(st)tDt=Math.min(250,Math.max(60,tDt*.6+(now-tAt)*.4));
   pv=st;st=n;tAt=now;const mine=u=>me&&u===me.uid;
@@ -416,7 +417,7 @@ function frame(now){
   if(cur!=="game"){raf=0;return}
   raf=requestAnimationFrame(frame);if(!st)return;
   if(now-(frame.l||0)<13.5)return;frame.l=now; // 60 images/s au maximum : inutile (et chaud) de dessiner à 120 Hz
-  if(st.k==="surv")return drawSurv(now);if(st.k==="br")return drawBr(now);
+  if(st.k==="surv")return drawSurv(now);if(st.k==="lab")return drawLab(now);if(st.k==="br")return drawBr(now);
   const cv=$("cv"),x=gctx(),k=cv.width/st.W,p=Math.min(1,(now-tAt)/tDt),mid=me&&me.uid;
   x.drawImage(snakeBg(st.W,st.H,k),0,0);
   x.textAlign="center";x.textBaseline="middle";
@@ -447,14 +448,14 @@ function frame(now){
 const KEYS={ArrowUp:"U",w:"U",z:"U",ArrowDown:"D",s:"D",ArrowLeft:"L",a:"L",q:"L",ArrowRight:"R",d:"R"};
 const held=new Set();let seqN=0;
 const mv=()=>{if(cur!=="game"||!code||!me)return;if(gk==="br")return brSend();const m=`${(held.has("R")?1:0)-(held.has("L")?1:0)},${(held.has("D")?1:0)-(held.has("U")?1:0)}`;if(m!==lastMv){lastMv=m;set(R(`games/${code}/inputs/${me.uid}`),m+","+(++seqN)).catch(()=>{})}};
-const send=d=>{if(cur!=="game"||gk==="surv"||gk==="br"||d===lastDir)return;lastDir=d;set(R(`games/${code}/inputs/${me.uid}`),d+(++seqN)).catch(()=>{})};
-addEventListener("keydown",e=>{if(cur!=="game"||/^(INPUT|TEXTAREA)$/.test(e.target.tagName))return;const d=KEYS[e.key.length>1?e.key:e.key.toLowerCase()];if(d){e.preventDefault();if(gk==="surv"||gk==="br"){held.add(d);mv()}else send(d)}});
-addEventListener("keyup",e=>{const d=KEYS[e.key.length>1?e.key:e.key.toLowerCase()];if(d&&(gk==="surv"||gk==="br")&&cur==="game"){held.delete(d);mv()}});
+const send=d=>{if(cur!=="game"||gk!=="snake"||d===lastDir)return;lastDir=d;set(R(`games/${code}/inputs/${me.uid}`),d+(++seqN)).catch(()=>{})};
+addEventListener("keydown",e=>{if(cur!=="game"||/^(INPUT|TEXTAREA)$/.test(e.target.tagName))return;const d=KEYS[e.key.length>1?e.key:e.key.toLowerCase()];if(d){e.preventDefault();if(gk!=="snake"){held.add(d);mv()}else send(d)}});
+addEventListener("keyup",e=>{const d=KEYS[e.key.length>1?e.key:e.key.toLowerCase()];if(d&&(gk!=="snake")&&cur==="game"){held.delete(d);mv()}});
 let t0;const cvs=$("cv");
 cvs.addEventListener("touchstart",e=>{if(TOUCH)return;t0=e.touches[0]},{passive:true});
 cvs.addEventListener("touchmove",e=>{if(TOUCH)return;e.preventDefault();if(!t0||cur!=="game")return;const t=e.touches[0],dx=t.clientX-t0.clientX,dy=t.clientY-t0.clientY;
   if(Math.max(Math.abs(dx),Math.abs(dy))>20){send(Math.abs(dx)>Math.abs(dy)?(dx>0?"R":"L"):(dy>0?"D":"U"));t0=t}},{passive:false});
-document.querySelectorAll("#pad button").forEach(b=>{const d=b.dataset.d,on=e=>{e.preventDefault();if(gk==="surv"||gk==="br"){held.add(d);mv()}else send(d)},off=()=>{if(gk==="surv"||gk==="br"){held.delete(d);mv()}};
+document.querySelectorAll("#pad button").forEach(b=>{const d=b.dataset.d,on=e=>{e.preventDefault();if(gk!=="snake"){held.add(d);mv()}else send(d)},off=()=>{if(gk!=="snake"){held.delete(d);mv()}};
   b.addEventListener("pointerdown",on);["pointerup","pointercancel","pointerleave"].forEach(t=>b.addEventListener(t,off))});
 
 // ---------- Commandes tactiles (iPhone / iPad) : joysticks flottants, balayage, croix ----------
@@ -478,7 +479,7 @@ function drag(s,e){let dx=e.clientX-s.ox,dy=e.clientY-s.oy;const d=Math.hypot(dx
   s.kn.style.transform=`translate(${dx}px,${dy}px)`;return[dx,dy,Math.min(d,SMAX)]}
 function endStick(k){const s=tp[k];if(!s)return;tp[k]=null;s.el.classList.remove("on");
   if(k==="mv")setHeld(0,0,0,0);else{ptrDown=0;aimLock=0;if(cur==="game"&&gk==="br")setFire()}}
-function resetTouch(){["mv","aim"].forEach(endStick);tp.sw=null;held.clear();ptrDown=0;aimLock=0;if(cur==="game"){if(gk==="br")setFire();else if(gk==="surv")mv()}}
+function resetTouch(){["mv","aim"].forEach(endStick);tp.sw=null;held.clear();ptrDown=0;aimLock=0;if(cur==="game"){if(gk==="br")setFire();else if(gk==="surv"||gk==="lab")mv()}}
 gameEl.addEventListener("pointerdown",e=>{
   if(!touchy(e)||cur!=="game"||e.target.closest("button"))return;
   e.preventDefault();const x=e.clientX,y=e.clientY;
@@ -551,9 +552,10 @@ function gameSetup(){
   mapC=null;lootC=[];fxF={};fxH={};floats=[];ptrDown=spDown=brFire=0;brK=brA="";brT=0;mpos=null;aimLock=0;
   $("cv").style.cursor=gk==="br"?"crosshair":"";
   $("ghelp").textContent=gk==="br"?"ZQSD / flèches : bouger · souris : viser · clic ou espace : tirer. Sur mobile : joystick gauche pour bouger, joystick droit pour viser (tu tires tant que ton doigt touche). Marche sur les objets pour les ramasser : la couleur du halo indique la rareté (vert < bleu < violet < doré), 💊 soigne et 🧪 donne du bouclier. Reste dans la zone !"
+    :gk==="lab"?"Flèches ou ZQSD pour bouger. Ramassez toutes les 🗝️ (clés partagées), puis rejoignez-vous TOUS sur la sortie 🚪. Une plaque ● ouvre la porte de la même couleur tant que quelqu'un reste dessus : un copain passe de l'autre côté et active le levier pour la verrouiller ouverte. Évite les gardiens rouges : chaque contact coûte une vie à l'équipe ! Seul, la plaque ouvre la porte pour de bon."
     :gk==="surv"?"Flèches ou ZQSD pour bouger, tu tires automatiquement. Sur mobile : glisse le pouce. Entre deux vagues, vote avec 1 / 2 / 3."
     :"Flèches ou ZQSD / WASD. Sur mobile : glisse le doigt. ⭐ = +3 points, 🛡️ = traverse tout pendant 5 s.";
-  if(TOUCH){const t=$("tip");t.textContent=gk==="br"?"Pouce gauche : bouger · pouce droit : viser et tirer":gk==="surv"?"Glisse ton pouce pour te déplacer (tir automatique)":"Glisse ton doigt pour tourner";
+  if(TOUCH){const t=$("tip");t.textContent=gk==="br"?"Pouce gauche : bouger · pouce droit : viser et tirer":gk==="lab"?"Glisse ton pouce pour te déplacer · récupérez les 🗝️ puis rejoignez-vous tous sur la sortie":gk==="surv"?"Glisse ton pouce pour te déplacer (tir automatique)":"Glisse ton doigt pour tourner";
     t.hidden=false;clearTimeout(gameSetup.t);gameSetup.t=setTimeout(()=>{t.hidden=true},6000)}
 }
 // ---- Graphismes du battle royale ----
@@ -771,6 +773,7 @@ addEventListener("keyup",e=>{if(e.key===" "&&gk==="br"&&cur==="game"){spDown=0;s
 // ---------- Jeu : boucle de l'hôte ----------
 $("start").onclick=async()=>{
   if(lobby.game==="surv")return startSurv();
+  if(lobby.game==="lab")return startLab();
   if(lobby.game==="br")return startBr();
   const c=code,players=lobby.players,ids=Object.keys(players),o=lobby.opts||{},W=40,H=28;
   const base=[170,120,85][o.sp??1],wrap=!!o.wr,bonus=o.bo!==0;
@@ -864,6 +867,216 @@ async function startSurv(){
     pub();pace(100,step);
   };
   step();
+}
+
+// ---------- Évasion coop : labyrinthe (l'hôte simule, la carte vient d'une graine commune) ----------
+// Taille, clés, portes et gardiens s'adaptent au nombre de joueurs (N) et au niveau (lv).
+const LT=40,GC=["#ffd23f","#6c8cff","#c77dff","#ff9f1c"]; // LT = taille d'une case en pixels ; GC = couleur de chaque porte
+function genLab(sd,N,lv){
+  const r=rng(sd),cw=Math.min(16,5+N+lv),ch=Math.min(11,4+Math.ceil(N/2)+(lv>>1)),TW=2*cw+1,TH=2*ch+1,T=new Uint8Array(TW*TH).fill(1),I=(x,y)=>y*TW+x;
+  const D4=[[1,0],[-1,0],[0,1],[0,-1]],fl=(x,y)=>T[I(x,y)]===0;
+  // labyrinthe parfait (un seul chemin entre deux cases) : les portes ne peuvent donc jamais être contournées
+  const seen=new Uint8Array(cw*ch),stk=[[0,0]];seen[0]=1;T[I(1,1)]=0;
+  while(stk.length){const[a,b]=stk[stk.length-1],nb=[];
+    D4.forEach(([dx,dy])=>{const i=a+dx,j=b+dy;if(i>=0&&j>=0&&i<cw&&j<ch&&!seen[j*cw+i])nb.push([i,j,dx,dy])});
+    if(!nb.length){stk.pop();continue}
+    const[i,j,dx,dy]=nb[Math.floor(r()*nb.length)];seen[j*cw+i]=1;T[I(2*i+1,2*j+1)]=0;T[I(2*a+1+dx,2*b+1+dy)]=0;stk.push([i,j])}
+  const bfs=(sx,sy)=>{const d=new Int16Array(TW*TH).fill(-1),pa=new Int32Array(TW*TH).fill(-1),q=[I(sx,sy)];d[q[0]]=0;
+    for(let h=0;h<q.length;h++){const c=q[h],x=c%TW,y=(c-x)/TW;for(const[a,b]of D4){const n=I(x+a,y+b);if(T[n]===0&&d[n]<0){d[n]=d[c]+1;pa[n]=c;q.push(n)}}}
+    return{d,pa,q}};
+  const B=bfs(1,1),sp=I(1,1),shuf=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+  let ei=sp,bd=-1;for(const c of B.q){const x=c%TW,y=(c-x)/TW;if(x%2&&y%2&&B.d[c]>bd){bd=B.d[c];ei=c}}
+  const path=[];for(let c=ei;c>=0;c=B.pa[c])path.push(c);path.reverse();const L=path.length,pathSet=new Set(path);
+  const isDead=c=>{const x=c%TW,y=(c-x)/TW;let n=0;for(const[a,b]of D4)if(fl(x+a,y+b))n++;return n===1};
+  // portes : placées sur le chemin principal, dans un couloir (case « entre deux salles »)
+  const ng=Math.min(4,1+Math.floor((N-1)/3)+((lv-1)>>1)),gates=[];let prev=0;
+  for(let i=0;i<ng;i++){const tg=Math.round(L*(i+1)/(ng+1));let k=-1;
+    for(let o=0;o<=5&&k<0;o++)for(const q of[tg+o,tg-o]){if(q<0||q>=L)continue;const x=path[q]%TW,y=(path[q]-x)/TW;if(q>prev+5&&q<L-5&&(x+y)%2===1){k=q;break}}
+    if(k<0)continue;gates.push({k});prev=k}
+  const used=new Set([sp,ei]);gates.forEach(g=>{used.add(path[g.k]);used.add(path[g.k+2])});
+  // plaque : dans un cul-de-sac AVANT la porte. levier : juste APRÈS la porte (il la verrouille ouverte)
+  const out=gates.map(g=>{
+    const gc=path[g.k],gx=gc%TW,gy=(gc-gx)/TW,G=bfs(gx,gy),beyond=c=>{for(let t=c;t>=0;t=B.pa[t])if(t===gc)return true;return false};
+    const ok=(c,m)=>!used.has(c)&&!beyond(c)&&G.d[c]>=m;
+    let cand=B.q.filter(c=>isDead(c)&&ok(c,6));if(!cand.length)cand=B.q.filter(c=>!pathSet.has(c)&&ok(c,4));if(!cand.length)cand=[path[Math.max(1,g.k-3)]];
+    const pc=cand[Math.floor(r()*cand.length)];used.add(pc);const lc=path[g.k+2];
+    return{x:gx,y:gy,c:gc,px:pc%TW,py:(pc-pc%TW)/TW,lx:lc%TW,ly:(lc-lc%TW)/TW}});
+  // clés : dans les culs-de-sac (donc à explorer, parfois derrière une porte)
+  const K=Math.min(9,N+1+Math.ceil(lv/2));
+  let kc=shuf(B.q.filter(c=>isDead(c)&&!used.has(c)));
+  if(kc.length<K)kc=kc.concat(shuf(B.q.filter(c=>{const x=c%TW,y=(c-x)/TW;return x%2&&y%2&&!used.has(c)&&!kc.includes(c)})));
+  const keys=kc.slice(0,K).map(c=>[c%TW,(c-c%TW)/TW]);
+  // gardiens : loin du départ
+  const gn=Math.min(12,Math.ceil(N/2)+((lv-1)>>1));
+  let gc2=shuf(B.q.filter(c=>{const x=c%TW,y=(c-x)/TW;return x%2&&y%2&&B.d[c]>=12}));if(gc2.length<gn)gc2=shuf(B.q.filter(c=>{const x=c%TW,y=(c-x)/TW;return x%2&&y%2&&B.d[c]>=6}));
+  const gs=gc2.slice(0,gn).map(c=>[c%TW,(c-c%TW)/TW]);
+  return{TW,TH,T,sp:[1,1],ex:[ei%TW,(ei-ei%TW)/TW],gates:out,gm:new Map(out.map((g,i)=>[g.c,i])),keys,gs};
+}
+// vrai si un disque de rayon R centré en (x,y) touche un mur ou une porte fermée (go = masque des portes ouvertes)
+function labBlocked(m,go,x,y,R=11){
+  const x0=Math.floor((x-R)/LT),x1=Math.floor((x+R)/LT),y0=Math.floor((y-R)/LT),y1=Math.floor((y+R)/LT);
+  for(let ty=y0;ty<=y1;ty++)for(let tx=x0;tx<=x1;tx++){
+    let w=tx<0||ty<0||tx>=m.TW||ty>=m.TH||m.T[ty*m.TW+tx]===1;
+    if(!w){const g=m.gm.get(ty*m.TW+tx);if(g!=null&&!((go>>g)&1))w=true}
+    if(!w)continue;
+    const cx=Math.max(tx*LT,Math.min(x,tx*LT+LT)),cy=Math.max(ty*LT,Math.min(y,ty*LT+LT));
+    if((x-cx)**2+(y-cy)**2<R*R)return true}
+  return false;
+}
+
+// Fond du labyrinthe : dessiné une seule fois par niveau
+function labBg(m){
+  if(m.bg)return m.bg;const c=mkC(m.TW*LT,m.TH*LT),g=c.getContext("2d"),f=(x,y)=>x>=0&&y>=0&&x<m.TW&&y<m.TH&&m.T[y*m.TW+x]===0;
+  g.fillStyle="#1a1438";g.fillRect(0,0,c.width,c.height);
+  for(let y=0;y<m.TH;y++)for(let x=0;x<m.TW;x++){
+    if(m.T[y*m.TW+x]){g.fillStyle="#3a3068";g.fillRect(x*LT,y*LT,LT,LT);
+      if(f(x,y-1)){g.fillStyle="#5a4fa0";g.fillRect(x*LT,y*LT,LT,4)}
+      if(f(x,y+1)){g.fillStyle="#241c4a";g.fillRect(x*LT,y*LT+LT-5,LT,5)}}
+    else if((x+y)%2){g.fillStyle="#201a45";g.fillRect(x*LT,y*LT,LT,LT)}}
+  g.fillStyle="#3ee6c433";g.fillRect(m.sp[0]*LT,m.sp[1]*LT,LT,LT);
+  return m.bg=c;
+}
+let labM=null;
+function labMapFor(n){const k=n.sd+"|"+n.n+"|"+n.lv;if(!labM||labM.key!==k){labM=genLab(n.sd,n.n,n.lv);labM.key=k}return labM}
+function onLab(n){
+  const now=performance.now();if(st)tDt=Math.min(250,Math.max(60,tDt*.6+(now-tAt)*.4));
+  pv=st;st=n;tAt=now;const m=labMapFor(n);
+  if(pv&&pv.k==="lab"){
+    if(pv.lv!==n.lv)beep(440,.2,"triangle",.05,880);
+    else{
+      if(n.ky.length<pv.ky.length){pv.ky.filter(i=>!n.ky.includes(i)).forEach(i=>{const[a,b]=m.keys[i];sb((a+.5)*LT,(b+.5)*LT,"#ffd23f",14,200)});beep(880,.1,"triangle",.05,1320)}
+      if(n.go&~pv.go)beep(300,.18,"square",.04,620);
+      if(pv.go&~n.go)beep(520,.15,"square",.03,260);
+      if(n.lf<pv.lf){shk=now+250;beep(150,.25,"sawtooth",.05,60);if(navigator.vibrate)navigator.vibrate(60)}
+    }
+  }
+  setScore(Object.values(n.p).map(q=>[`${q[3]}${q[5]?" ✔":""}`,q[4]]));
+  setOv(n.o||n.fz?n.msg:"");
+}
+function drawLab(now){
+  const x=gctx(),m=labM;if(!m)return;
+  const o=pv&&pv.k==="lab"&&pv.sd===st.sd?pv:null,p=Math.min(1,(now-tAt)/tDt),dt=Math.min(.05,(now-(drawLab.t||now))/1000);drawLab.t=now;
+  const ip=(a,b)=>!a||Math.hypot(a[0]-b[0],a[1]-b[1])>90?[b[0],b[1]]:[a[0]+(b[0]-a[0])*p,a[1]+(b[1]-a[1])*p]; // pas d'interpolation après une téléportation
+  const P=Object.entries(st.p).map(([u,q])=>{const r=ip(o&&o.p[u],q);return{u,q,x:r[0],y:r[1]}});
+  const mpl=me&&P.find(e=>e.u===me.uid);
+  if(mpl){const r=predict(dt,mpl.x,mpl.y,120,11,m.TW*LT-11,11,m.TH*LT-11,(a,b)=>labBlocked(m,st.go,a,b));mpl.x=r[0];mpl.y=r[1]}else pred=null;
+  const Z=TOUCH?1.35:1,VW=800/Z,VH=560/Z,WW=m.TW*LT,WH=m.TH*LT,hs=vsc,ns=Math.min(1.5,hs),f=mpl||P[0],K=m.keys.length,ok=st.kk>=K;
+  const camX=WW<=VW?(WW-VW)/2:Math.max(0,Math.min(WW-VW,(f?f.x:WW/2)-VW/2)),camY=WH<=VH?(WH-VH)/2:Math.max(0,Math.min(WH-VH,(f?f.y:WH/2)-VH/2));
+  x.fillStyle="#0e0a22";x.fillRect(0,0,800,560);
+  x.save();x.scale(Z,Z);if(now<shk)x.translate((Math.random()-.5)*8,(Math.random()-.5)*8);x.translate(-camX,-camY);
+  x.drawImage(labBg(m),0,0);x.textAlign="center";x.textBaseline="middle";
+  // sortie
+  const ex=(m.ex[0]+.5)*LT,ey=(m.ex[1]+.5)*LT;
+  x.globalAlpha=ok?.55+.25*Math.sin(now/250):1;x.fillStyle=ok?"#34c759":"#ffffff14";x.fillRect(m.ex[0]*LT+2,m.ex[1]*LT+2,LT-4,LT-4);x.globalAlpha=1;
+  x.strokeStyle=ok?"#34c759":"#8a86b8";x.lineWidth=3;x.strokeRect(m.ex[0]*LT+2,m.ex[1]*LT+2,LT-4,LT-4);
+  x.font="22px sans-serif";x.fillStyle="#fff";x.fillText(ok?"🚪":"🔒",ex,ey+1);
+  // plaques, leviers et portes (une couleur par porte)
+  m.gates.forEach((g,i)=>{
+    const c=GC[i%4],pr=(st.pp>>i)&1,pm=(st.pm>>i)&1,op=(st.go>>i)&1,px=(g.px+.5)*LT,py=(g.py+.5)*LT;
+    x.fillStyle="#0007";x.beginPath();x.arc(px,py,17,0,7);x.fill();
+    x.strokeStyle=c;x.lineWidth=4;x.beginPath();x.arc(px,py,15,0,7);x.stroke();
+    x.globalAlpha=pr||pm?1:.35;x.fillStyle=c;x.beginPath();x.arc(px,py,pr?11:9,0,7);x.fill();x.globalAlpha=1;
+    if(st.n>1){const lx=(g.lx+.5)*LT,ly=(g.ly+.5)*LT,tx=lx+(pm?10:-10);
+      x.fillStyle="#241c4a";x.fillRect(lx-13,ly+3,26,9);x.strokeStyle=c;x.lineWidth=5;x.lineCap="round";x.beginPath();x.moveTo(lx,ly+6);x.lineTo(tx,ly-8);x.stroke();
+      x.fillStyle=c;x.beginPath();x.arc(tx,ly-8,4.5,0,7);x.fill()}
+    const gx=g.x*LT,gy=g.y*LT;
+    if(op){x.strokeStyle=c;x.globalAlpha=.55;x.lineWidth=2;x.setLineDash([5,5]);x.strokeRect(gx+3,gy+3,LT-6,LT-6);x.setLineDash([]);x.globalAlpha=1}
+    else{x.fillStyle=c;x.fillRect(gx+2,gy+2,LT-4,LT-4);x.fillStyle="#0007";[9,19,29].forEach(q=>x.fillRect(gx+q,gy+4,3,LT-8))}});
+  // clés
+  st.ky.forEach(i=>{const[a,b]=m.keys[i],kx=(a+.5)*LT,ky=(b+.5)*LT+Math.sin(now/220+i)*3;x.drawImage(glow("#ffd23f",30),kx-42,ky-42);x.font="22px sans-serif";x.fillStyle="#fff";x.fillText("🗝️",kx,ky)});
+  // gardiens
+  st.g.forEach((q,i)=>{const r=ip(o&&o.g[i],q),gx=r[0],gy=r[1],rr=13*(1+.06*Math.sin(now/110+i));let t=null,bd=1e12;P.forEach(e=>{const d=(e.x-gx)**2+(e.y-gy)**2;if(d<bd){bd=d;t=e}});
+    const a=t?Math.atan2(t.y-gy,t.x-gx):0;
+    x.fillStyle="#0006";x.beginPath();x.ellipse(gx,gy+rr*.8,rr*.9,rr*.35,0,0,7);x.fill();
+    x.fillStyle="#e63946";x.beginPath();x.arc(gx,gy,rr,0,7);x.fill();x.strokeStyle="#0005";x.lineWidth=2;x.stroke();
+    [-1,1].forEach(sd=>{const ex2=gx+Math.cos(a)*rr*.35-Math.sin(a)*rr*.4*sd,ey2=gy+Math.sin(a)*rr*.35+Math.cos(a)*rr*.4*sd;
+      x.fillStyle="#fff";x.beginPath();x.arc(ex2,ey2,rr*.26,0,7);x.fill();x.fillStyle="#14102b";x.beginPath();x.arc(ex2+Math.cos(a)*rr*.1,ey2+Math.sin(a)*rr*.1,rr*.13,0,7);x.fill()})});
+  // joueurs
+  P.forEach(e=>{const{u,q,x:px,y:py}=e,old=lab.pos[u];let a=lab.ang[u]||0;if(old&&Math.hypot(px-old[0],py-old[1])>.4)a=lab.ang[u]=Math.atan2(py-old[1],px-old[0]);lab.pos[u]=[px,py];
+    x.save();x.globalAlpha=q[2]?.45+.3*Math.sin(now/60):1;
+    x.fillStyle="#0006";x.beginPath();x.ellipse(px,py+9,11,4.5,0,0,7);x.fill();
+    if(me&&u===me.uid){x.globalAlpha*=.35;x.fillStyle=q[4];x.beginPath();x.arc(px,py,19,0,7);x.fill();x.globalAlpha=q[2]?.45+.3*Math.sin(now/60):1}
+    x.fillStyle=q[4];x.beginPath();x.arc(px,py,11,0,7);x.fill();x.strokeStyle="#0005";x.lineWidth=2;x.stroke();
+    [-1,1].forEach(sd=>{x.fillStyle="#fff";x.beginPath();x.arc(px+Math.cos(a)*5-Math.sin(a)*3.6*sd,py+Math.sin(a)*5+Math.cos(a)*3.6*sd,3,0,7);x.fill();
+      x.fillStyle="#14102b";x.beginPath();x.arc(px+Math.cos(a)*6.2-Math.sin(a)*3.6*sd,py+Math.sin(a)*6.2+Math.cos(a)*3.6*sd,1.4,0,7);x.fill()});
+    x.restore();x.fillStyle="#fff";x.font=`${12*ns}px sans-serif`;x.fillText(q[3],px,py-19-3*ns)});
+  const dt2=dt;parts=parts.filter(q=>(q.l-=dt2*1.8)>0);parts.forEach(q=>{q.x+=q.vx*dt2;q.y+=q.vy*dt2;x.globalAlpha=q.l;x.fillStyle=q.c;x.fillRect(q.x-3,q.y-3,6,6)});x.globalAlpha=1;
+  x.restore();
+  x.drawImage(vig(220,"9"),0,0);
+  // minicarte (en haut à droite : le pouce ne la cache pas)
+  const s=Math.min(150*ns/WW,100*ns/WH),mw=WW*s,mh=WH*s,mx=792-mw,my=8;
+  x.fillStyle="#0e0a22cc";x.fillRect(mx-3,my-3,mw+6,mh+6);x.globalAlpha=.9;x.drawImage(labBg(m),mx,my,mw,mh);x.globalAlpha=1;
+  x.fillStyle=ok?"#34c759":"#8a86b8";x.fillRect(mx+m.ex[0]*LT*s-2,my+m.ex[1]*LT*s-2,LT*s+4,LT*s+4);
+  P.forEach(e=>{x.fillStyle=e.q[4];x.beginPath();x.arc(mx+e.x*s,my+e.y*s,3,0,7);x.fill()});
+  x.strokeStyle="#fff6";x.lineWidth=1;x.strokeRect(mx+camX*s,my+camY*s,VW*s,VH*s);
+  // en-tête
+  x.fillStyle="#fff";x.font=`700 ${18*hs}px sans-serif`;x.textAlign="left";x.textBaseline="alphabetic";
+  x.fillText(`Niveau ${st.lv}   🗝 ${st.kk}/${K}   ♥ ${Math.max(0,st.lf)}`,12,6+19*hs);
+}
+const lab={pos:{},ang:{}};
+
+// ---------- Évasion coop : boucle de l'hôte (10 images/s) ----------
+async function startLab(){
+  const pace=mkPace(),c=code,players=lobby.players,ids=Object.keys(players),N=ids.length,SP=12; // SP = pixels par image (120 px/s)
+  await remove(R(`games/${c}`));await update(R(`lobbies/${c}`),{status:"playing"});
+  const P={},want={},seen={};
+  ids.forEach(u=>{P[u]={n:players[u].name,c:players[u].color,x:0,y:0,inv:0,ex:0};want[u]=[0,0]});
+  const un=onValue(R(`games/${c}/inputs`),s=>Object.entries(s.val()||{}).forEach(([u,v])=>{if(!P[u]||seen[u]===v)return;seen[u]=v;
+    const[a,b]=String(v).split(",").map(Number);if(a===a&&b===b)want[u]=[Math.max(-1,Math.min(1,a)),Math.max(-1,Math.min(1,b))]}));
+  let lv=0,sd=0,m=null,keys=[],kk=0,pm=0,pp=0,go=0,gr=[],G=[],cp=[0,0],lives=N+3,brk=0,clr=0,msg="";
+  const ctr=(tx,ty)=>[(tx+.5)*LT,(ty+.5)*LT],near=(u,x,y,d)=>(P[u].x-x)**2+(P[u].y-y)**2<d*d;
+  const newLevel=()=>{
+    lv++;sd=Math.floor(Math.random()*2147483647);m=genLab(sd,N,lv);keys=m.keys.map((_,i)=>i);kk=0;pm=pp=go=0;gr=m.gates.map(()=>0);
+    cp=ctr(...m.sp);G=m.gs.map(([tx,ty])=>{const[x,y]=ctr(tx,ty);return{x,y,tx,ty,dx:0,dy:0}});
+    ids.forEach(u=>{const q=P[u];q.x=cp[0];q.y=cp[1];q.inv=15;q.ex=0});
+    if(lv>1)lives=Math.min(N+5,lives+1);
+    msg=`Niveau ${lv}`;brk=20;
+  };
+  const pub=(x={})=>set(R(`games/${c}/state`),JSON.stringify({k:"lab",n:N,lv,sd,kk,lf:lives,go,pp,pm,ky:keys,fz:brk>0?1:0,msg,
+    g:G.map(g=>[Math.round(g.x),Math.round(g.y)]),
+    p:Object.fromEntries(ids.map(u=>{const q=P[u];return[u,[Math.round(q.x),Math.round(q.y),q.inv>0?1:0,q.n,q.c,q.ex]]})),...x}));
+  const step=()=>{
+    if(code!==c){un();return}
+    const live=ids.filter(u=>lobby&&lobby.players&&lobby.players[u]),solo=live.length<=1;
+    if(brk>0){brk--;if(!brk&&clr){clr=0;newLevel()}}
+    else{
+      // plaques et leviers. À plusieurs : la porte reste ouverte tant qu'on tient la plaque (+1 s), le levier la verrouille ouverte.
+      // Tout seul (ou si les autres sont partis) : la plaque suffit, elle verrouille la porte ouverte.
+      m.gates.forEach((g,i)=>{
+        const[px,py]=ctr(g.px,g.py),[lx,ly]=ctr(g.lx,g.ly),on=ids.some(u=>near(u,px,py,22));
+        if(on){pp|=1<<i;gr[i]=solo?0:10;if(solo&&!((pm>>i)&1)){pm|=1<<i;cp=ctr(g.x,g.y)}}else{pp&=~(1<<i);if(gr[i]>0)gr[i]--}
+        if(!((pm>>i)&1)&&ids.some(u=>near(u,lx,ly,22))){pm|=1<<i;cp=[lx,ly]}});
+      go=pm;m.gates.forEach((g,i)=>{const[gx,gy]=ctr(g.x,g.y); // une porte ne se referme jamais sur quelqu'un
+        if(((pp>>i)&1)||gr[i]>0||ids.some(u=>Math.abs(P[u].x-gx)<LT/2+9&&Math.abs(P[u].y-gy)<LT/2+9))go|=1<<i});
+      // déplacements (3 petits pas par image pour coller aux murs)
+      ids.forEach(u=>{const q=P[u];if(q.inv>0)q.inv--;const[a,b]=want[u],n=a&&b?.707:1,s=SP*n/3;
+        for(let t=0;t<3;t++){
+          if(a){const nx=q.x+a*s;if(!labBlocked(m,go,nx,q.y))q.x=nx}
+          if(b){const ny=q.y+b*s;if(!labBlocked(m,go,q.x,ny))q.y=ny}}});
+      // clés (partagées par toute l'équipe)
+      keys=keys.filter(ki=>{const[kx,ky]=ctr(...m.keys[ki]);if(ids.some(u=>near(u,kx,ky,24))){kk++;return false}return true});
+      // gardiens : patrouillent dans les couloirs, tournent aux intersections
+      const gs=4.2+Math.min(lv,8)*.25;
+      G.forEach(g=>{const[tx,ty]=ctr(g.tx,g.ty),ex=tx-g.x,ey=ty-g.y,d=Math.hypot(ex,ey);
+        if(d<=gs){g.x=tx;g.y=ty;
+          const dirs=[[1,0],[-1,0],[0,1],[0,-1]].filter(([a,b])=>m.T[(g.ty+b)*m.TW+g.tx+a]===0),fw=dirs.filter(([a,b])=>!(a===-g.dx&&b===-g.dy)),pool=fw.length?fw:dirs,
+            same=pool.find(([a,b])=>a===g.dx&&b===g.dy),[a,b]=same&&Math.random()<.75?same:pool[Math.floor(Math.random()*pool.length)];
+          g.dx=a;g.dy=b;g.tx+=a;g.ty+=b}
+        else{g.x+=ex/d*gs;g.y+=ey/d*gs}});
+      // un gardien touche un joueur : une vie de l'équipe en moins, retour au dernier point de passage
+      ids.forEach(u=>{const q=P[u];if(q.inv>0)return;if(G.some(g=>(g.x-q.x)**2+(g.y-q.y)**2<23*23)){lives--;q.x=cp[0];q.y=cp[1];q.inv=25}});
+      // sortie : toutes les clés + tout le monde dessus
+      const[exx,eyy]=ctr(...m.ex),all=kk>=m.keys.length;
+      ids.forEach(u=>{P[u].ex=all&&near(u,exx,eyy,30)?1:0});
+      if(all&&live.length&&live.every(u=>P[u].ex)){clr=1;brk=25;msg=`Niveau ${lv} réussi !`}
+      if(lives<=0){
+        un();set(R("stats/gamesPlayed"),increment(1)).catch(()=>{});pub({o:1,lf:0,msg:`Défaite au niveau ${lv} · ${lv-1} réussi${lv>2?"s":""}`});
+        setTimeout(async()=>{const cp2=(lobby&&lobby.players)||{},u2={status:"lobby"};ids.filter(u=>cp2[u]).forEach(u=>u2[`players/${u}/ready`]=u===me.uid);try{await update(R(`lobbies/${c}`),u2)}catch{}},6000);
+        return}
+    }
+    pub();pace(100,step);
+  };
+  newLevel();step();
 }
 
 // ---------- Battle Royale (l'hôte simule : 10 images/s, zone qui rétrécit, butin, tirs) ----------

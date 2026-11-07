@@ -214,7 +214,22 @@ function renderStats(D){
 }
 
 // ---------- Installation (PWA) ----------
-if("serviceWorker" in navigator&&location.protocol==="https:")addEventListener("load",()=>navigator.serviceWorker.register("sw.js",{updateViaCache:"none"}).catch(()=>{}));
+if("serviceWorker" in navigator&&location.protocol==="https:"){
+  addEventListener("load",()=>navigator.serviceWorker.register("sw.js",{updateViaCache:"none"}).catch(()=>{}));
+  // Nouvelle version détectée : on recharge seulement si ça ne coupe rien (jamais en lobby ni en partie, ni pendant la saisie)
+  let notified=false;
+  navigator.serviceWorker.addEventListener("message",e=>{
+    if(!e.data||e.data.type!=="sw-update"||notified)return;
+    notified=true;
+    const typing=/^(INPUT|TEXTAREA)$/.test(document.activeElement&&document.activeElement.tagName);
+    if(!typing&&(cur==="home"||cur==="stats"||cur==="auth")){location.reload();return}
+    $("upd").hidden=false;
+  });
+  const check=()=>{navigator.serviceWorker.controller&&navigator.serviceWorker.controller.postMessage({type:"check"});navigator.serviceWorker.getRegistration().then(r=>r&&r.update()).catch(()=>{})};
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden)check()});
+  setInterval(check,10*60*1000);setTimeout(check,4000);
+  $("updbtn").onclick=()=>location.reload();
+}
 (function(){
   const btn=$("inst"),help=$("iosHelp");
   const standalone=matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;

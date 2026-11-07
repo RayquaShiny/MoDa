@@ -79,6 +79,7 @@ canvas{touch-action:none;-webkit-user-select:none;user-select:none;width:100%;ma
  <section id="lobby" class="panel" hidden>
   <h2>Lobby</h2><div class="code" id="lcode"></div>
   <div id="players"></div>
+  <div class="row" id="opts"><button class="alt mini" id="oSp"></button><button class="alt mini" id="oWr"></button><button class="alt mini" id="oBo"></button></div>
   <div class="row"><button id="ready">Prêt</button><button id="start" hidden>Lancer la partie</button><button class="alt" id="leave">Quitter</button></div>
   <p style="color:var(--mute)">Invite un ami avec le bouton « Inviter » de la liste à droite, ou donne-lui le code.</p>
  </section>
@@ -86,7 +87,7 @@ canvas{touch-action:none;-webkit-user-select:none;user-select:none;width:100%;ma
   <div style="position:relative;max-width:800px"><canvas id="cv" width="800" height="560"></canvas>
   <div id="ov" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:800 56px 'Bricolage Grotesque';text-shadow:0 2px 12px #000;text-align:center"></div></div>
   <div id="pad"><span></span><button data-d="U" aria-label="Haut">▲</button><span></span><button data-d="L" aria-label="Gauche">◀</button><button data-d="D" aria-label="Bas">▼</button><button data-d="R" aria-label="Droite">▶</button></div>
-  <div id="score" class="row"></div><p style="color:var(--mute)">Flèches ou ZQSD / WASD. Sur mobile : glisse le doigt.</p>
+  <div id="score" class="row"></div><div class="row"><button class="alt mini" id="mute" aria-label="Son"></button><span style="color:var(--mute)">Flèches ou ZQSD / WASD. Sur mobile : glisse le doigt. ⭐ = +3 points, 🛡️ = traverse tout pendant 5 s.</span></div>
  </section>
 </div>
 <aside class="panel" id="side" hidden>

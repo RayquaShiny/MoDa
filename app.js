@@ -167,7 +167,7 @@ const rcode=()=>Array.from({length:5},()=>"ABCDEFGHJKLMNPQRSTUVWXYZ"[Math.floor(
 const firstColor=pl=>COLORS.find(c=>!Object.values(pl||{}).some(p=>p.color===c))||COLORS[0];
 $("tsnake").onclick=$("create").onclick=async()=>{
   const c=rcode();
-  await set(R(`lobbies/${c}`),{host:me.uid,game:"snake",status:"lobby",players:{[me.uid]:{name:me.name,color:COLORS[0],ready:true}}});
+  await set(R(`lobbies/${c}`),{host:me.uid,game:"snake",status:"lobby",opts:{sp:1,wr:0,bo:1},players:{[me.uid]:{name:me.name,color:COLORS[0],ready:true}}});
   onDisconnect(R(`lobbies/${c}`)).remove();enter(c);
 };
 $("join").onclick=()=>joinLobby($("joincode").value.trim().toUpperCase());
@@ -192,10 +192,15 @@ function enter(c){
 function renderLobby(){
   const b=$("players"),host=lobby.host===me.uid,pl=lobby.players||{};b.replaceChildren();
   Object.entries(pl).forEach(([u,p])=>{const r=h("div",null);r.className="pl";const sw=h("span");sw.className="sw";sw.style.background=p.color;
-    r.append(sw,h("span",p.name+(u===lobby.host?" (hôte)":"")),h("span",p.ready?"✔ prêt":"…"));b.append(r)});
+    r.append(sw,h("span",p.name+(u===lobby.host?" (hôte)":"")+(p.wins?` 🏆${p.wins}`:"")),h("span",p.ready?"✔ prêt":"…"));b.append(r)});
   $("ready").hidden=host;$("ready").textContent=pl[me.uid]?.ready?"Pas prêt":"Prêt";
+  const op=lobby.opts||{};$("oSp").textContent="⚡ Vitesse : "+["lente","normale","rapide"][op.sp??1];
+  $("oWr").textContent=op.wr?"🌀 Murs : traversables":"🧱 Murs : mortels";$("oBo").textContent=op.bo===0?"🎁 Bonus : non":"🎁 Bonus : oui";
+  ["oSp","oWr","oBo"].forEach(i=>$(i).disabled=!host);
   $("start").hidden=!host;$("start").disabled=!Object.values(pl).every(p=>p.ready);
 }
+const setOpt=(k,f)=>()=>{if(lobby&&lobby.host===me.uid)update(R(`lobbies/${code}/opts`),{[k]:f(lobby.opts||{})}).catch(err)};
+$("oSp").onclick=setOpt("sp",o=>((o.sp??1)+1)%3);$("oWr").onclick=setOpt("wr",o=>o.wr?0:1);$("oBo").onclick=setOpt("bo",o=>o.bo===0?1:0);
 $("ready").onclick=()=>set(R(`lobbies/${code}/players/${me.uid}/ready`),!lobby.players[me.uid].ready);
 $("leave").onclick=leaveLobby;
 async function leaveLobby(){
@@ -206,21 +211,63 @@ async function leaveLobby(){
 function local(){unLobby&&unLobby();unState&&unState();unLobby=unState=null;code=lobby=null;if(me)showHome()}
 
 // ---------- Jeu : affichage (tous les joueurs) ----------
+let st=null,pv=null,tAt=0,tDt=130,raf=0,parts=[],mute=false,ac;
+try{mute=localStorage.getItem("moda.mute")==="1"}catch{}
+const AC=()=>{try{ac=ac||new AudioContext();ac.resume()}catch{}};
+addEventListener("pointerdown",AC,{once:true});addEventListener("keydown",AC,{once:true});
+const beep=(f,d=.08,t="square",v=.04,f2)=>{if(mute||!ac)return;try{const T=ac.currentTime,o=ac.createOscillator(),g=ac.createGain();o.type=t;o.frequency.setValueAtTime(f,T);if(f2)o.frequency.exponentialRampToValueAtTime(f2,T+d);
+  g.gain.setValueAtTime(v,T);g.gain.exponentialRampToValueAtTime(.001,T+d);o.connect(g);g.connect(ac.destination);o.start(T);o.stop(T+d)}catch{}};
+const muteUI=()=>$("mute").textContent=mute?"🔇":"🔊";muteUI();
+$("mute").onclick=()=>{mute=!mute;try{localStorage.setItem("moda.mute",mute?"1":"0")}catch{}muteUI()};
+const burst=(a,b,c,n)=>{for(let i=0;i<n;i++){const r=Math.random()*6.28,v=2+Math.random()*5;parts.push({x:a+.5,y:b+.5,vx:Math.cos(r)*v,vy:Math.sin(r)*v,l:1,c})}};
 function enterGame(c){
-  show("game");lastDir=null;
-  unState=onValue(R(`games/${c}/state`),s=>{if(s.val())draw(JSON.parse(s.val()))});
+  show("game");lastDir=null;st=pv=null;parts=[];
+  unState=onValue(R(`games/${c}/state`),s=>{if(s.val())onState(JSON.parse(s.val()))});
+  if(!raf)raf=requestAnimationFrame(frame);
 }
-function draw(st){
-  const cv=$("cv"),x=cv.getContext("2d"),k=cv.width/st.W;
+function onState(n){
+  const now=performance.now();if(st)tDt=Math.min(250,Math.max(60,tDt*.6+(now-tAt)*.4));
+  pv=st;st=n;tAt=now;const mine=u=>me&&u===me.uid;
+  if(n.cd&&(!pv||pv.cd!==n.cd))beep(520,.1,"sine");
+  if(pv&&n.o&&!pv.o)beep(n.w?880:200,.3,"triangle",.06);
+  Object.entries(n.s).forEach(([u,s])=>{const o=pv&&pv.s[u];if(!o)return;
+    if(o.a&&!s.a){burst(o.b[0][0],o.b[0][1],s.c,26);beep(180,.35,"sawtooth",.05,50);if(mine(u)&&navigator.vibrate)navigator.vibrate(80)}
+    else if(s.p>o.p&&s.b[0]){burst(s.b[0][0],s.b[0][1],s.c,8);if(mine(u)){const g=s.p-o.p>1;beep(g?880:620,.07,"square",.04,g?1320:820)}}
+    if(s.sh>0&&!o.sh&&mine(u))beep(300,.25,"sine",.05,900)});
+  $("score").replaceChildren(...Object.values(n.s).sort((a,b)=>b.p-a.p).map(s=>{const d=h("div",`${s.n} : ${s.p}${s.sh>0?" 🛡":""}${s.a?"":" ✖"}`);d.style.color=s.c;d.style.fontWeight=600;return d}));
+  $("ov").textContent=n.cd?n.cd:n.o?(n.w?`${n.w} gagne !`:"Fin de partie"):"";
+}
+function frame(now){
+  if(cur!=="game"){raf=0;return}
+  raf=requestAnimationFrame(frame);if(!st)return;
+  const cv=$("cv"),x=cv.getContext("2d"),k=cv.width/st.W,p=Math.min(1,(now-tAt)/tDt),mid=me&&me.uid;
   x.fillStyle="#0e0a22";x.fillRect(0,0,cv.width,cv.height);
   x.fillStyle="#1a1438";for(let i=0;i<st.W;i++)for(let j=0;j<st.H;j++)if((i+j)%2)x.fillRect(i*k,j*k,k,k);
-  x.fillStyle="#fff";st.f.forEach(([a,b])=>{x.beginPath();x.arc((a+.5)*k,(b+.5)*k,k*.32,0,7);x.fill()});
-  Object.values(st.s).forEach(s=>{x.fillStyle=s.c;s.b.forEach(([a,b],i)=>{x.globalAlpha=i?.85:1;x.fillRect(a*k+1,b*k+1,k-2,k-2)});x.globalAlpha=1});
-  $("score").replaceChildren(...Object.values(st.s).sort((a,b)=>b.p-a.p).map(s=>{const d=h("div",`${s.n} : ${s.p}${s.a?"":" ✖"}`);d.style.color=s.c;d.style.fontWeight=600;return d}));
-  $("ov").textContent=st.cd?st.cd:st.o?(st.w?`${st.w} gagne !`:"Fin de partie"):"";
+  x.textAlign="center";x.textBaseline="middle";
+  st.f.forEach(([a,b,t,l])=>{const cx=(a+.5)*k,cy=(b+.5)*k,pu=1+.12*Math.sin(now/180+a);
+    if(t&&l<25&&Math.floor(now/140)%2)return;
+    if(!t){x.fillStyle="#fff";x.beginPath();x.arc(cx,cy,k*.3*pu,0,7);x.fill()}
+    else{x.font=`${k*.95*pu}px sans-serif`;x.fillText(t===1?"⭐":"🛡️",cx,cy)}});
+  Object.entries(st.s).forEach(([u,s])=>{
+    if(!s.b.length)return;
+    const o=pv&&pv.s[u],ob=o&&o.b.length?o.b:s.b;
+    const pts=s.b.map((c,i)=>{const q=ob[Math.min(i,ob.length-1)],j=Math.abs(q[0]-c[0])>1||Math.abs(q[1]-c[1])>1;return[(j?c[0]:q[0]+(c[0]-q[0])*p)+.5,(j?c[1]:q[1]+(c[1]-q[1])*p)+.5]});
+    x.save();x.globalAlpha=s.sh>0?.55+.25*Math.sin(now/80):1;
+    x.strokeStyle=s.c;x.lineCap=x.lineJoin="round";x.lineWidth=k*.78;
+    if(u===mid){x.shadowColor=s.c;x.shadowBlur=14}
+    x.beginPath();pts.forEach(([a,b],i)=>{if(!i||Math.abs(a-pts[i-1][0])>1.5||Math.abs(b-pts[i-1][1])>1.5)x.moveTo(a*k,b*k);else x.lineTo(a*k,b*k)});x.stroke();
+    x.shadowBlur=0;x.globalAlpha=1;
+    const[hx,hy]=pts[0],[dx,dy]=s.d,e=k*.17;
+    [-1,1].forEach(sd=>{const ex=(hx+dx*.22-dy*.22*sd)*k,ey=(hy+dy*.22+dx*.22*sd)*k;
+      x.fillStyle="#fff";x.beginPath();x.arc(ex,ey,e,0,7);x.fill();x.fillStyle="#14102b";x.beginPath();x.arc(ex+dx*e*.35,ey+dy*e*.35,e*.5,0,7);x.fill()});
+    if(s.sh>0){x.strokeStyle="#3ee6c4";x.lineWidth=3;x.beginPath();x.arc(hx*k,hy*k,k*.85,0,7);x.stroke()}
+    x.restore()});
+  const dt=Math.min(.05,(now-(frame.t||now))/1000);frame.t=now;
+  parts=parts.filter(q=>(q.l-=dt*1.6)>0);
+  parts.forEach(q=>{q.x+=q.vx*dt;q.y+=q.vy*dt;x.globalAlpha=q.l;x.fillStyle=q.c;x.fillRect(q.x*k-3,q.y*k-3,6,6)});x.globalAlpha=1;
 }
 const KEYS={ArrowUp:"U",w:"U",z:"U",ArrowDown:"D",s:"D",ArrowLeft:"L",a:"L",q:"L",ArrowRight:"R",d:"R"};
-const send=d=>{if(cur!=="game"||d===lastDir)return;lastDir=d;set(R(`games/${code}/inputs/${me.uid}`),d)};
+let seqN=0;const send=d=>{if(cur!=="game"||d===lastDir)return;lastDir=d;set(R(`games/${code}/inputs/${me.uid}`),d+(++seqN))};
 addEventListener("keydown",e=>{if(cur!=="game"||/^(INPUT|TEXTAREA)$/.test(e.target.tagName))return;const d=KEYS[e.key.length>1?e.key:e.key.toLowerCase()];if(d){e.preventDefault();send(d)}});
 let t0;const cvs=$("cv");
 cvs.addEventListener("touchstart",e=>{t0=e.touches[0]},{passive:true});
@@ -230,33 +277,52 @@ document.querySelectorAll("#pad button").forEach(b=>{const f=e=>{e.preventDefaul
 
 // ---------- Jeu : boucle de l'hôte ----------
 $("start").onclick=async()=>{
-  const c=code,players=lobby.players,ids=Object.keys(players),W=40,H=28;
+  const c=code,players=lobby.players,ids=Object.keys(players),o=lobby.opts||{},W=40,H=28;
+  const base=[170,120,85][o.sp??1],wrap=!!o.wr,bonus=o.bo!==0;
   await remove(R(`games/${c}`));
   await update(R(`lobbies/${c}`),{status:"playing"});
-  const V={U:[0,-1],D:[0,1],L:[-1,0],R:[1,0]},want={},snakes={},food=[];
-  ids.forEach((u,i)=>{const y=3+i*3;snakes[u]={n:players[u].name,c:players[u].color,a:true,p:0,d:V.R,b:[[5,y],[4,y],[3,y]]}});
-  const un=onValue(R(`games/${c}/inputs`),s=>Object.entries(s.val()||{}).forEach(([u,d])=>want[u]=V[d]));
-  const free=()=>{const o=new Set();Object.values(snakes).forEach(s=>s.b.forEach(c=>o.add(c+"")));food.forEach(f=>o.add(f+""));
-    for(;;){const p=[Math.floor(Math.random()*W),Math.floor(Math.random()*H)];if(!o.has(p+""))return p}};
+  const V={U:[0,-1],D:[0,1],L:[-1,0],R:[1,0]},q={},seen={},snakes={},food=[];
+  ids.forEach((u,i)=>{const y=3+i*3;q[u]=[];snakes[u]={n:players[u].name,c:players[u].color,a:true,p:0,g:0,sh:0,d:V.R,b:[[5,y],[4,y],[3,y]]}});
+  // file d'attente de virages (3 max par joueur) : un virage par tick, aucun n'est perdu
+  const un=onValue(R(`games/${c}/inputs`),s=>Object.entries(s.val()||{}).forEach(([u,v])=>{if(q[u]&&seen[u]!==v&&V[v[0]]){seen[u]=v;if(q[u].length<3)q[u].push(v[0])}}));
+  const free=()=>{const t=new Set();Object.values(snakes).forEach(s=>s.b.forEach(c=>t.add(c+"")));food.forEach(f=>t.add(f[0]+","+f[1]));
+    for(;;){const p=[Math.floor(Math.random()*W),Math.floor(Math.random()*H)];if(!t.has(p+""))return p}};
   const pub=(x={})=>set(R(`games/${c}/state`),JSON.stringify({W,H,f:food,s:snakes,...x}));
-  for(let i=0;i<Math.max(3,ids.length+2);i++)food.push(free());
+  for(let i=0;i<Math.max(3,ids.length+2);i++)food.push([...free(),0,0]); // [x,y,type(0 pomme,1 étoile,2 bouclier),durée]
   for(let n=3;n>0;n--){await pub({cd:n});await new Promise(r=>setTimeout(r,1000))}
-  const iv=setInterval(()=>{
+  const step=()=>{
+    if(code!==c){un();return} // l'hôte a quitté : on arrête tout
     const alive=Object.keys(snakes).filter(u=>snakes[u].a),heads={},occ=new Set(),hc={};
-    alive.forEach(u=>{const s=snakes[u],d=want[u];
-      if(d&&!(d[0]===-s.d[0]&&d[1]===-s.d[1]))s.d=d;
-      heads[u]=[s.b[0][0]+s.d[0],s.b[0][1]+s.d[1]];hc[heads[u]+""]=(hc[heads[u]+""]||0)+1;s.b.forEach(c=>occ.add(c+""))});
-    alive.forEach(u=>{const s=snakes[u],[x,y]=heads[u],k=heads[u]+"";
-      if(x<0||y<0||x>=W||y>=H||occ.has(k)||hc[k]>1){s.a=false;s.b=[];return}
+    alive.forEach(u=>{const s=snakes[u];
+      while(q[u].length){const d=V[q[u].shift()];if(d[0]*s.d[0]+d[1]*s.d[1]===0){s.d=d;break}}
+      let x=s.b[0][0]+s.d[0],y=s.b[0][1]+s.d[1];
+      if(wrap||s.sh>0){x=(x+W)%W;y=(y+H)%H}
+      heads[u]=[x,y];hc[x+","+y]=(hc[x+","+y]||0)+1;s.b.forEach(c=>occ.add(c+""))});
+    alive.forEach(u=>{const s=snakes[u],[x,y]=heads[u],k=x+","+y,ghost=s.sh>0;
+      if(ghost)s.sh--;
+      if(!ghost&&(x<0||y<0||x>=W||y>=H||occ.has(k)||hc[k]>1)){s.a=false;s.b=[];return}
       s.b.unshift([x,y]);const fi=food.findIndex(f=>f[0]===x&&f[1]===y);
-      if(fi>=0){s.p++;food.splice(fi,1);food.push(free())}else s.b.pop()});
+      if(fi>=0){const f=food.splice(fi,1)[0];
+        if(f[2]===2)s.sh=40;else{const n=f[2]===1?3:1;s.p+=n;s.g+=n}
+        if(!f[2])food.push([...free(),0,0])}
+      if(s.g>0)s.g--;else s.b.pop()});
+    food.forEach(f=>{if(f[2])f[3]--});
+    for(let i=food.length;i--;)if(food[i][2]&&food[i][3]<=0)food.splice(i,1);
+    if(bonus&&food.filter(f=>f[2]).length<2&&Math.random()<.025)food.push([...free(),Math.random()<.65?1:2,100]);
     const left=Object.keys(snakes).filter(u=>snakes[u].a);
     if(ids.length>1?left.length<=1:left.length===0){
-      clearInterval(iv);un();set(R("stats/gamesPlayed"),increment(1)).catch(()=>{});pub({o:1,w:left[0]?snakes[left[0]].n:null});
-      setTimeout(async()=>{const up={status:"lobby"};ids.forEach(u=>up[`players/${u}/ready`]=u===me.uid);
+      un();set(R("stats/gamesPlayed"),increment(1)).catch(()=>{});pub({o:1,w:left[0]?snakes[left[0]].n:null});
+      setTimeout(async()=>{const cp=(lobby&&lobby.players)||{},up={status:"lobby"};
+        ids.filter(u=>cp[u]).forEach(u=>up[`players/${u}/ready`]=u===me.uid);
+        if(ids.length>1&&left[0]&&cp[left[0]])up[`players/${left[0]}/wins`]=(cp[left[0]].wins||0)+1;
         try{await update(R(`lobbies/${c}`),up)}catch{}},5000);
-    }else pub();
-  },120);
+      return;
+    }
+    pub();
+    // la partie accélère quand les serpents grandissent
+    setTimeout(step,Math.max(60,base-Math.max(...Object.values(snakes).map(s=>s.p))*2));
+  };
+  step();
 };
 
 // ---------- Owners : interrupteur + statistiques ----------

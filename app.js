@@ -5,19 +5,22 @@ import {getDatabase,ref,get,set,update,remove,onValue,onDisconnect,serverTimesta
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="10";
+const VER="11";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
 const h=(t,txt,fn)=>{const e=document.createElement(t);if(txt!=null)e.textContent=txt;if(fn)e.onclick=fn;return e};
 const R=p=>ref(db,p);
+const TOUCH=matchMedia("(hover:none) and (pointer:coarse)").matches,LOW=TOUCH||(navigator.hardwareConcurrency||8)<=4; // écran tactile : mode plein écran + effets allégés
 const COLORS=["#ff4d6d","#3ee6c4","#ffd23f","#6c8cff","#ff9f1c","#c77dff","#80ed99","#f8f9fa"];
 const VIEWS=["auth","home","stats","lobby","game"];
 const OW=["rayqua","8x"],ownerMail=n=>`${n}@moda.owner`;
 const ownerOf=u=>OW.find(n=>u.email===ownerMail(n));
 let adm=false,unStats=[];try{adm=localStorage.getItem("moda.stats")==="1"}catch{}
 let me=null,cur="auth",code=null,lobby=null,pending=null,unLobby=null,unState=null,presUn=[],lastDir=null;
-const show=v=>{cur=v;VIEWS.forEach(x=>$(x).hidden=x!==v);$("side").hidden=v==="auth"};
+const show=v=>{cur=v;VIEWS.forEach(x=>$(x).hidden=x!==v);$("side").hidden=v==="auth";
+  document.body.classList.toggle("gm",TOUCH&&v==="game"); // plein écran de jeu sur téléphone
+  if(v!=="game"){resetTouch();unwake()}};
 let tt;const toast=m=>{$("toast").textContent=m;clearTimeout(tt);tt=setTimeout(()=>$("toast").textContent="",3500)};
 const clean=s=>(s||"joueur").replace(/[^A-Za-z0-9_]/g,"").slice(0,16).padEnd(3,"x");
 
@@ -184,6 +187,7 @@ onAuthStateChanged(auth,run);
 addEventListener("online",()=>{const u=auth.currentUser;if(u&&!me)run(u)});
 
 // ---------- Amis & invitations ----------
+$("fname").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();$("fadd").click()}});
 $("fadd").onclick=async()=>{
   const n=$("fname").value.trim().toLowerCase();if(!n)return;
   const t=(await get(R(`usernames/${n}`))).val();
@@ -221,6 +225,7 @@ const mkLobby=game=>async()=>{
 };
 $("tsnake").onclick=mkLobby("snake");$("tsurv").onclick=mkLobby("surv");$("tbr").onclick=mkLobby("br");
 $("join").onclick=()=>joinLobby($("joincode").value.trim().toUpperCase());
+$("joincode").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();$("join").click()}});
 async function joinLobby(c){
   if(code)await leaveLobby();
   const l=(await get(R(`lobbies/${c}`))).val();
@@ -268,17 +273,65 @@ async function leaveLobby(){
 function local(){unLobby&&unLobby();unState&&unState();unLobby=unState=null;code=lobby=null;if(me)showHome()}
 
 // ---------- Jeu : affichage (tous les joueurs) ----------
-let gk="snake",lastMv="",st=null,pv=null,tAt=0,tDt=130,raf=0,parts=[],mute=false,ac;
+let gk="snake",lastMv="",st=null,pv=null,tAt=0,tDt=130,raf=0,parts=[],mute=false,ac,pred=null,scoreKey="",gx=null,vsc=1;
 try{mute=localStorage.getItem("moda.mute")==="1"}catch{}
-const AC=()=>{try{ac=ac||new AudioContext();ac.resume()}catch{}};
-addEventListener("pointerdown",AC,{once:true});addEventListener("keydown",AC,{once:true});
+const AC=()=>{try{ac=ac||new(window.AudioContext||window.webkitAudioContext)();if(ac.state!=="running")ac.resume()}catch{}};
+["pointerdown","touchend","click","keydown"].forEach(t=>addEventListener(t,AC,{passive:true}));
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)AC()});
 const beep=(f,d=.08,t="square",v=.04,f2)=>{if(mute||!ac)return;try{const T=ac.currentTime,o=ac.createOscillator(),g=ac.createGain();o.type=t;o.frequency.setValueAtTime(f,T);if(f2)o.frequency.exponentialRampToValueAtTime(f2,T+d);
   g.gain.setValueAtTime(v,T);g.gain.exponentialRampToValueAtTime(.001,T+d);o.connect(g);g.connect(ac.destination);o.start(T);o.stop(T+d)}catch{}};
 const muteUI=()=>$("mute").textContent=mute?"🔇":"🔊";muteUI();
 $("mute").onclick=()=>{mute=!mute;try{localStorage.setItem("moda.mute",mute?"1":"0")}catch{}muteUI()};
-const burst=(a,b,c,n)=>{for(let i=0;i<n;i++){const r=Math.random()*6.28,v=2+Math.random()*5;parts.push({x:a+.5,y:b+.5,vx:Math.cos(r)*v,vy:Math.sin(r)*v,l:1,c})}};
+const burst=(a,b,c,n)=>{if(LOW)n=Math.ceil(n/2);if(parts.length>150)return;for(let i=0;i<n;i++){const r=Math.random()*6.28,v=2+Math.random()*5;parts.push({x:a+.5,y:b+.5,vx:Math.cos(r)*v,vy:Math.sin(r)*v,l:1,c})}};
+
+// ---------- Outils de rendu et de confort (téléphone) ----------
+// Contexte du canvas : sans transparence (plus rapide) ; sur téléphone on coupe les ombres floues, très coûteuses sous iOS
+function gctx(){
+  if(gx)return gx;gx=$("cv").getContext("2d",{alpha:false});
+  if(LOW)try{Object.defineProperty(gx,"shadowBlur",{get:()=>0,set(){},configurable:true})}catch{}
+  return gx;
+}
+// Le jeu est parfois affiché petit (téléphone en portrait) : on agrandit l'interface dessinée pour qu'elle reste lisible
+const calcVs=()=>{const w=$("cv").clientWidth;vsc=w>0?Math.max(1,Math.min(1.6,.8*800/w)):1};
+try{new ResizeObserver(calcVs).observe($("cv"))}catch{addEventListener("resize",calcVs)}
+// Fonds et effets qui ne changent pas : dessinés une seule fois puis recopiés (au lieu de centaines de fillRect par image)
+const mkC=(w,h)=>{const c=document.createElement("canvas");c.width=w;c.height=h;return c};
+let skBg=null,svBg=null;const vigs={},glows={};
+const snakeBg=(W,H,k)=>{const key=W+"x"+H+"x"+k;if(skBg&&skBg.key===key)return skBg;const c=mkC(W*k,H*k),g=c.getContext("2d");
+  g.fillStyle="#0e0a22";g.fillRect(0,0,c.width,c.height);g.fillStyle="#1a1438";for(let i=0;i<W;i++)for(let j=0;j<H;j++)if((i+j)%2)g.fillRect(i*k,j*k,k,k);c.key=key;return skBg=c};
+const survBg=()=>{if(svBg)return svBg;const c=mkC(820,580),g=c.getContext("2d");g.fillStyle="#0e0a22";g.fillRect(0,0,820,580);g.fillStyle="#1a1438";
+  for(let i=0;i<800;i+=40)for(let j=0;j<560;j+=40)if((i+j)%80===0)g.fillRect(i+10,j+10,40,40);return svBg=c};
+const vig=(r0,a)=>{const k=r0+a;if(vigs[k])return vigs[k];const c=mkC(800,560),g=c.getContext("2d"),gr=g.createRadialGradient(400,280,r0,400,280,520);
+  gr.addColorStop(0,"#0000");gr.addColorStop(1,"#000"+a);g.fillStyle=gr;g.fillRect(0,0,800,560);return vigs[k]=c};
+const glow=(col,r)=>{const k=col+r;if(glows[k])return glows[k];const c=mkC(84,84),g=c.getContext("2d"),gr=g.createRadialGradient(42,42,2,42,42,r);
+  gr.addColorStop(0,col+"99");gr.addColorStop(1,col+"00");g.fillStyle=gr;g.fillRect(0,0,84,84);return glows[k]=c};
+// Interface HTML : on ne touche au DOM que si le texte a vraiment changé (10 fois par seconde sinon)
+function setScore(a){const k=a.map(e=>e[0]+"|"+e[1]).join("\n");if(k===scoreKey)return;scoreKey=k;
+  $("score").replaceChildren(...a.map(([t,c])=>{const d=h("div",t);d.style.color=c;d.style.fontWeight=600;return d}))}
+function setOv(t){t=String(t);const e=$("ov");if(e.textContent!==t)e.textContent=t}
+// Prédiction locale : mon personnage bouge tout de suite à l'écran (sans attendre l'aller-retour avec l'hôte),
+// puis se recale en douceur sur la position officielle. Même vitesse et mêmes murs que la simulation de l'hôte.
+function predict(dt,sx,sy,spd,x0,x1,y0,y1,blocked){
+  const a=(held.has("R")?1:0)-(held.has("L")?1:0),b=(held.has("D")?1:0)-(held.has("U")?1:0),mvg=(a||b)&&!st.cd&&!st.o;
+  if(!pred||Math.hypot(pred.x-sx,pred.y-sy)>140)pred={x:sx,y:sy};
+  if(mvg){const n=a&&b?.707:1,nx=pred.x+a*n*spd*dt,ny=pred.y+b*n*spd*dt;
+    if(!blocked||!blocked(nx,pred.y))pred.x=Math.max(x0,Math.min(x1,nx));
+    if(!blocked||!blocked(pred.x,ny))pred.y=Math.max(y0,Math.min(y1,ny))}
+  const ex=sx-pred.x,ey=sy-pred.y,e=Math.hypot(ex,ey),k=mvg?(e>Math.max(55,spd*.7)?Math.min(1,dt*4):0):Math.min(1,dt*10);
+  pred.x+=ex*k;pred.y+=ey*k;return[pred.x,pred.y];
+}
+// Cadence régulière pour l'hôte : un setTimeout dérive, surtout sur un téléphone chargé
+const mkPace=()=>{let due=0;return(ms,fn)=>{const t=performance.now();due=due?due+ms:t+ms;if(due<t)due=t;setTimeout(fn,Math.max(0,due-t))}};
+// Écran toujours allumé pendant une partie (sinon l'iPhone se verrouille et l'hôte coupe la partie)
+let wl=null;
+async function wake(){try{if(!navigator.wakeLock||wl||document.hidden)return;const l=await navigator.wakeLock.request("screen");
+  if(cur!=="game"){l.release();return}wl=l;l.addEventListener("release",()=>{if(wl===l)wl=null})}catch{wl=null}}
+function unwake(){try{wl&&wl.release()}catch{}wl=null}
+let hinted=0;
+function orientHint(){if(!TOUCH||hinted||gk==="snake")return;if(matchMedia("(orientation:portrait)").matches){hinted=1;setTimeout(()=>{if(cur==="game")toast("📱 Astuce : tourne ton téléphone en paysage pour une vue plus grande")},1600)}}
 function enterGame(c){
-  show("game");lastDir=null;st=pv=null;parts=[];gk=lobby&&(lobby.game==="surv"||lobby.game==="br")?lobby.game:"snake";held.clear();lastMv="";$("ov").style.fontSize=gk==="snake"?"56px":"34px";mine=-1;vk="";vbox.style.display="none";gameSetup();
+  show("game");lastDir=null;st=pv=null;parts=[];gk=lobby&&(lobby.game==="surv"||lobby.game==="br")?lobby.game:"snake";held.clear();lastMv="";$("ov").style.fontSize=gk==="snake"?"min(56px,11vw)":"min(34px,6.5vw)";mine=-1;vk="";vbox.style.display="none";
+  pred=null;scoreKey="";document.body.dataset.g=gk;ctlUI();calcVs();wake();orientHint();gameSetup();
   unState=onValue(R(`games/${c}/state`),s=>{if(s.val())onState(JSON.parse(s.val()))});
   if(!raf)raf=requestAnimationFrame(frame);
 }
@@ -293,15 +346,15 @@ function onState(n){
     if(o.a&&!s.a){burst(o.b[0][0],o.b[0][1],s.c,26);beep(180,.35,"sawtooth",.05,50);if(mine(u)&&navigator.vibrate)navigator.vibrate(80)}
     else if(s.p>o.p&&s.b[0]){burst(s.b[0][0],s.b[0][1],s.c,8);if(mine(u)){const g=s.p-o.p>1;beep(g?880:620,.07,"square",.04,g?1320:820)}}
     if(s.sh>0&&!o.sh&&mine(u))beep(300,.25,"sine",.05,900)});
-  $("score").replaceChildren(...Object.values(n.s).sort((a,b)=>b.p-a.p).map(s=>{const d=h("div",`${s.n} : ${s.p}${s.sh>0?" 🛡":""}${s.a?"":" ✖"}`);d.style.color=s.c;d.style.fontWeight=600;return d}));
-  $("ov").textContent=n.cd?n.cd:n.o?(n.w?`${n.w} gagne !`:"Fin de partie"):"";
+  setScore(Object.values(n.s).sort((a,b)=>b.p-a.p).map(s=>[`${s.n} : ${s.p}${s.sh>0?" 🛡":""}${s.a?"":" ✖"}`,s.c]));
+  setOv(n.cd?n.cd:n.o?(n.w?`${n.w} gagne !`:"Fin de partie"):"");
 }
 let mine=-1,vk="",shk=0;const aim={};
 const vbox=document.createElement("div");vbox.style.cssText="position:absolute;left:0;right:0;bottom:14px;display:none;gap:8px;justify-content:center;flex-wrap:wrap;padding:0 8px";
 if($("ov").parentElement)$("ov").parentElement.append(vbox);
-const vote=i=>{if(cur!=="game"||gk!=="surv"||vbox.style.display!=="flex")return;mine=i;set(R(`games/${code}/inputs/${me.uid}`),`v,${i},${++seqN}`)};
+const vote=i=>{if(cur!=="game"||gk!=="surv"||vbox.style.display!=="flex")return;mine=i;set(R(`games/${code}/inputs/${me.uid}`),`v,${i},${++seqN}`).catch(()=>{})};
 addEventListener("keydown",e=>{if(/^[123]$/.test(e.key))vote(+e.key-1)});
-const sb=(x,y,c,n,v=160)=>{for(let i=0;i<n;i++){const r=Math.random()*6.28,q=v*(.3+Math.random()*.7);parts.push({x,y,vx:Math.cos(r)*q,vy:Math.sin(r)*q,l:1,c})}};
+const sb=(x,y,c,n,v=160)=>{if(LOW)n=Math.ceil(n/2);if(parts.length>150)return;for(let i=0;i<n;i++){const r=Math.random()*6.28,q=v*(.3+Math.random()*.7);parts.push({x,y,vx:Math.cos(r)*q,vy:Math.sin(r)*q,l:1,c})}};
 const MC=["#e63946","#ff9f1c","#9d4edd"];
 function showVote(n){
   const on=n.br&&n.vt&&n.vt.length;vbox.style.display=on?"flex":"none";if(!on){vk="";return}
@@ -321,15 +374,18 @@ function onSurv(n){
       if(q[2]<o[2]){sb(q[0],q[1],"#ff4d6d",10);if(me&&u===me.uid){shk=now+220;beep(150,.2,"sawtooth",.05,70);if(navigator.vibrate)navigator.vibrate(50)}}
       if(o[4]&&!q[4]){sb(q[0],q[1],q[6],30,260);beep(180,.4,"sawtooth",.05,50)}});
   }
-  $("score").replaceChildren(...Object.values(n.p).sort((x,y)=>y[3]-x[3]).map(q=>{const d=h("div",`${q[5]} : ${q[3]} ☠ ${"♥".repeat(Math.max(0,q[2]))}${q[4]?"":" ✖"}`);d.style.color=q[6];d.style.fontWeight=600;return d}));
-  $("ov").textContent=n.o||n.br?n.msg:"";showVote(n);
+  setScore(Object.values(n.p).sort((x,y)=>y[3]-x[3]).map(q=>[`${q[5]} : ${q[3]} ☠ ${"♥".repeat(Math.max(0,q[2]))}${q[4]?"":" ✖"}`,q[6]]));
+  setOv(n.o||n.br?n.msg:"");showVote(n);
 }
 function drawSurv(now){
-  const x=$("cv").getContext("2d"),p=Math.min(1,(now-tAt)/tDt),L=(a,b)=>a+(b-a)*p,dt=Math.min(.05,(now-(drawSurv.t||now))/1000);drawSurv.t=now;
+  const x=gctx(),p=Math.min(1,(now-tAt)/tDt),L=(a,b)=>a+(b-a)*p,dt=Math.min(.05,(now-(drawSurv.t||now))/1000);drawSurv.t=now;
+  const hs=vsc,ns=Math.min(1.5,hs);
   x.save();if(now<shk)x.translate((Math.random()-.5)*8,(Math.random()-.5)*8);
-  x.fillStyle="#0e0a22";x.fillRect(-10,-10,820,580);x.fillStyle="#1a1438";for(let i=0;i<800;i+=40)for(let j=0;j<560;j+=40)if((i+j)%80===0)x.fillRect(i,j,40,40);
+  x.drawImage(survBg(),-10,-10);
   const pm=new Map(pv?pv.m.map(m=>[m[0],m]):[]);
   const P=Object.entries(st.p).filter(([,q])=>q[4]).map(([u,q])=>{const o=(pv&&pv.p[u])||q;return{u,q,x:L(o[0],q[0]),y:L(o[1],q[1])}});
+  const mpl=me&&P.find(e=>e.u===me.uid);
+  if(mpl){const r=predict(dt,mpl.x,mpl.y,90*(st.sp||1),14,786,14,546,null);mpl.x=r[0];mpl.y=r[1]}else pred=null; // mon personnage réagit tout de suite
   st.m.forEach(m=>{const o=pm.get(m[0])||m,r=[12,9,20][m[4]]*(1+.07*Math.sin(now/110+m[0])),mx=L(o[1],m[1]),my=L(o[2],m[2]);
     let t=null,bd=1e12;P.forEach(q=>{const d=(q.x-mx)**2+(q.y-my)**2;if(d<bd){bd=d;t=q}});
     const g=t?Math.atan2(t.y-my,t.x-mx):0;
@@ -350,18 +406,19 @@ function drawSurv(now){
     x.beginPath();x.arc(0,0,14,0,7);x.fill();x.shadowBlur=0;
     [-1,1].forEach(sd=>{x.fillStyle="#fff";x.beginPath();x.arc(Math.cos(a)*6-Math.sin(a)*4*sd,Math.sin(a)*6+Math.cos(a)*4*sd,3.2,0,7);x.fill()});
     x.restore();
-    x.fillStyle="#fff";x.font="12px sans-serif";x.fillText(q[5],px,py-24);x.fillStyle="#ff4d6d";x.font="11px sans-serif";x.fillText("♥".repeat(Math.max(0,q[2])),px,py+28)});
+    x.fillStyle="#fff";x.font=`${12*ns}px sans-serif`;x.fillText(q[5],px,py-22-4*ns);x.fillStyle="#ff4d6d";x.font=`${11*ns}px sans-serif`;x.fillText("♥".repeat(Math.max(0,q[2])),px,py+24+4*ns)});
   parts=parts.filter(q=>(q.l-=dt*1.8)>0);parts.forEach(q=>{q.x+=q.vx*dt;q.y+=q.vy*dt;x.globalAlpha=q.l;x.fillStyle=q.c;x.fillRect(q.x-3,q.y-3,6,6)});x.globalAlpha=1;
   x.restore();
-  const g=x.createRadialGradient(400,280,220,400,280,520);g.addColorStop(0,"#0000");g.addColorStop(1,"#0009");x.fillStyle=g;x.fillRect(0,0,800,560);
-  x.fillStyle="#fff";x.font="700 18px sans-serif";x.textAlign="left";x.fillText(`Vague ${st.wv}   ☠ ${st.kl}`,12,24);
+  x.drawImage(vig(220,"9"),0,0);
+  x.fillStyle="#fff";x.font=`700 ${18*hs}px sans-serif`;x.textAlign="left";x.fillText(`Vague ${st.wv}   ☠ ${st.kl}`,12,6+19*hs);
 }
 function frame(now){
   if(cur!=="game"){raf=0;return}
-  raf=requestAnimationFrame(frame);if(!st)return;if(st.k==="surv")return drawSurv(now);if(st.k==="br")return drawBr(now);
-  const cv=$("cv"),x=cv.getContext("2d"),k=cv.width/st.W,p=Math.min(1,(now-tAt)/tDt),mid=me&&me.uid;
-  x.fillStyle="#0e0a22";x.fillRect(0,0,cv.width,cv.height);
-  x.fillStyle="#1a1438";for(let i=0;i<st.W;i++)for(let j=0;j<st.H;j++)if((i+j)%2)x.fillRect(i*k,j*k,k,k);
+  raf=requestAnimationFrame(frame);if(!st)return;
+  if(now-(frame.l||0)<13.5)return;frame.l=now; // 60 images/s au maximum : inutile (et chaud) de dessiner à 120 Hz
+  if(st.k==="surv")return drawSurv(now);if(st.k==="br")return drawBr(now);
+  const cv=$("cv"),x=gctx(),k=cv.width/st.W,p=Math.min(1,(now-tAt)/tDt),mid=me&&me.uid;
+  x.drawImage(snakeBg(st.W,st.H,k),0,0);
   x.textAlign="center";x.textBaseline="middle";
   st.f.forEach(([a,b,t,l])=>{const cx=(a+.5)*k,cy=(b+.5)*k,pu=1+.12*Math.sin(now/180+a);
     if(t&&l<25&&Math.floor(now/140)%2)return;
@@ -374,7 +431,9 @@ function frame(now){
     x.save();x.globalAlpha=s.sh>0?.55+.25*Math.sin(now/80):1;
     x.strokeStyle=s.c;x.lineCap=x.lineJoin="round";x.lineWidth=k*.78;
     if(u===mid){x.shadowColor=s.c;x.shadowBlur=14}
-    x.beginPath();pts.forEach(([a,b],i)=>{if(!i||Math.abs(a-pts[i-1][0])>1.5||Math.abs(b-pts[i-1][1])>1.5)x.moveTo(a*k,b*k);else x.lineTo(a*k,b*k)});x.stroke();
+    x.beginPath();pts.forEach(([a,b],i)=>{if(!i||Math.abs(a-pts[i-1][0])>1.5||Math.abs(b-pts[i-1][1])>1.5)x.moveTo(a*k,b*k);else x.lineTo(a*k,b*k)});
+    if(u===mid&&LOW){const ga=x.globalAlpha;x.globalAlpha=ga*.3;x.lineWidth=k*1.15;x.stroke();x.globalAlpha=ga;x.lineWidth=k*.78} // halo léger (sans ombre floue)
+    x.stroke();
     x.shadowBlur=0;x.globalAlpha=1;
     const[hx,hy]=pts[0],[dx,dy]=s.d,e=k*.17;
     [-1,1].forEach(sd=>{const ex=(hx+dx*.22-dy*.22*sd)*k,ey=(hy+dy*.22+dx*.22*sd)*k;
@@ -387,16 +446,74 @@ function frame(now){
 }
 const KEYS={ArrowUp:"U",w:"U",z:"U",ArrowDown:"D",s:"D",ArrowLeft:"L",a:"L",q:"L",ArrowRight:"R",d:"R"};
 const held=new Set();let seqN=0;
-const mv=()=>{if(gk==="br")return brSend();const m=`${(held.has("R")?1:0)-(held.has("L")?1:0)},${(held.has("D")?1:0)-(held.has("U")?1:0)}`;if(m!==lastMv){lastMv=m;set(R(`games/${code}/inputs/${me.uid}`),m+","+(++seqN))}};
-const send=d=>{if(cur!=="game"||gk==="surv"||gk==="br"||d===lastDir)return;lastDir=d;set(R(`games/${code}/inputs/${me.uid}`),d+(++seqN))};
+const mv=()=>{if(cur!=="game"||!code||!me)return;if(gk==="br")return brSend();const m=`${(held.has("R")?1:0)-(held.has("L")?1:0)},${(held.has("D")?1:0)-(held.has("U")?1:0)}`;if(m!==lastMv){lastMv=m;set(R(`games/${code}/inputs/${me.uid}`),m+","+(++seqN)).catch(()=>{})}};
+const send=d=>{if(cur!=="game"||gk==="surv"||gk==="br"||d===lastDir)return;lastDir=d;set(R(`games/${code}/inputs/${me.uid}`),d+(++seqN)).catch(()=>{})};
 addEventListener("keydown",e=>{if(cur!=="game"||/^(INPUT|TEXTAREA)$/.test(e.target.tagName))return;const d=KEYS[e.key.length>1?e.key:e.key.toLowerCase()];if(d){e.preventDefault();if(gk==="surv"||gk==="br"){held.add(d);mv()}else send(d)}});
 addEventListener("keyup",e=>{const d=KEYS[e.key.length>1?e.key:e.key.toLowerCase()];if(d&&(gk==="surv"||gk==="br")&&cur==="game"){held.delete(d);mv()}});
 let t0;const cvs=$("cv");
-cvs.addEventListener("touchstart",e=>{t0=e.touches[0]},{passive:true});
-cvs.addEventListener("touchmove",e=>{e.preventDefault();if(!t0||cur!=="game")return;const t=e.touches[0],dx=t.clientX-t0.clientX,dy=t.clientY-t0.clientY;
+cvs.addEventListener("touchstart",e=>{if(TOUCH)return;t0=e.touches[0]},{passive:true});
+cvs.addEventListener("touchmove",e=>{if(TOUCH)return;e.preventDefault();if(!t0||cur!=="game")return;const t=e.touches[0],dx=t.clientX-t0.clientX,dy=t.clientY-t0.clientY;
   if(Math.max(Math.abs(dx),Math.abs(dy))>20){send(Math.abs(dx)>Math.abs(dy)?(dx>0?"R":"L"):(dy>0?"D":"U"));t0=t}},{passive:false});
 document.querySelectorAll("#pad button").forEach(b=>{const d=b.dataset.d,on=e=>{e.preventDefault();if(gk==="surv"||gk==="br"){held.add(d);mv()}else send(d)},off=()=>{if(gk==="surv"||gk==="br"){held.delete(d);mv()}};
   b.addEventListener("pointerdown",on);["pointerup","pointercancel","pointerleave"].forEach(t=>b.addEventListener(t,off))});
+
+// ---------- Commandes tactiles (iPhone / iPad) : joysticks flottants, balayage, croix ----------
+// Snake : glisse le doigt n'importe où. Survie : un joystick flottant. Battle royale : joystick gauche = bouger,
+// joystick droit = viser (tir tant que le doigt touche). Le bouton 🕹️/✚ en haut permet de passer à la croix directionnelle.
+const gameEl=$("game"),sL=$("sL"),sR=$("sR"),SMAX=58,SDEAD=.2,SWIPE=14,AIMASSIST=true,tp={mv:null,aim:null,sw:null};
+let ctlMode="stick";try{ctlMode=localStorage.getItem("moda.ctl")==="pad"?"pad":"stick"}catch{}
+let rawAim=0,aimLock=0;
+const touchy=e=>TOUCH&&e.pointerType!=="mouse";
+function ctlUI(){document.body.classList.toggle("padon",ctlMode==="pad");const b=$("gctl");b.textContent=ctlMode==="pad"?"✚":"🕹️";
+  b.setAttribute("aria-label",ctlMode==="pad"?"Commandes : croix. Toucher pour passer au joystick":"Commandes : joystick. Toucher pour passer à la croix")}
+$("gctl").onclick=()=>{resetTouch();ctlMode=ctlMode==="pad"?"stick":"pad";try{localStorage.setItem("moda.ctl",ctlMode)}catch{}ctlUI()};
+$("gexit").onclick=()=>{if(cur!=="game")return;
+  if(confirm(lobby&&lobby.host===me.uid?"Tu es l'hôte : la partie s'arrêtera pour tout le monde. Quitter ?":"Quitter la partie ?"))leaveLobby()};
+const setHeld=(U,D,L,R)=>{const w={U,D,L,R};let ch=0;for(const k in w){const on=!!w[k];if(on!==held.has(k)){on?held.add(k):held.delete(k);ch=1}}if(ch)mv()};
+const place=(s,x,y)=>{s.el.style.transform=`translate(${x}px,${y}px)`};
+const mkStick=(el,x,y,id)=>{el.classList.add("on");el.firstElementChild.style.transform="translate(0,0)";const s={id,ox:x,oy:y,el,kn:el.firstElementChild};place(s,x,y);return s};
+// le joystick suit le doigt s'il s'éloigne trop : on ne « sort » jamais de la zone
+function drag(s,e){let dx=e.clientX-s.ox,dy=e.clientY-s.oy;const d=Math.hypot(dx,dy);
+  if(d>SMAX){const k=(d-SMAX)/d;s.ox+=dx*k;s.oy+=dy*k;dx=e.clientX-s.ox;dy=e.clientY-s.oy;place(s,s.ox,s.oy)}
+  s.kn.style.transform=`translate(${dx}px,${dy}px)`;return[dx,dy,Math.min(d,SMAX)]}
+function endStick(k){const s=tp[k];if(!s)return;tp[k]=null;s.el.classList.remove("on");
+  if(k==="mv")setHeld(0,0,0,0);else{ptrDown=0;aimLock=0;if(cur==="game"&&gk==="br")setFire()}}
+function resetTouch(){["mv","aim"].forEach(endStick);tp.sw=null;held.clear();ptrDown=0;aimLock=0;if(cur==="game"){if(gk==="br")setFire();else if(gk==="surv")mv()}}
+gameEl.addEventListener("pointerdown",e=>{
+  if(!touchy(e)||cur!=="game"||e.target.closest("button"))return;
+  e.preventDefault();const x=e.clientX,y=e.clientY;
+  if(gk==="snake"){if(tp.sw)return;tp.sw={id:e.pointerId,ox:x,oy:y}}
+  else if(gk==="br"&&(ctlMode==="pad"||x>=innerWidth*.5)){if(tp.aim)return;tp.aim=mkStick(sR,x,y,e.pointerId);ptrDown=1;setFire()}
+  else if(ctlMode==="stick"){if(tp.mv)return;tp.mv=mkStick(sL,x,y,e.pointerId)}
+  else return;
+  try{gameEl.setPointerCapture(e.pointerId)}catch{}
+});
+gameEl.addEventListener("pointermove",e=>{
+  if(!touchy(e)||cur!=="game")return;
+  if(tp.mv&&tp.mv.id===e.pointerId){const[dx,dy,m]=drag(tp.mv,e);
+    if(m<SDEAD*SMAX)return setHeld(0,0,0,0);
+    const n=Math.hypot(dx,dy)||1,nx=dx/n,ny=dy/n;setHeld(ny<-.38,ny>.38,nx<-.38,nx>.38)} // 8 directions
+  else if(tp.aim&&tp.aim.id===e.pointerId){const[dx,dy,m]=drag(tp.aim,e);if(m>12){rawAim=Math.atan2(dy,dx);aimLock=1}else aimLock=0}
+  else if(tp.sw&&tp.sw.id===e.pointerId){const dx=e.clientX-tp.sw.ox,dy=e.clientY-tp.sw.oy;
+    if(Math.max(Math.abs(dx),Math.abs(dy))>=SWIPE){send(Math.abs(dx)>Math.abs(dy)?(dx>0?"R":"L"):(dy>0?"D":"U"));tp.sw.ox=e.clientX;tp.sw.oy=e.clientY}}
+});
+const relPtr=e=>{if(tp.mv&&tp.mv.id===e.pointerId)endStick("mv");else if(tp.aim&&tp.aim.id===e.pointerId)endStick("aim");else if(tp.sw&&tp.sw.id===e.pointerId)tp.sw=null};
+["pointerup","pointercancel"].forEach(t=>gameEl.addEventListener(t,relPtr));
+document.addEventListener("gesturestart",e=>{if(cur==="game")e.preventDefault()}); // pas de zoom à deux doigts pendant la partie
+document.addEventListener("visibilitychange",()=>{if(document.hidden)resetTouch();else if(cur==="game")wake()});
+addEventListener("blur",resetTouch);
+// Angle de visée : souris > joystick de visée (avec une petite aide) > direction de marche
+function assist(a){
+  if(!AIMASSIST||!st||st.k!=="br"||!me)return a;
+  const Q=st.p,mq=Q[me.uid];if(!mq||!mq[4])return a;
+  const px=pred?pred.x:mq[0],py=pred?pred.y:mq[1];let best=a,bt=1e9;
+  for(const u in Q){if(u===me.uid)continue;const q=Q[u];if(!q[4]||q[10])continue;
+    const ex=q[0]-px,ey=q[1]-py,d=Math.hypot(ex,ey);if(d>560||d<1)continue;
+    let df=Math.atan2(ey,ex)-a;df=Math.atan2(Math.sin(df),Math.cos(df));
+    if(Math.abs(df)<Math.min(.22,Math.max(.07,70/d))&&Math.abs(df)<bt){bt=Math.abs(df);best=a+df}}
+  return best;
+}
+function myAim(){if(mpos)return Math.atan2(mpos.y-meScr.y,mpos.x-meScr.x);if(aimLock){lastAim=assist(rawAim);return lastAim}return lastAim}
 
 // ---------- Battle Royale : carte, armes, affichage et commandes ----------
 const BW=1600,BH=1200;
@@ -431,11 +548,13 @@ function solidAt(m,x,y,rad){
 
 let fxF={},fxH={},floats=[],lastAim=0,mapC=null,lootC=[],mpos=null,brFire=0,ptrDown=0,spDown=0,brK="",brA="",brT=0,meScr={x:400,y:280};
 function gameSetup(){
-  mapC=null;lootC=[];fxF={};fxH={};floats=[];ptrDown=spDown=brFire=0;brK=brA="";brT=0;mpos=null;
+  mapC=null;lootC=[];fxF={};fxH={};floats=[];ptrDown=spDown=brFire=0;brK=brA="";brT=0;mpos=null;aimLock=0;
   $("cv").style.cursor=gk==="br"?"crosshair":"";
-  $("ghelp").textContent=gk==="br"?"ZQSD / flèches : bouger · souris : viser · clic ou espace : tirer. Sur mobile : croix pour bouger, touche l'écran pour viser et tirer. Marche sur les objets pour les ramasser : la couleur du halo indique la rareté (vert < bleu < violet < doré), 💊 soigne et 🧪 donne du bouclier. Reste dans la zone !"
-    :gk==="surv"?"Flèches ou ZQSD pour bouger, tu tires automatiquement. Entre deux vagues, vote avec 1 / 2 / 3."
+  $("ghelp").textContent=gk==="br"?"ZQSD / flèches : bouger · souris : viser · clic ou espace : tirer. Sur mobile : joystick gauche pour bouger, joystick droit pour viser (tu tires tant que ton doigt touche). Marche sur les objets pour les ramasser : la couleur du halo indique la rareté (vert < bleu < violet < doré), 💊 soigne et 🧪 donne du bouclier. Reste dans la zone !"
+    :gk==="surv"?"Flèches ou ZQSD pour bouger, tu tires automatiquement. Sur mobile : glisse le pouce. Entre deux vagues, vote avec 1 / 2 / 3."
     :"Flèches ou ZQSD / WASD. Sur mobile : glisse le doigt. ⭐ = +3 points, 🛡️ = traverse tout pendant 5 s.";
+  if(TOUCH){const t=$("tip");t.textContent=gk==="br"?"Pouce gauche : bouger · pouce droit : viser et tirer":gk==="surv"?"Glisse ton pouce pour te déplacer (tir automatique)":"Glisse ton doigt pour tourner";
+    t.hidden=false;clearTimeout(gameSetup.t);gameSetup.t=setTimeout(()=>{t.hidden=true},6000)}
 }
 // ---- Graphismes du battle royale ----
 // Rareté des armes (comme dans Fortnite) : la couleur du halo indique la valeur de l'objet
@@ -443,7 +562,8 @@ const RAR=[null,["Peu commun","#8be28b"],["Rare","#4dabff"],["Épique","#c77dff"
 const lc=t=>t<5?RAR[t][1]:t===5?"#3ee66a":"#35d0ff";
 const lname=t=>t<5?[WP[t][0],RAR[t][0]]:t===5?["Trousse de soin","+50 PV"]:["Potion de bouclier","+50 bouclier"];
 const rr=(x,a,b,w,hh,r)=>{x.beginPath();x.moveTo(a+r,b);x.arcTo(a+w,b,a+w,b+hh,r);x.arcTo(a+w,b+hh,a,b+hh,r);x.arcTo(a,b+hh,a,b,r);x.arcTo(a,b,a+w,b,r);x.closePath()};
-const pill=(x,t,px,py,al,bg,fg)=>{x.font="700 15px sans-serif";const w=x.measureText(t).width+20,a=al==="r"?px-w:al==="c"?px-w/2:px;
+const pw=new Map();
+const pill=(x,t,px,py,al,bg,fg)=>{x.font="700 15px sans-serif";let w=pw.get(t);if(w==null){w=x.measureText(t).width+20;if(pw.size>300)pw.clear();pw.set(t,w)}const a=al==="r"?px-w:al==="c"?px-w/2:px; // largeur mémorisée : measureText est lent
   x.fillStyle=bg||"#000a";rr(x,a,py,w,26,13);x.fill();x.fillStyle=fg||"#fff";x.textAlign="left";x.textBaseline="middle";x.fillText(t,a+10,py+14);x.textBaseline="alphabetic"};
 // silhouette d'arme dessinée vers la droite, centrée verticalement
 function gun(x,t,s){
@@ -489,7 +609,7 @@ function buildMapImg(m){
 // Objet au sol : halo de rareté, anneau qui pulse, icône qui flotte, étincelles ; le nom s'affiche quand on s'approche
 function drawLoot(x,l,now,near){
   const[,lx,ly,t]=l,col=lc(t),bob=Math.sin(now/350+lx)*2.5;
-  const g=x.createRadialGradient(lx,ly,2,lx,ly,t>=3?42:32);g.addColorStop(0,col+"99");g.addColorStop(1,col+"00");x.fillStyle=g;x.beginPath();x.arc(lx,ly,42,0,7);x.fill();
+  x.drawImage(glow(col,t>=3?42:32),lx-42,ly-42);
   if(t===4){x.save();x.translate(lx,ly);x.rotate(now/1800);x.strokeStyle=col;x.globalAlpha=.35;x.lineWidth=3;x.beginPath();for(let k=0;k<8;k++){const a=k*.785;x.moveTo(Math.cos(a)*18,Math.sin(a)*18);x.lineTo(Math.cos(a)*38,Math.sin(a)*38)}x.stroke();x.restore()}
   x.fillStyle="#0007";x.beginPath();x.ellipse(lx,ly+11,15,5.5,0,0,7);x.fill();
   x.strokeStyle=col;x.lineWidth=2;x.globalAlpha=.55+.4*Math.sin(now/250+lx);x.beginPath();x.arc(lx,ly,20+Math.sin(now/300+lx)*1.5,0,7);x.stroke();x.globalAlpha=1;
@@ -525,26 +645,29 @@ function onBr(n){
         if(q[2]>o[2])fl(`+${q[2]-o[2]} PV`,"#3ee66a");
         if(q[3]>o[3])fl(`+${q[3]-o[3]} bouclier`,"#35d0ff")}});
   }
-  $("score").replaceChildren(...Object.values(n.p).sort((a,b)=>b[9]-a[9]||b[4]-a[4]).map(q=>{const d=h("div",`${q[5]} : ☠ ${q[9]}${q[4]?"":" ✖"}`);d.style.color=q[6];d.style.fontWeight=600;return d}));
-  $("ov").textContent=n.cd?n.cd:n.o?n.msg:"";
+  setScore(Object.values(n.p).sort((a,b)=>b[9]-a[9]||b[4]-a[4]).map(q=>[`${q[5]} : ☠ ${q[9]}${q[4]?"":" ✖"}`,q[6]]));
+  setOv(n.cd?n.cd:n.o?n.msg:"");
 }
 // Envoi des commandes à l'hôte : "dx,dy,angle,tir,n°" (seulement quand quelque chose change)
 function brSend(){
   if(cur!=="game"||gk!=="br"||!code||!me)return;
   const dx=(held.has("R")?1:0)-(held.has("L")?1:0),dy=(held.has("D")?1:0)-(held.has("U")?1:0),
     k=`${dx},${dy},${brFire}`,t=performance.now();
-  if(!mpos&&(dx||dy))lastAim=Math.atan2(dy,dx);
-  const a=(mpos?Math.atan2(mpos.y-meScr.y,mpos.x-meScr.x):lastAim).toFixed(2);
-  if(k===brK&&(a===brA||t-brT<50))return;
+  if(!mpos&&!aimLock&&(dx||dy))lastAim=Math.atan2(dy,dx);
+  const a=myAim().toFixed(2);
+  if(k===brK&&(a===brA||t-brT<80))return; // l'hôte ne calcule que 10 fois par seconde : inutile d'envoyer la visée plus souvent
   brK=k;brA=a;brT=t;set(R(`games/${code}/inputs/${me.uid}`),`${dx},${dy},${a},${brFire},${++seqN}`).catch(()=>{});
 }
 function drawBr(now){
-  const x=$("cv").getContext("2d"),p=Math.min(1,(now-tAt)/tDt),lp=(a,b)=>a+(b-a)*p,dt=Math.min(.05,(now-(drawBr.t||now))/1000);drawBr.t=now;
-  const m=mapC,Q=st.p,keys=Object.keys(Q),mu=me&&me.uid,old=pv&&pv.k==="br"?pv:st,mq=mu&&Q[mu];
-  const pos=u=>{const q=Q[u],o=old.p[u]||q;return[lp(o[0],q[0]),lp(o[1],q[1])]};
+  const x=gctx(),p=Math.min(1,(now-tAt)/tDt),lp=(a,b)=>a+(b-a)*p,dt=Math.min(.05,(now-(drawBr.t||now))/1000);drawBr.t=now;
+  const ns=Math.min(1.5,vsc),m=mapC,Q=st.p,keys=Object.keys(Q),mu=me&&me.uid,old=pv&&pv.k==="br"?pv:st,mq=mu&&Q[mu];
+  const spos=u=>{const q=Q[u],o=old.p[u]||q;return[lp(o[0],q[0]),lp(o[1],q[1])]};
+  let pm=null; // ma position prédite : je bouge sans attendre l'hôte
+  if(mq&&mq[4]){const s0=spos(mu);pm=predict(dt,s0[0],s0[1],110,13,BW-13,13,BH-13,(a,b)=>solidAt(m,a,b,13))}else pred=null;
+  const pos=u=>u===mu&&pm?pm:spos(u);
   // caméra : sur moi, ou sur le survivant en tête quand je suis éliminé
   const fu=mq&&mq[4]?mu:keys.filter(u=>Q[u][4]).sort((a,b)=>Q[b][9]-Q[a][9])[0],fp=fu?pos(fu):[BW/2,BH/2];
-  const ox=400-Math.max(400,Math.min(BW-400,fp[0])),oy=280-Math.max(280,Math.min(BH-280,fp[1]));
+  const ox=Math.round(400-Math.max(400,Math.min(BW-400,fp[0]))),oy=Math.round(280-Math.max(280,Math.min(BH-280,fp[1]))); // pixels entiers : décor net, sans scintillement
   if(mq){const mp=pos(mu);meScr={x:mp[0]+ox,y:mp[1]+oy}}
   brSend();
   const zo=old.z,zx=lp(zo[0],st.z[0]),zy=lp(zo[1],st.z[1]),zr=Math.max(0,lp(zo[2],st.z[2]));
@@ -552,7 +675,7 @@ function drawBr(now){
   x.save();x.textBaseline="alphabetic";x.fillStyle="#0b1a1a";x.fillRect(-10,-10,820,580);
   if(now<shk)x.translate((Math.random()-.5)*8,(Math.random()-.5)*8);
   x.translate(ox,oy);
-  x.drawImage(m.img,0,0);
+  x.drawImage(m.img,-ox,-oy,800,560,-ox,-oy,800,560); // seulement la partie visible de la carte
   // objets au sol
   let nearL=null,nd=110*110;
   if(mp)lootC.forEach(l=>{const d=(l[1]-mp[0])**2+(l[2]-mp[1])**2;if(d<nd){nd=d;nearL=l}});
@@ -560,11 +683,11 @@ function drawBr(now){
   // balles : traînée lumineuse de la couleur de l'arme
   x.lineCap="round";
   st.b.forEach(b=>{const uo=keys[b[4]],w=uo&&Q[uo]?Q[uo][8]:0,c=(WP[w]||WP[0])[8],bx=b[0]+b[2]*p,by=b[1]+b[3]*p,tx=bx-b[2]*.9,ty=by-b[3]*.9;
-    const g=x.createLinearGradient(tx,ty,bx,by);g.addColorStop(0,c+"00");g.addColorStop(1,c);x.strokeStyle=g;x.lineWidth=w===4?4.5:3;x.beginPath();x.moveTo(tx,ty);x.lineTo(bx,by);x.stroke();
+    if(LOW)x.strokeStyle=c;else{const g=x.createLinearGradient(tx,ty,bx,by);g.addColorStop(0,c+"00");g.addColorStop(1,c);x.strokeStyle=g}x.lineWidth=w===4?4.5:3;x.beginPath();x.moveTo(tx,ty);x.lineTo(bx,by);x.stroke();
     x.fillStyle="#fff";x.beginPath();x.arc(bx,by,w===4?2.4:1.8,0,7);x.fill()});
   // joueurs
   keys.forEach(u=>{const q=Q[u];if(!q[4])return;
-    const[px,py]=pos(u),self=u===mu,a=self?(mpos?Math.atan2(mpos.y-meScr.y,mpos.x-meScr.x):lastAim):q[7],w=q[8]||0;
+    const[px,py]=pos(u),self=u===mu,a=self?myAim():q[7],w=q[8]||0;
     if(self){x.save();x.setLineDash([4,8]);x.strokeStyle="#ffffff55";x.lineWidth=1.5;x.beginPath();x.moveTo(px+Math.cos(a)*22,py+Math.sin(a)*22);x.lineTo(px+Math.cos(a)*280,py+Math.sin(a)*280);x.stroke();x.restore()}
     x.save();x.translate(px,py);
     x.fillStyle="#0006";x.beginPath();x.ellipse(3,13,14,6,0,0,7);x.fill();
@@ -582,11 +705,12 @@ function drawBr(now){
       const tip=7+GL[w]*.95+2;x.shadowColor="#ffb703";x.shadowBlur=14;x.fillStyle="#ffe66d";x.beginPath();
       for(let k=0;k<10;k++){const r=k%2?5:14,an=k*.628;x.lineTo(tip+Math.cos(an)*r,Math.sin(an)*r)}x.closePath();x.fill();x.shadowBlur=0}
     x.restore();
-    if(!self){
-      x.fillStyle="#000a";rr(x,px-19,py-31,38,9,4);x.fill();
-      x.fillStyle=q[2]>50?"#3ee66a":q[2]>25?"#ffd23f":"#ff4d6d";rr(x,px-17,py-29.5,34*q[2]/100,4,2);x.fill();
-      x.fillStyle="#35d0ff";rr(x,px-17,py-25,34*q[3]/100,3,1.5);x.fill();
-      x.font="700 12px sans-serif";x.textAlign="center";x.lineWidth=3;x.strokeStyle="#000b";x.strokeText(q[5],px,py-36);x.fillStyle="#fff";x.fillText(q[5],px,py-36)}});
+    if(!self){ // barre de vie et pseudo, agrandis sur petit écran
+      x.save();x.translate(px,py);x.scale(ns,ns);
+      x.fillStyle="#000a";rr(x,-19,-31,38,9,4);x.fill();
+      x.fillStyle=q[2]>50?"#3ee66a":q[2]>25?"#ffd23f":"#ff4d6d";rr(x,-17,-29.5,34*q[2]/100,4,2);x.fill();
+      x.fillStyle="#35d0ff";rr(x,-17,-25,34*q[3]/100,3,1.5);x.fill();
+      x.font="700 12px sans-serif";x.textAlign="center";x.lineWidth=3;x.strokeStyle="#000b";x.strokeText(q[5],0,-36);x.fillStyle="#fff";x.fillText(q[5],0,-36);x.restore()}});
   // particules et textes flottants
   parts=parts.filter(q=>(q.l-=dt*1.8)>0);parts.forEach(q=>{q.x+=q.vx*dt;q.y+=q.vy*dt;x.globalAlpha=q.l;x.fillStyle=q.c;x.fillRect(q.x-3,q.y-3,6,6)});x.globalAlpha=1;
   floats=floats.filter(f=>(f.l-=dt)>0);x.textAlign="center";x.font="800 16px sans-serif";
@@ -594,23 +718,25 @@ function drawBr(now){
   // la tempête : voile violet animé hors du cercle, bord qui pulse
   const sp=new Path2D();sp.rect(-3000,-3000,BW+6000,BH+6000);sp.moveTo(zx+zr,zy);sp.arc(zx,zy,zr,0,7);
   x.fillStyle="#9d1060";x.globalAlpha=.4;x.fill(sp,"evenodd");x.globalAlpha=1;
-  x.save();x.clip(sp,"evenodd");
+  if(!LOW){x.save();x.clip(sp,"evenodd");
   for(let i=0;i<9;i++){const bx=-ox+((i*211+now*.03*(1+i%3))%1000)-100,by=-oy+((i*137+now*.02*(1+i%2))%760)-100,g=x.createRadialGradient(bx,by,0,bx,by,130);
     g.addColorStop(0,"#ff4da655");g.addColorStop(1,"#ff4da600");x.fillStyle=g;x.fillRect(bx-130,by-130,260,260)}
-  x.restore();
+  x.restore()}
   x.shadowColor="#ff4da6";x.shadowBlur=14+5*Math.sin(now/200);x.strokeStyle="#fff";x.lineWidth=3;x.beginPath();x.arc(zx,zy,zr,0,7);x.stroke();x.shadowBlur=0;
   x.setLineDash([12,10]);x.strokeStyle="#ffffffa0";x.lineWidth=2;x.beginPath();x.arc(st.nz[0],st.nz[1],st.nz[2],0,7);x.stroke();x.setLineDash([]);
   x.restore();
-  // ----- interface -----
-  const vg=x.createRadialGradient(400,280,250,400,280,520);vg.addColorStop(0,"#0000");vg.addColorStop(1,"#0008");x.fillStyle=vg;x.fillRect(0,0,800,560);
+  // ----- interface (agrandie quand le jeu est affiché en petit, comme sur iPhone) -----
+  x.drawImage(vig(250,"8"),0,0);
   const out=mp&&(mp[0]-zx)**2+(mp[1]-zy)**2>zr*zr;
   if(out){x.fillStyle="#ff000022";x.fillRect(0,0,800,560)}
-  pill(x,`👥 ${st.al}   ☠ ${mq?mq[9]:0}`,12,10,"l");
-  pill(x,st.zs?"⚠️ La zone rétrécit !":`🌀 Zone dans ${st.zt} s`,400,10,"c",st.zs?"#b31266cc":"#000a");
-  st.kf.slice(-4).forEach((s,i)=>pill(x,s,788,46+i*28,"r"));
-  if(out)pill(x,"Retourne dans la zone !",400,48,"c","#ff4d6dcc");
+  const hs=vsc,hb=Math.min(hs,1.4),hp=(t,px,py,al,s,bg)=>{x.save();x.translate(px,py);x.scale(s,s);pill(x,t,0,0,al,bg);x.restore()},ky=10+26*hs+10;
+  hp(`👥 ${st.al}   ☠ ${mq?mq[9]:0}`,12,10,"l",hs);
+  hp(st.zs?"⚠️ La zone rétrécit !":`🌀 Zone dans ${st.zt} s`,400,10,"c",hs,st.zs?"#b31266cc":"#000a");
+  st.kf.slice(-4).forEach((s,i)=>hp(s,788,ky+i*28*hs,"r",hs));
+  if(out)hp("Retourne dans la zone !",400,ky,"c",hs,"#ff4d6dcc");
   if(mq&&mq[4]){
-    const bx=270,by=478,bw=260,wc=mq[8]?RAR[mq[8]][1]:"#cfd3ff",hc=mq[2]>50?"#3ee66a":mq[2]>25?"#ffd23f":"#ff4d6d";
+    x.save();x.translate(400,550);x.scale(hb,hb);
+    const bx=-130,by=-72,bw=260,wc=mq[8]?RAR[mq[8]][1]:"#cfd3ff",hc=mq[2]>50?"#3ee66a":mq[2]>25?"#ffd23f":"#ff4d6d";
     x.fillStyle="#000b";rr(x,bx,by,bw,72,12);x.fill();x.strokeStyle=wc;x.lineWidth=2;x.stroke();
     x.save();x.translate(bx+22,by+34);x.shadowColor=wc;x.shadowBlur=8;gun(x,mq[8],1.25);x.restore();
     x.fillStyle="#fff";x.font="700 13px sans-serif";x.textAlign="left";x.fillText(WP[mq[8]][0],bx+14,by+64);
@@ -618,24 +744,26 @@ function drawBr(now){
     if(mq[3]>0){x.fillStyle="#35d0ff";rr(x,bx+96,by+12,Math.max(8,152*mq[3]/100),10,5);x.fill()}
     x.fillStyle=hc;rr(x,bx+96,by+32,Math.max(10,152*mq[2]/100),16,8);x.fill();
     x.fillStyle="#fff";x.font="700 11px sans-serif";x.fillText(`🛡 ${mq[3]}`,bx+100,by+21);x.font="700 13px sans-serif";x.fillText(`❤ ${mq[2]}`,bx+102,by+45);
-  }else if(mq)pill(x,"Éliminé 👀 tu regardes la fin de la partie",400,516,"c");
-  // mini-carte avec les objets
-  const mx0=670,my0=450,ms=.0775;
+    x.restore();
+  }else if(mq)hp("Éliminé 👀 tu regardes la fin de la partie",400,544-26*hb,"c",hb);
+  // mini-carte avec les objets (ancrée en bas à droite)
+  const mx0=-124,my0=-93,ms=.0775;
+  x.save();x.translate(794,544);x.scale(hb,hb);
   x.save();x.fillStyle="#000b";rr(x,mx0,my0,124,93,8);x.fill();x.clip();
   x.fillStyle="#ffffff18";m.H.forEach(([a,b,w,hh])=>x.fillRect(mx0+2+a*ms,my0+2+b*ms,w*ms,hh*ms));
   lootC.forEach(l=>{x.fillStyle=lc(l[3]);x.beginPath();x.arc(mx0+2+l[1]*ms,my0+2+l[2]*ms,l[3]===4?2.6:1.6,0,7);x.fill()});
   x.strokeStyle="#fff";x.lineWidth=1.5;x.beginPath();x.arc(mx0+2+zx*ms,my0+2+zy*ms,zr*ms,0,7);x.stroke();
   x.setLineDash([3,3]);x.strokeStyle="#ffffff90";x.beginPath();x.arc(mx0+2+st.nz[0]*ms,my0+2+st.nz[1]*ms,st.nz[2]*ms,0,7);x.stroke();x.setLineDash([]);
   if(mp){x.fillStyle="#fff";x.beginPath();x.arc(mx0+2+mp[0]*ms,my0+2+mp[1]*ms,4.5,0,7);x.fill();x.fillStyle=mq[6];x.beginPath();x.arc(mx0+2+mp[0]*ms,my0+2+mp[1]*ms,3,0,7);x.fill()}
-  x.restore();
+  x.restore();x.restore();
 }
 
 // Commandes : souris / doigt pour viser et tirer, espace pour tirer
 const cpos=e=>{const r=cvs.getBoundingClientRect();return{x:(e.clientX-r.left)*cvs.width/r.width,y:(e.clientY-r.top)*cvs.height/r.height}};
 const setFire=()=>{brFire=ptrDown||spDown?1:0;brSend()};
-cvs.addEventListener("pointermove",e=>{if(gk==="br"&&cur==="game")mpos=cpos(e)});
-cvs.addEventListener("pointerdown",e=>{if(gk!=="br"||cur!=="game")return;e.preventDefault();try{cvs.setPointerCapture(e.pointerId)}catch{}mpos=cpos(e);ptrDown=1;setFire()});
-["pointerup","pointercancel"].forEach(t=>cvs.addEventListener(t,()=>{ptrDown=0;if(gk==="br"&&cur==="game")setFire()}));
+cvs.addEventListener("pointermove",e=>{if(touchy(e))return;if(gk==="br"&&cur==="game")mpos=cpos(e)});
+cvs.addEventListener("pointerdown",e=>{if(touchy(e)||gk!=="br"||cur!=="game")return;e.preventDefault();try{cvs.setPointerCapture(e.pointerId)}catch{}mpos=cpos(e);ptrDown=1;setFire()});
+["pointerup","pointercancel"].forEach(t=>cvs.addEventListener(t,e=>{if(touchy(e))return;ptrDown=0;if(gk==="br"&&cur==="game")setFire()}));
 cvs.addEventListener("contextmenu",e=>{if(gk==="br")e.preventDefault()});
 addEventListener("keydown",e=>{if(e.key===" "&&gk==="br"&&cur==="game"&&!/^(INPUT|TEXTAREA|BUTTON)$/.test(e.target.tagName)){e.preventDefault();spDown=1;setFire()}});
 addEventListener("keyup",e=>{if(e.key===" "&&gk==="br"&&cur==="game"){spDown=0;setFire()}});
@@ -657,7 +785,7 @@ $("start").onclick=async()=>{
   const pub=(x={})=>set(R(`games/${c}/state`),JSON.stringify({W,H,f:food,s:snakes,...x}));
   for(let i=0;i<Math.max(3,ids.length+2);i++)food.push([...free(),0,0]); // [x,y,type(0 pomme,1 étoile,2 bouclier),durée]
   for(let n=3;n>0;n--){await pub({cd:n});await new Promise(r=>setTimeout(r,1000))}
-  let tk=0;
+  let tk=0;const pace=mkPace();
   const step=()=>{
     tk++;
     if(code!==c){un();return} // l'hôte a quitté : on arrête tout
@@ -689,20 +817,20 @@ $("start").onclick=async()=>{
     }
     pub();
     // la partie accélère quand les serpents grandissent
-    setTimeout(step,Math.max(60,base-Math.max(...Object.values(snakes).map(s=>s.p))*2));
+    pace(Math.max(60,base-Math.max(...Object.values(snakes).map(s=>s.p))*2),step);
   };
   step();
 };
 
 // ---------- Survie coop (l'hôte simule, tir automatique sur le monstre le plus proche) ----------
 async function startSurv(){
-  const c=code,players=lobby.players,ids=Object.keys(players),W=800,H=560,SPD=[3.2,5,2],RAD=[12,9,20];
+  const pace=mkPace(),c=code,players=lobby.players,ids=Object.keys(players),W=800,H=560,SPD=[3.2,5,2],RAD=[12,9,20];
   await remove(R(`games/${c}`));await update(R(`lobbies/${c}`),{status:"playing"});
   const P={},want={},seen={},up={fr:5,dm:1,sp:1,pr:0};let opts=[],votes={},M=[],B=[],nid=1,wv=0,left=0,brk=40,tk=0,kills=0,msg="Préparez-vous !";
   ids.forEach((u,i)=>{P[u]={n:players[u].name,c:players[u].color,x:200+i*60,y:280,hp:5,k:0,inv:0,cd:0,a:1};want[u]=[0,0]});
   const un=onValue(R(`games/${c}/inputs`),s=>Object.entries(s.val()||{}).forEach(([u,v])=>{if(!P[u]||seen[u]===v)return;seen[u]=v;const sp=String(v).split(",");if(sp[0]==="v"){if(opts[+sp[1]])votes[u]=+sp[1];return}const[a,b]=sp.map(Number);if(a===a&&b===b)want[u]=[Math.max(-1,Math.min(1,a)),Math.max(-1,Math.min(1,b))]}));
   const UPG=[["⚡ Cadence +",()=>up.fr=Math.max(2,up.fr-1)],["💥 Dégâts +",()=>up.dm++],["👟 Vitesse +",()=>up.sp+=.12],["🎯 Balles perforantes",()=>up.pr++]];
-  const pub=(x={})=>set(R(`games/${c}/state`),JSON.stringify({k:"surv",W,H,wv,msg,kl:kills,br:brk>0?1:0,vt:brk>0&&opts.length?opts.map(o=>o[0]):0,vc:opts.map((_,i)=>Object.values(votes).filter(v=>v===i).length),
+  const pub=(x={})=>set(R(`games/${c}/state`),JSON.stringify({k:"surv",W,H,wv,msg,kl:kills,sp:+up.sp.toFixed(2),br:brk>0?1:0,vt:brk>0&&opts.length?opts.map(o=>o[0]):0,vc:opts.map((_,i)=>Object.values(votes).filter(v=>v===i).length),
     p:Object.fromEntries(ids.map(u=>{const q=P[u];return[u,[Math.round(q.x),Math.round(q.y),q.hp,q.k,q.a,q.n,q.c,q.inv>0?1:0]]})),
     m:M.map(m=>[m[0],Math.round(m[1]),Math.round(m[2]),m[3],m[4]]),b:B.map(b=>[Math.round(b[0]),Math.round(b[1]),b[2],b[3]]),...x}));
   const startWave=()=>{wv++;left=4+wv*3;msg="Vague "+wv;
@@ -733,14 +861,14 @@ async function startSurv(){
       setTimeout(async()=>{const cp=(lobby&&lobby.players)||{},u2={status:"lobby"};ids.filter(u=>cp[u]).forEach(u=>u2[`players/${u}/ready`]=u===me.uid);try{await update(R(`lobbies/${c}`),u2)}catch{}},6000);
       return;
     }
-    pub();setTimeout(step,100);
+    pub();pace(100,step);
   };
   step();
 }
 
 // ---------- Battle Royale (l'hôte simule : 10 images/s, zone qui rétrécit, butin, tirs) ----------
 async function startBr(){
-  const c=code,players=lobby.players,ids=Object.keys(players);
+  const pace=mkPace(),c=code,players=lobby.players,ids=Object.keys(players);
   if(ids.length<2)return toast("Il faut au moins 2 joueurs pour lancer un battle royale");
   const sd=Math.floor(Math.random()*1e9),map=genMap(sd);
   await remove(R(`games/${c}`));await update(R(`lobbies/${c}`),{status:"playing"});
@@ -823,7 +951,7 @@ async function startBr(){
         try{await update(R(`lobbies/${c}`),up)}catch{}},6000);
       return;
     }
-    pub();setTimeout(step,100);
+    pub();pace(100,step);
   };
   step();
 }

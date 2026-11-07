@@ -3,11 +3,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#14102b">
-<meta name="moda-v" content="10">
+<meta name="moda-v" content="11">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="MoDa">
+<meta name="format-detection" content="telephone=no">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <title>MoDa – jeux entre potes</title>
@@ -47,7 +48,7 @@ input{font:inherit;padding:9px 12px;border-radius:10px;border:2px solid #3a3068;
 canvas{touch-action:none;-webkit-user-select:none;user-select:none;width:100%;max-width:800px;border-radius:var(--r);display:block;background:#0e0a22}
 #pad{display:none;grid-template-columns:repeat(3,72px);grid-template-rows:repeat(2,72px);gap:8px;justify-content:center;margin:14px auto;user-select:none;-webkit-user-select:none;touch-action:manipulation}
 #pad button{font-size:28px;padding:0;background:#3a3068;color:var(--ink)}
-@media(pointer:coarse){#pad{display:grid}button.mini{padding:8px 12px}}
+@media(pointer:coarse){button:not(#sw):not(.eye):not(.mini){min-height:44px}button.mini{padding:8px 12px;min-height:40px}}
 @media(max-width:500px){header{padding:10px 14px}main{padding:14px 12px}.code{font-size:36px}}
 #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--a);color:#241a00;padding:10px 18px;border-radius:10px;font-weight:600}
 #upd{display:flex;gap:10px;align-items:center;justify-content:space-between}
@@ -89,6 +90,49 @@ section:not([hidden]){animation:fade .28s ease backwards}
 #net{position:fixed;top:calc(10px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);background:#ff4d6d;color:#fff;padding:6px 14px;border-radius:20px;font-weight:600;font-size:14px;z-index:40;animation:fade .25s}
 #net[hidden]{display:none}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ===== iPhone / iPad : confort tactile ===== */
+html{-webkit-text-size-adjust:100%}
+body{touch-action:manipulation;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+button,.tile,.stat{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+/* marges de sécurité (encoche, coins arrondis) en paysage */
+header,main{padding-left:max(var(--px,24px),env(safe-area-inset-left));padding-right:max(var(--px,24px),env(safe-area-inset-right))}
+@media(max-width:500px){header{--px:14px}main{--px:12px}}
+#toast{bottom:calc(20px + env(safe-area-inset-bottom));z-index:60;max-width:calc(100% - 24px);text-align:center}
+#gw{position:relative;max-width:800px}
+#ov{padding:0 8px}
+#gctl,#gexit,#tip,.stick{display:none}
+/* joysticks flottants (déplacés par transform : aucun recalcul de mise en page) */
+.stick{position:fixed;left:0;top:0;width:124px;height:124px;margin:-62px 0 0 -62px;border-radius:50%;border:2px solid #ffffff44;background:#ffffff14;pointer-events:none;z-index:15;will-change:transform}
+.stick.on{display:block}
+.stick .knob{position:absolute;left:38px;top:38px;width:48px;height:48px;border-radius:50%;background:#ffffffb0;will-change:transform}
+.stick.r{border-color:#ff4d6d99;background:#ff4d6d22}.stick.r .knob{background:#ff4d6dcc}
+#tip{position:absolute;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);width:max-content;max-width:86vw;text-align:center;background:#000a;color:#fff;padding:8px 14px;border-radius:12px;font-size:14px;pointer-events:none;z-index:14}
+
+/* Plein écran de jeu sur téléphone / tablette : plus d'en-tête, pas de défilement, le jeu occupe tout l'écran */
+body.gm{position:fixed;inset:0;width:100%;overflow:hidden;background:var(--bg);-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+body.gm header,body.gm aside,body.gm #ver,body.gm #ghelp{display:none!important}
+body.gm main{display:block;padding:0;max-width:none;margin:0}
+body.gm #game{position:fixed;inset:0;z-index:10;background:var(--bg);touch-action:none;display:flex;flex-direction:column;align-items:center;padding-top:env(safe-area-inset-top)}
+/* le jeu garde son format 800×560 : il remplit la largeur (portrait) ou la hauteur (paysage) */
+body.gm #gw{flex:none;max-width:none;width:min(calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right)),calc((100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))*1.4286));
+  width:min(calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right)),calc((100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom))*1.4286))}
+body.gm canvas{max-width:none;border-radius:0;background:#000}
+body.gm #score{margin:4px 12px;gap:2px 14px;font-size:13px;pointer-events:none;justify-content:center}
+body.gm #score:empty{display:none}
+body[data-g=br].gm #score{display:none}
+body.gm #gbar{margin:2px 0 6px;gap:10px;justify-content:center}
+body.gm #gctl,body.gm #gexit,body.gm #tip{display:block}
+body.gm #gctl,body.gm #gexit{display:inline-block}
+body.gm #gbar button{min-width:44px;opacity:.92}
+@media(orientation:landscape){
+ body.gm #game{justify-content:center}
+ body.gm #score{position:absolute;left:calc(8px + env(safe-area-inset-left));bottom:calc(8px + env(safe-area-inset-bottom));flex-direction:column;align-items:flex-start;margin:0;max-width:22vw;font-size:12px;background:#0007;padding:4px 8px;border-radius:8px}
+ body.gm #gbar{position:absolute;top:calc(6px + env(safe-area-inset-top));right:calc(8px + env(safe-area-inset-right));margin:0}
+}
+/* croix directionnelle (option) : en bas à gauche, par-dessus le jeu */
+body.gm.padon #pad{display:grid;position:fixed;left:calc(14px + env(safe-area-inset-left));bottom:calc(14px + env(safe-area-inset-bottom));grid-template-columns:repeat(3,62px);grid-template-rows:repeat(2,62px);margin:0;z-index:16;opacity:.9}
+body.gm.padon #pad button{background:#3a3068cc;border-radius:14px}
 </style></head><body>
 <div id="boot"><div class="logo">Mo<b>Da</b></div><div class="spinner"></div><div id="bootmsg"></div></div>
 <div id="net" hidden>🔌 Reconnexion…</div>
@@ -124,7 +168,7 @@ section:not([hidden]){animation:fade .28s ease backwards}
  <section id="home" hidden>
   <div class="panel"><h2>Jouer avec tes potes</h2>
    <p class="sub">Choisis un jeu ci-dessous pour créer un lobby, puis invite tes amis. Ou rejoins un pote avec son code.</p>
-   <div class="row"><input id="joincode" placeholder="Code du lobby" maxlength="5" style="max-width:160px;text-transform:uppercase"><button class="alt" id="join">Rejoindre</button></div></div>
+   <div class="row"><input id="joincode" placeholder="Code du lobby" maxlength="5" autocapitalize="characters" autocorrect="off" spellcheck="false" autocomplete="off" enterkeyhint="go" style="max-width:160px;text-transform:uppercase"><button class="alt" id="join">Rejoindre</button></div></div>
   <div class="grid"><div class="tile snake" id="tsnake">Snake<small>1 à 8 joueurs</small></div><div class="tile surv" id="tsurv">Survie coop<small>1 à 8 joueurs</small></div><div class="tile br" id="tbr">Battle Royale<small>2 à 8 joueurs · dernier en vie</small></div><div class="tile">Bientôt</div></div>
  </section>
  <section id="stats" hidden>
@@ -140,15 +184,18 @@ section:not([hidden]){animation:fade .28s ease backwards}
   <p style="color:var(--mute)">Invite un ami avec le bouton « Inviter » de la liste à droite, ou donne-lui le code.</p>
  </section>
  <section id="game" hidden>
-  <div style="position:relative;max-width:800px"><canvas id="cv" width="800" height="560"></canvas>
+  <div id="gw"><canvas id="cv" width="800" height="560"></canvas>
   <div id="ov" style="position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center;font:800 56px 'Bricolage Grotesque';text-shadow:0 2px 12px #000;text-align:center"></div></div>
   <div id="pad"><span></span><button data-d="U" aria-label="Haut">▲</button><span></span><button data-d="L" aria-label="Gauche">◀</button><button data-d="D" aria-label="Bas">▼</button><button data-d="R" aria-label="Droite">▶</button></div>
-  <div id="score" class="row"></div><div class="row"><button class="alt mini" id="mute" aria-label="Son"></button><span id="ghelp" style="color:var(--mute)"></span></div>
+  <div id="score" class="row"></div>
+  <div class="row" id="gbar"><button class="alt mini" id="gctl" aria-label="Commandes"></button><button class="alt mini" id="mute" aria-label="Son"></button><button class="alt mini" id="gexit" aria-label="Quitter la partie">✕</button><span id="ghelp" style="color:var(--mute)"></span></div>
+  <div id="tip" hidden></div>
+  <div class="stick" id="sL"><i class="knob"></i></div><div class="stick r" id="sR"><i class="knob"></i></div>
  </section>
 </div>
 <aside class="panel" id="side" hidden>
  <h3>Amis</h3>
- <div class="row"><input id="fname" placeholder="Pseudo de l'ami"><button class="mini" id="fadd">Ajouter</button></div>
+ <div class="row"><input id="fname" placeholder="Pseudo de l'ami" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="send"><button class="mini" id="fadd">Ajouter</button></div>
  <div id="reqs"></div><div id="invs"></div><div id="friends"></div>
 </aside>
 </main>

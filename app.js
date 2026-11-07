@@ -5,7 +5,7 @@ import {getDatabase,ref,get,set,update,remove,onValue,onDisconnect,serverTimesta
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="12";
+const VER="13";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -947,7 +947,8 @@ function onLab(n){
       if(n.ky.length<pv.ky.length){pv.ky.filter(i=>!n.ky.includes(i)).forEach(i=>{const[a,b]=m.keys[i];sb((a+.5)*LT,(b+.5)*LT,"#ffd23f",14,200)});beep(880,.1,"triangle",.05,1320)}
       if(n.go&~pv.go)beep(300,.18,"square",.04,620);
       if(pv.go&~n.go)beep(520,.15,"square",.03,260);
-      if(n.lf<pv.lf){shk=now+250;beep(150,.25,"sawtooth",.05,60);if(navigator.vibrate)navigator.vibrate(60)}
+      if(n.lf<pv.lf){shk=now+250;beep(150,.25,"sawtooth",.05,60);
+        Object.entries(n.p).forEach(([u,q])=>{const o=pv.p[u];if(o&&q[2]&&!o[2]){sb(o[0],o[1],"#ff4d6d",16,220);if(me&&u===me.uid){lab.flash=now+350;if(navigator.vibrate)navigator.vibrate(70)}}})}
     }
   }
   setScore(Object.values(n.p).map(q=>[`${q[3]}${q[5]?" ✔":""}`,q[4]]));
@@ -987,12 +988,13 @@ function drawLab(now){
   // gardiens
   st.g.forEach((q,i)=>{const r=ip(o&&o.g[i],q),gx=r[0],gy=r[1],rr=13*(1+.06*Math.sin(now/110+i));let t=null,bd=1e12;P.forEach(e=>{const d=(e.x-gx)**2+(e.y-gy)**2;if(d<bd){bd=d;t=e}});
     const a=t?Math.atan2(t.y-gy,t.x-gx):0;
+    x.drawImage(glow("#e63946",30),gx-42,gy-42);
     x.fillStyle="#0006";x.beginPath();x.ellipse(gx,gy+rr*.8,rr*.9,rr*.35,0,0,7);x.fill();
     x.fillStyle="#e63946";x.beginPath();x.arc(gx,gy,rr,0,7);x.fill();x.strokeStyle="#0005";x.lineWidth=2;x.stroke();
     [-1,1].forEach(sd=>{const ex2=gx+Math.cos(a)*rr*.35-Math.sin(a)*rr*.4*sd,ey2=gy+Math.sin(a)*rr*.35+Math.cos(a)*rr*.4*sd;
       x.fillStyle="#fff";x.beginPath();x.arc(ex2,ey2,rr*.26,0,7);x.fill();x.fillStyle="#14102b";x.beginPath();x.arc(ex2+Math.cos(a)*rr*.1,ey2+Math.sin(a)*rr*.1,rr*.13,0,7);x.fill()})});
   // joueurs
-  P.forEach(e=>{const{u,q,x:px,y:py}=e,old=lab.pos[u];let a=lab.ang[u]||0;if(old&&Math.hypot(px-old[0],py-old[1])>.4)a=lab.ang[u]=Math.atan2(py-old[1],px-old[0]);lab.pos[u]=[px,py];
+  P.forEach(e=>{const{u,q,x:px,y:py}=e,old=lab.pos[u];let a=lab.ang[u]||0;if(old&&Math.hypot(px-old[0],py-old[1])>.4&&Math.hypot(px-old[0],py-old[1])<60)a=lab.ang[u]=Math.atan2(py-old[1],px-old[0]);lab.pos[u]=[px,py];
     x.save();x.globalAlpha=q[2]?.45+.3*Math.sin(now/60):1;
     x.fillStyle="#0006";x.beginPath();x.ellipse(px,py+9,11,4.5,0,0,7);x.fill();
     if(me&&u===me.uid){x.globalAlpha*=.35;x.fillStyle=q[4];x.beginPath();x.arc(px,py,19,0,7);x.fill();x.globalAlpha=q[2]?.45+.3*Math.sin(now/60):1}
@@ -1003,6 +1005,7 @@ function drawLab(now){
   const dt2=dt;parts=parts.filter(q=>(q.l-=dt2*1.8)>0);parts.forEach(q=>{q.x+=q.vx*dt2;q.y+=q.vy*dt2;x.globalAlpha=q.l;x.fillStyle=q.c;x.fillRect(q.x-3,q.y-3,6,6)});x.globalAlpha=1;
   x.restore();
   x.drawImage(vig(220,"9"),0,0);
+  if(now<lab.flash){x.globalAlpha=(lab.flash-now)/350*.35;x.fillStyle="#ff4d6d";x.fillRect(0,0,800,560);x.globalAlpha=1}
   // minicarte (en haut à droite : le pouce ne la cache pas)
   const s=Math.min(150*ns/WW,100*ns/WH),mw=WW*s,mh=WH*s,mx=792-mw,my=8;
   x.fillStyle="#0e0a22cc";x.fillRect(mx-3,my-3,mw+6,mh+6);x.globalAlpha=.9;x.drawImage(labBg(m),mx,my,mw,mh);x.globalAlpha=1;
@@ -1013,62 +1016,78 @@ function drawLab(now){
   x.fillStyle="#fff";x.font=`700 ${18*hs}px sans-serif`;x.textAlign="left";x.textBaseline="alphabetic";
   x.fillText(`Niveau ${st.lv}   🗝 ${st.kk}/${K}   ♥ ${Math.max(0,st.lf)}`,12,6+19*hs);
 }
-const lab={pos:{},ang:{}};
+const lab={pos:{},ang:{},flash:0};
 
-// ---------- Évasion coop : boucle de l'hôte (10 images/s) ----------
+// ---------- Évasion coop : boucle de l'hôte (10 images/s, vitesses calculées sur le temps réel) ----------
 async function startLab(){
-  const pace=mkPace(),c=code,players=lobby.players,ids=Object.keys(players),N=ids.length,SP=12; // SP = pixels par image (120 px/s)
+  const pace=mkPace(),c=code,players=lobby.players,ids=Object.keys(players),N=ids.length,D4=[[1,0],[-1,0],[0,1],[0,-1]];
   await remove(R(`games/${c}`));await update(R(`lobbies/${c}`),{status:"playing"});
   const P={},want={},seen={};
   ids.forEach(u=>{P[u]={n:players[u].name,c:players[u].color,x:0,y:0,inv:0,ex:0};want[u]=[0,0]});
   const un=onValue(R(`games/${c}/inputs`),s=>Object.entries(s.val()||{}).forEach(([u,v])=>{if(!P[u]||seen[u]===v)return;seen[u]=v;
     const[a,b]=String(v).split(",").map(Number);if(a===a&&b===b)want[u]=[Math.max(-1,Math.min(1,a)),Math.max(-1,Math.min(1,b))]}));
-  let lv=0,sd=0,m=null,keys=[],kk=0,pm=0,pp=0,go=0,gr=[],G=[],cp=[0,0],lives=N+3,brk=0,clr=0,msg="";
+  let lv=0,sd=0,m=null,keys=[],kk=0,pm=0,pp=0,go=0,gr=[],G=[],cp=[0,0],lives=N+3,brk=0,clr=0,msg="",act=ids.slice(),lastT=performance.now();
   const ctr=(tx,ty)=>[(tx+.5)*LT,(ty+.5)*LT],near=(u,x,y,d)=>(P[u].x-x)**2+(P[u].y-y)**2<d*d;
+  // les joueurs se répartissent autour du point de départ / de réapparition (au lieu de s'empiler)
+  const spot=u=>{const i=ids.indexOf(u),a=i*6.2832/N;return N>1?[cp[0]+Math.cos(a)*8,cp[1]+Math.sin(a)*8]:cp};
+  const place=u=>{const s=spot(u);P[u].x=s[0];P[u].y=s[1]};
+  const home=(g,i)=>{const[sx,sy]=m.gs[i];g.x=(sx+.5)*LT;g.y=(sy+.5)*LT;g.tx=sx;g.ty=sy;g.dx=g.dy=0};
   const newLevel=()=>{
     lv++;sd=Math.floor(Math.random()*2147483647);m=genLab(sd,N,lv);keys=m.keys.map((_,i)=>i);kk=0;pm=pp=go=0;gr=m.gates.map(()=>0);
-    cp=ctr(...m.sp);G=m.gs.map(([tx,ty])=>{const[x,y]=ctr(tx,ty);return{x,y,tx,ty,dx:0,dy:0}});
-    ids.forEach(u=>{const q=P[u];q.x=cp[0];q.y=cp[1];q.inv=15;q.ex=0});
+    cp=ctr(...m.sp);G=m.gs.map(()=>({x:0,y:0,tx:0,ty:0,dx:0,dy:0}));G.forEach(home);
+    ids.forEach(u=>{place(u);P[u].inv=15;P[u].ex=0});
     if(lv>1)lives=Math.min(N+5,lives+1);
     msg=`Niveau ${lv}`;brk=20;
   };
   const pub=(x={})=>set(R(`games/${c}/state`),JSON.stringify({k:"lab",n:N,lv,sd,kk,lf:lives,go,pp,pm,ky:keys,fz:brk>0?1:0,msg,
     g:G.map(g=>[Math.round(g.x),Math.round(g.y)]),
-    p:Object.fromEntries(ids.map(u=>{const q=P[u];return[u,[Math.round(q.x),Math.round(q.y),q.inv>0?1:0,q.n,q.c,q.ex]]})),...x}));
+    p:Object.fromEntries(act.map(u=>{const q=P[u];return[u,[Math.round(q.x),Math.round(q.y),q.inv>0?1:0,q.n,q.c,q.ex]]})),...x}));
   const step=()=>{
     if(code!==c){un();return}
-    const live=ids.filter(u=>lobby&&lobby.players&&lobby.players[u]),solo=live.length<=1;
+    const tn=performance.now(),dt=Math.min(.25,Math.max(.03,(tn-lastT)/1000));lastT=tn;
+    act=ids.filter(u=>lobby&&lobby.players&&lobby.players[u]); // un joueur parti disparaît : il ne peut plus faire perdre de vies
+    const solo=act.length<=1;
     if(brk>0){brk--;if(!brk&&clr){clr=0;newLevel()}}
     else{
       // plaques et leviers. À plusieurs : la porte reste ouverte tant qu'on tient la plaque (+1 s), le levier la verrouille ouverte.
       // Tout seul (ou si les autres sont partis) : la plaque suffit, elle verrouille la porte ouverte.
       m.gates.forEach((g,i)=>{
-        const[px,py]=ctr(g.px,g.py),[lx,ly]=ctr(g.lx,g.ly),on=ids.some(u=>near(u,px,py,22));
+        const[px,py]=ctr(g.px,g.py),[lx,ly]=ctr(g.lx,g.ly),on=act.some(u=>near(u,px,py,22));
         if(on){pp|=1<<i;gr[i]=solo?0:10;if(solo&&!((pm>>i)&1)){pm|=1<<i;cp=ctr(g.x,g.y)}}else{pp&=~(1<<i);if(gr[i]>0)gr[i]--}
-        if(!((pm>>i)&1)&&ids.some(u=>near(u,lx,ly,22))){pm|=1<<i;cp=[lx,ly]}});
-      go=pm;m.gates.forEach((g,i)=>{const[gx,gy]=ctr(g.x,g.y); // une porte ne se referme jamais sur quelqu'un
-        if(((pp>>i)&1)||gr[i]>0||ids.some(u=>Math.abs(P[u].x-gx)<LT/2+9&&Math.abs(P[u].y-gy)<LT/2+9))go|=1<<i});
-      // déplacements (3 petits pas par image pour coller aux murs)
-      ids.forEach(u=>{const q=P[u];if(q.inv>0)q.inv--;const[a,b]=want[u],n=a&&b?.707:1,s=SP*n/3;
-        for(let t=0;t<3;t++){
+        if(!((pm>>i)&1)&&act.some(u=>near(u,lx,ly,22))){pm|=1<<i;cp=[lx,ly]}});
+      go=pm;m.gates.forEach((g,i)=>{const[gx,gy]=ctr(g.x,g.y); // une porte ne se referme jamais sur quelqu'un (joueur ou gardien)
+        if(((pp>>i)&1)||gr[i]>0||act.some(u=>Math.abs(P[u].x-gx)<LT/2+9&&Math.abs(P[u].y-gy)<LT/2+9)||G.some(q=>Math.abs(q.x-gx)<LT/2&&Math.abs(q.y-gy)<LT/2))go|=1<<i});
+      // déplacements : 120 px/s, par petits pas pour coller aux murs
+      const SP=120*dt,sub=Math.ceil(SP/6);
+      act.forEach(u=>{const q=P[u];if(q.inv>0)q.inv--;const[a,b]=want[u],n=a&&b?.707:1,s=SP*n/sub;
+        for(let t=0;t<sub;t++){
           if(a){const nx=q.x+a*s;if(!labBlocked(m,go,nx,q.y))q.x=nx}
           if(b){const ny=q.y+b*s;if(!labBlocked(m,go,q.x,ny))q.y=ny}}});
       // clés (partagées par toute l'équipe)
-      keys=keys.filter(ki=>{const[kx,ky]=ctr(...m.keys[ki]);if(ids.some(u=>near(u,kx,ky,24))){kk++;return false}return true});
-      // gardiens : patrouillent dans les couloirs, tournent aux intersections
-      const gs=4.2+Math.min(lv,8)*.25;
-      G.forEach(g=>{const[tx,ty]=ctr(g.tx,g.ty),ex=tx-g.x,ey=ty-g.y,d=Math.hypot(ex,ey);
-        if(d<=gs){g.x=tx;g.y=ty;
-          const dirs=[[1,0],[-1,0],[0,1],[0,-1]].filter(([a,b])=>m.T[(g.ty+b)*m.TW+g.tx+a]===0),fw=dirs.filter(([a,b])=>!(a===-g.dx&&b===-g.dy)),pool=fw.length?fw:dirs,
-            same=pool.find(([a,b])=>a===g.dx&&b===g.dy),[a,b]=same&&Math.random()<.75?same:pool[Math.floor(Math.random()*pool.length)];
-          g.dx=a;g.dy=b;g.tx+=a;g.ty+=b}
-        else{g.x+=ex/d*gs;g.y+=ey/d*gs}});
-      // un gardien touche un joueur : une vie de l'équipe en moins, retour au dernier point de passage
-      ids.forEach(u=>{const q=P[u];if(q.inv>0)return;if(G.some(g=>(g.x-q.x)**2+(g.y-q.y)**2<23*23)){lives--;q.x=cp[0];q.y=cp[1];q.inv=25}});
+      keys=keys.filter(ki=>{const[kx,ky]=ctr(...m.keys[ki]);if(act.some(u=>near(u,kx,ky,24))){kk++;return false}return true});
+      // gardiens : vitesse régulière (le reste du pas est reporté après un virage), tournent aux intersections, ne traversent JAMAIS une porte fermée
+      const gsp=(42+Math.min(lv,8)*2.5)*dt,closed=(tx,ty)=>{const gi=m.gm.get(ty*m.TW+tx);return gi!=null&&!((go>>gi)&1)};
+      G.forEach(g=>{let rem=gsp;
+        for(let it=0;it<6&&rem>0;it++){
+          // la porte devant vient de se fermer : demi-tour (sauf si le gardien est déjà dedans : elle reste alors ouverte)
+          if((g.dx||g.dy)&&closed(g.tx,g.ty)&&Math.hypot(g.x-(g.tx+.5)*LT,g.y-(g.ty+.5)*LT)>=18){g.tx-=g.dx;g.ty-=g.dy;g.dx=-g.dx;g.dy=-g.dy}
+          const tx=(g.tx+.5)*LT,ty=(g.ty+.5)*LT,ex=tx-g.x,ey=ty-g.y,d=Math.hypot(ex,ey);
+          if(d>rem){g.x+=ex/d*rem;g.y+=ey/d*rem;break}
+          g.x=tx;g.y=ty;rem-=d;
+          const dirs=D4.filter(([a,b])=>m.T[(g.ty+b)*m.TW+g.tx+a]===0&&!closed(g.tx+a,g.ty+b));
+          if(!dirs.length){g.dx=g.dy=0;break}
+          const fw=dirs.filter(([a,b])=>!(a===-g.dx&&b===-g.dy)),pool=fw.length?fw:dirs,same=pool.find(([a,b])=>a===g.dx&&b===g.dy),
+            [a,b]=same&&Math.random()<.75?same:pool[Math.floor(Math.random()*pool.length)];
+          g.dx=a;g.dy=b;g.tx+=a;g.ty+=b}});
+      // un gardien touche un joueur (contact net : rayon 19 px) : une vie de l'équipe en moins, retour au dernier point de passage,
+      // 4 s d'invincibilité, et les gardiens qui rôdaient près de ce point sont renvoyés à leur poste
+      let hit=0;
+      act.forEach(u=>{const q=P[u];if(q.inv>0)return;if(G.some(g=>(g.x-q.x)**2+(g.y-q.y)**2<19*19)){lives--;hit=1;place(u);q.inv=40}});
+      if(hit)G.forEach((g,i)=>{if(Math.hypot(g.x-cp[0],g.y-cp[1])<160){const[sx,sy]=ctr(...m.gs[i]);if(Math.hypot(sx-cp[0],sy-cp[1])>=160)home(g,i)}});
       // sortie : toutes les clés + tout le monde dessus
       const[exx,eyy]=ctr(...m.ex),all=kk>=m.keys.length;
-      ids.forEach(u=>{P[u].ex=all&&near(u,exx,eyy,30)?1:0});
-      if(all&&live.length&&live.every(u=>P[u].ex)){clr=1;brk=25;msg=`Niveau ${lv} réussi !`}
+      act.forEach(u=>{P[u].ex=all&&near(u,exx,eyy,30)?1:0});
+      if(all&&act.length&&act.every(u=>P[u].ex)){clr=1;brk=25;msg=`Niveau ${lv} réussi !`}
       if(lives<=0){
         un();set(R("stats/gamesPlayed"),increment(1)).catch(()=>{});pub({o:1,lf:0,msg:`Défaite au niveau ${lv} · ${lv-1} réussi${lv>2?"s":""}`});
         setTimeout(async()=>{const cp2=(lobby&&lobby.players)||{},u2={status:"lobby"};ids.filter(u=>cp2[u]).forEach(u=>u2[`players/${u}/ready`]=u===me.uid);try{await update(R(`lobbies/${c}`),u2)}catch{}},6000);

@@ -21,7 +21,7 @@ const clean=s=>(s||"joueur").replace(/[^A-Za-z0-9_]/g,"").slice(0,16).padEnd(3,"
 // ---------- Comptes ----------
 const err=e=>toast({"auth/invalid-credential":"Email ou mot de passe incorrect","auth/email-already-in-use":"Email déjà utilisé","auth/weak-password":"Mot de passe trop court"}[e.code]||e.message);
 $("login").onclick=()=>{
-  const id=$("email").value.trim(),low=id.toLowerCase();
+  const id=$("email").value.trim(),low=id.toLowerCase().replace(/@moda\.owner$/,"");
   if(OW.includes(low))return ownerLogin(low);
   signInWithEmailAndPassword(auth,id,$("pass").value).catch(err);
 };

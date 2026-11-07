@@ -1,14 +1,23 @@
 <!doctype html>
 <html lang="fr"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#14102b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MoDa">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
 <title>MoDa – jeux entre potes</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;800&family=DM+Sans:wght@400;600&display=swap">
 <style>
 :root{--bg:#14102b;--card:#211a44;--ink:#f3f0ff;--mute:#9d94c9;--a:#ffd23f;--b:#3ee6c4;--r:14px}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 'DM Sans',sans-serif}
 h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0}
-header{flex-wrap:wrap;display:flex;align-items:center;gap:16px;padding:14px 24px;background:#0e0a22}
+header{padding-top:max(14px,env(safe-area-inset-top))!important;flex-wrap:wrap;display:flex;align-items:center;gap:16px;padding:14px 24px;background:#0e0a22}
 .logo{font-size:30px;font-weight:800;letter-spacing:-1px}.logo b{color:var(--a)}
+#inst{background:var(--b);color:#06231d}
 #who{margin-left:auto;color:var(--mute)}
 #adm{display:flex;align-items:center;gap:8px;color:var(--mute);font-size:14px}
 #sw{width:51px;height:31px;padding:0;border-radius:16px;background:#3a3068;position:relative;transition:background .2s}
@@ -42,6 +51,7 @@ canvas{touch-action:none;-webkit-user-select:none;user-select:none;width:100%;ma
 #toast:empty{display:none}
 </style></head><body>
 <header><div class="logo">Mo<b>Da</b></div><div id="who"></div>
+<button id="inst" hidden>📲 Installer</button>
 <div id="adm" hidden><span>Stats</span><button id="sw" role="switch" aria-checked="false" aria-label="Afficher les statistiques à la place des jeux"></button></div><button class="alt" id="out" hidden>Déconnexion</button></header>
 <main>
 <div>
@@ -80,6 +90,11 @@ canvas{touch-action:none;-webkit-user-select:none;user-select:none;width:100%;ma
  <div id="reqs"></div><div id="invs"></div><div id="friends"></div>
 </aside>
 </main>
+<div id="iosHelp" class="panel" hidden style="position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:20;max-width:420px;margin:auto">
+ <b>Installer MoDa sur iPhone</b>
+ <p style="margin:6px 0">Dans <b>Safari</b> : touche le bouton Partager <span aria-hidden="true">⬆️</span>, puis « Sur l’écran d’accueil ».</p>
+ <button class="alt" id="iosClose">Fermer</button>
+</div>
 <div id="toast" role="status"></div>
 <script type="module" src="app.js"></script>
 </body></html>

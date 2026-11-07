@@ -212,3 +212,21 @@ function renderStats(D){
   $("stgrid").replaceChildren(...cards.map(([v,l])=>{const d=h("div");d.className="stat";const b=h("b",String(v));d.append(b,h("span",l));return d}));
   $("onl").replaceChildren(...(online.length?online.map(u=>{const c=h("span",us[u]?.name||"?");c.className="chip";return c}):[h("span","Personne pour l'instant")]));
 }
+
+// ---------- Installation (PWA) ----------
+if("serviceWorker" in navigator&&location.protocol==="https:")addEventListener("load",()=>navigator.serviceWorker.register("sw.js",{updateViaCache:"none"}).catch(()=>{}));
+(function(){
+  const btn=$("inst"),help=$("iosHelp");
+  const standalone=matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
+  const ios=/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+  if(standalone)return;
+  let ev=null;
+  addEventListener("beforeinstallprompt",e=>{e.preventDefault();ev=e;btn.hidden=false});
+  addEventListener("appinstalled",()=>{btn.hidden=true;ev=null});
+  if(ios)btn.hidden=false;
+  btn.onclick=async()=>{
+    if(ev){ev.prompt();await ev.userChoice.catch(()=>{});ev=null;btn.hidden=true}
+    else help.hidden=false;
+  };
+  $("iosClose").onclick=()=>help.hidden=true;
+})();

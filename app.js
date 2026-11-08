@@ -1,11 +1,12 @@
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signInWithPopup,signInWithRedirect,getRedirectResult,GoogleAuthProvider,signOut,sendPasswordResetEmail} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import {getDatabase,ref,get,set,update,remove,onValue,onDisconnect,serverTimestamp,increment} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
+import {startSim,createSimClient} from "./sim.js";
 
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="15";
+const VER="17";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -13,7 +14,7 @@ const h=(t,txt,fn)=>{const e=document.createElement(t);if(txt!=null)e.textConten
 const R=p=>ref(db,p);
 const TOUCH=matchMedia("(hover:none) and (pointer:coarse)").matches,LOW=TOUCH||(navigator.hardwareConcurrency||8)<=4; // écran tactile : mode plein écran + effets allégés
 const COLORS=["#ff4d6d","#3ee6c4","#ffd23f","#6c8cff","#ff9f1c","#c77dff","#80ed99","#f8f9fa"];
-const VIEWS=["auth","home","stats","lobby","game"];
+const VIEWS=["auth","home","stats","lobby","game","sim"];
 const OW=["rayqua","8x"],ownerMail=n=>`${n}@moda.owner`;
 const ownerOf=u=>OW.find(n=>u.email===ownerMail(n));
 let adm=false,unStats=[];try{adm=localStorage.getItem("moda.stats")==="1"}catch{}
@@ -223,14 +224,14 @@ const mkLobby=game=>async()=>{
   await set(R(`lobbies/${c}`),{host:me.uid,game,status:"lobby",opts:{sp:1,wr:0,bo:1},players:{[me.uid]:{name:me.name,color:COLORS[0],ready:true}}});
   onDisconnect(R(`lobbies/${c}`)).remove();enter(c);
 };
-$("tsnake").onclick=mkLobby("snake");$("tsurv").onclick=mkLobby("surv");$("tbr").onclick=mkLobby("br");$("tlab").onclick=mkLobby("lab");
+$("tsnake").onclick=mkLobby("snake");$("tsurv").onclick=mkLobby("surv");$("tbr").onclick=mkLobby("br");$("tlab").onclick=mkLobby("lab");$("tsim").onclick=mkLobby("sim");
 $("join").onclick=()=>joinLobby($("joincode").value.trim().toUpperCase());
 $("joincode").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();$("join").click()}});
 async function joinLobby(c){
   if(code)await leaveLobby();
   const l=(await get(R(`lobbies/${c}`))).val();
   if(!l)return toast("Lobby introuvable");
-  if(l.status!=="lobby")return toast("Partie déjà en cours");
+  if(l.status!=="lobby"&&l.game!=="sim")return toast("Partie déjà en cours");
   const pl=l.players||{};if(Object.keys(pl).length>=8&&!pl[me.uid])return toast("Lobby plein (8 max)");
   await set(R(`lobbies/${c}/players/${me.uid}`),{name:me.name,color:firstColor(pl),ready:false});
   onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();enter(c);
@@ -240,11 +241,11 @@ function enter(c){
   unLobby=onValue(R(`lobbies/${c}`),s=>{
     const l=s.val();if(!l){if(code){local();toast("Le lobby a été fermé")}return}
     lobby=l;
-    if(l.status==="lobby"&&l.host!==me.uid&&!(l.players&&l.players[me.uid])){ // coupure puis retour : on se réinscrit
+    if((l.status==="lobby"||l.game==="sim")&&l.host!==me.uid&&!(l.players&&l.players[me.uid])){ // coupure puis retour : on se réinscrit
       set(R(`lobbies/${c}/players/${me.uid}`),{name:me.name,color:firstColor(l.players),ready:false});onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();return}
     renderLobby();
-    if(l.status==="playing"&&cur!=="game")enterGame(c);
-    if(l.status==="lobby"&&cur==="game"){unState&&unState();unState=null;show("lobby")}
+    if(l.status==="playing"&&cur!==(l.game==="sim"?"sim":"game"))enterGame(c);
+    if(l.status==="lobby"&&(cur==="game"||cur==="sim")){unState&&unState();unState=null;show("lobby")}
   });
 }
 function renderLobby(){
@@ -252,7 +253,7 @@ function renderLobby(){
   Object.entries(pl).forEach(([u,p])=>{const r=h("div",null);r.className="pl";const sw=h("span");sw.className="sw";sw.style.background=p.color;
     r.append(sw,h("span",p.name+(u===lobby.host?" (hôte)":"")+(p.wins?` 🏆${p.wins}`:"")),h("span",p.ready?"✔ prêt":"…"));b.append(r)});
   $("ready").hidden=host;$("ready").textContent=pl[me.uid]?.ready?"Pas prêt":"Prêt";
-  $("ltitle").textContent={snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",lab:"🗝️ Évasion coop"}[lobby.game]||"Lobby";
+  $("ltitle").textContent={snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator"}[lobby.game]||"Lobby";
   $("opts").style.display=lobby.game==="snake"?"":"none";
   const op=lobby.opts||{};$("oSp").textContent="⚡ Vitesse : "+["lente","normale","rapide"][op.sp??1];
   $("oWr").textContent=op.wr?"🌀 Murs : traversables":"🧱 Murs : mortels";$("oBo").textContent=op.bo===0?"🎁 Bonus : non":"🎁 Bonus : oui";
@@ -270,6 +271,10 @@ async function leaveLobby(){
   onDisconnect(R(`lobbies/${c}`)).cancel();onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).cancel();
   try{if(host){await remove(R(`games/${c}`));await remove(R(`lobbies/${c}`))}else await remove(R(`lobbies/${c}/players/${me.uid}`))}catch{}
 }
+// ---------- Mine Simulator (sim.js + simcore.js) : monde partagé, progression sauvegardée dans users/<uid>/sim ----------
+let sc=null;
+const simEnv=()=>({R,get,set,update,remove,onValue,increment,$,h,toast,beep,show,leave:leaveLobby,getMe:()=>me,getCode:()=>code,getLobby:()=>lobby});
+function enterSimGame(c){sc=sc||createSimClient(simEnv());return sc.enter(c)}
 function local(){unLobby&&unLobby();unState&&unState();unLobby=unState=null;code=lobby=null;if(me)showHome()}
 
 // ---------- Jeu : affichage (tous les joueurs) ----------
@@ -330,6 +335,7 @@ function unwake(){try{wl&&wl.release()}catch{}wl=null}
 let hinted=0;
 function orientHint(){if(!TOUCH||hinted||gk==="snake")return;if(matchMedia("(orientation:portrait)").matches){hinted=1;setTimeout(()=>{if(cur==="game")toast("📱 Astuce : tourne ton téléphone en paysage pour une vue plus grande")},1600)}}
 function enterGame(c){
+  if(lobby&&lobby.game==="sim"){unState=enterSimGame(c);return}
   show("game");lastDir=null;st=pv=null;parts=[];gk=lobby&&["surv","br","lab"].includes(lobby.game)?lobby.game:"snake";held.clear();lastMv="";$("ov").style.fontSize=gk==="snake"?"min(56px,11vw)":"min(34px,6.5vw)";mine=-1;vk="";vbox.style.display="none";
   pred=null;scoreKey="";document.body.dataset.g=gk;ctlUI();calcVs();wake();orientHint();gameSetup();
   unState=onValue(R(`games/${c}/state`),s=>{if(s.val())onState(JSON.parse(s.val()))});
@@ -772,6 +778,7 @@ addEventListener("keyup",e=>{if(e.key===" "&&gk==="br"&&cur==="game"){spDown=0;s
 
 // ---------- Jeu : boucle de l'hôte ----------
 $("start").onclick=async()=>{
+  if(lobby.game==="sim")return startSim(simEnv());
   if(lobby.game==="surv")return startSurv();
   if(lobby.game==="lab")return startLab();
   if(lobby.game==="br")return startBr();

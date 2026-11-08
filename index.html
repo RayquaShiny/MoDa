@@ -3,7 +3,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#14102b">
-<meta name="moda-v" content="17">
+<!-- ⚠️ À CONSERVER À CHAQUE MISE À JOUR : à chaque nouvelle version (chaque modification), la version affichée doit faire +1.
+     Changer le numéro aux 3 endroits, toujours identique : ce <meta name="moda-v">, `const VER` dans app.js, et `VERSION` dans sw.js. -->
+<meta name="moda-v" content="18">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -149,6 +151,32 @@ body[data-g=sim] #pad,body[data-g=sim] #gctl{display:none!important}
 .scard button{white-space:nowrap}.shatch{background:#3ee6c422;border:1px solid #3ee6c466;color:var(--b);border-radius:10px;padding:8px 10px;font-weight:600}
 #semo{position:absolute;right:8px;bottom:60px;display:flex;gap:6px;background:#14102bec;border-radius:12px;padding:6px;z-index:6}
 #semo button{font-size:22px;padding:4px 8px;background:#3a3068}
+
+/* ---- Thème noir-rouge néon (actif quand l'interrupteur Stats est sur ON) ---- */
+html.neon{--bg:#050204;--card:#12060a;--ink:#ffeef0;--mute:#ff8a9b;--a:#ff1f4b;--b:#ff4d6d}
+html.neon body{background:radial-gradient(ellipse at top,#1c0409 0,var(--bg) 60%) fixed}
+html.neon header{background:#0a0204;border-bottom:1px solid #ff1f4b;box-shadow:0 0 18px #ff1f4b88}
+html.neon .logo{text-shadow:0 0 10px #ff1f4b,0 0 24px #ff1f4b88}
+html.neon .logo b{color:#ff1f4b;text-shadow:0 0 8px #ff1f4b,0 0 22px #ff1f4b,0 0 40px #ff1f4bcc}
+html.neon .panel{border:1px solid #ff1f4b66;box-shadow:0 0 14px #ff1f4b44,inset 0 0 18px #ff1f4b14}
+html.neon .stat{background:#1a060c;border:1px solid #ff1f4b88;box-shadow:0 0 10px #ff1f4b55}
+html.neon .stat b,html.neon .code{color:#ff3b5c;text-shadow:0 0 8px #ff1f4b,0 0 20px #ff1f4b99}
+html.neon h1,html.neon h2,html.neon h3{text-shadow:0 0 8px #ff1f4b88}
+html.neon .chip{background:#1a060c;border:1px solid #ff1f4b77;box-shadow:0 0 6px #ff1f4b44}
+html.neon button{background:#ff1f4b;color:#fff;box-shadow:0 0 10px #ff1f4b,0 0 22px #ff1f4b66;text-shadow:0 0 4px #0008}
+html.neon button.alt,html.neon #pad button{background:#1a060c;color:var(--ink);border:1px solid #ff1f4b;box-shadow:0 0 8px #ff1f4b66}
+html.neon button:focus-visible,html.neon input:focus-visible{outline:3px solid #ff4d6d;box-shadow:0 0 14px #ff1f4b}
+html.neon input{background:#0a0204;border-color:#ff1f4b88;color:var(--ink)}
+html.neon .tabs{background:#0a0204;border:1px solid #ff1f4b55}
+html.neon .tile{background:#1a060c;border:1px solid #ff1f4b55}
+html.neon .dot{color:#5a1a28}html.neon .dot.on{color:#ff4d6d;text-shadow:0 0 6px #ff1f4b}
+html.neon canvas{box-shadow:0 0 18px #ff1f4b66}
+html.neon #sw{background:#2a0a12;box-shadow:0 0 8px #ff1f4b55}
+html.neon #sw[aria-checked=true]{background:#ff1f4b;box-shadow:0 0 12px #ff1f4b,0 0 26px #ff1f4b99}
+html.neon #toast{background:#ff1f4b;color:#fff;box-shadow:0 0 16px #ff1f4b}
+html.neon #semo{background:#0a0204ec;border:1px solid #ff1f4b88}
+html.neon #semo button{background:#1a060c}
+html.neon ::selection{background:#ff1f4b;color:#fff}
 </style></head><body>
 <div id="boot"><div class="logo">Mo<b>Da</b></div><div class="spinner"></div><div id="bootmsg"></div></div>
 <div id="net" hidden>🔌 Reconnexion…</div>

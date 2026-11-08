@@ -5,7 +5,7 @@
 <meta name="theme-color" content="#14102b">
 <!-- ⚠️ À CONSERVER À CHAQUE MISE À JOUR : à chaque nouvelle version (chaque modification), la version affichée doit faire +1.
      Changer le numéro aux 3 endroits, toujours identique : ce <meta name="moda-v">, `const VER` dans app.js, et `VERSION` dans sw.js. -->
-<meta name="moda-v" content="18">
+<meta name="moda-v" content="19">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -154,7 +154,9 @@ body[data-g=sim] #pad,body[data-g=sim] #gctl{display:none!important}
 
 /* ---- Thème noir-rouge néon (actif quand l'interrupteur Stats est sur ON) ---- */
 html.neon{--bg:#050204;--card:#12060a;--ink:#ffeef0;--mute:#ff8a9b;--a:#ff1f4b;--b:#ff4d6d}
-html.neon body{background:radial-gradient(ellipse at top,#1c0409 0,var(--bg) 60%) fixed}
+html,html.neon{background:var(--bg)}
+html.neon body{background:var(--bg)}
+html.neon header{margin-top:0}
 html.neon header{background:#0a0204;border-bottom:1px solid #ff1f4b;box-shadow:0 0 18px #ff1f4b88}
 html.neon .logo{text-shadow:0 0 10px #ff1f4b,0 0 24px #ff1f4b88}
 html.neon .logo b{color:#ff1f4b;text-shadow:0 0 8px #ff1f4b,0 0 22px #ff1f4b,0 0 40px #ff1f4bcc}

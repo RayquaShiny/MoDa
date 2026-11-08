@@ -36,7 +36,7 @@ export async function startSim(env) {
 // ----- Client -----
 export function createSimClient(env) {
   const { R, get, set, onValue, $, h, toast, beep, getMe, getCode, getLobby } = env;
-  const cv = $("scv"), x = cv.getContext("2d", { alpha: false });
+  const cv = $("cv"), x = cv.getContext("2d");
   const nodes = genNodes();
   let active = false, loaded = false, raf = 0, last = 0, s = C.fresh(), dirty = false, saveT = 0, sendT = 0, hudT = 0;
   let px = 1000, py = 700, vx = 0, vy = 0, face = 1, hitT = 0, target = null, fullMsgAt = 0, padIn = {}, tab = "tools", lastHatch = "", emoSeq = 0, myEmo = null, hpAcc = 0;
@@ -130,21 +130,25 @@ export function createSimClient(env) {
   EMOS.forEach((e, i) => emo.append(h("button", e, () => { myEmo = { i, seq: ++emoSeq, at: performance.now() }; emo.hidden = true; send(performance.now()); })));
   $("sEmo").onclick = () => { emo.hidden = !emo.hidden; };
   $("sShop").onclick = () => { if (mod.hidden) openShop(); else closeShop(); };
-  $("sExit").onclick = () => { if (!active) return; if (confirm(getLobby() && getLobby().host === me().uid ? "Tu es l'hôte : le monde fermera pour tout le monde (ta progression est sauvegardée). Quitter ?" : "Quitter le monde ? (ta progression est sauvegardée)")) { save(true); env.leave(); } };
-
+  
   // ---------- interface ----------
   function float(x0, y0, t, col) { if (floats.length < 40) floats.push({ x: x0, y: y0, t, col, l: 1 }); }
   function hud(force) {
-    const mx = C.capacity(s.bagL);
-    $("sCoins").textContent = "💰 " + fmt(s.coins); $("sBag").textContent = `🎒 ${s.bn}/${mx}`; $("sMult").textContent = `×${C.mult(s).toFixed(1)}` + (s.rb ? ` ⭐${s.rb}` : "");
-    $("sBarFill").style.width = Math.min(100, s.bn / mx * 100) + "%"; $("sBarFill").style.background = s.bn >= mx ? "#ff4d6d" : "#3ee6c4";
-    const zi = ZONES.findIndex(z => inRect(px, py, z.r)); $("sZone").textContent = zi >= 0 ? ZONES[zi].e + " " + ZONES[zi].n : "🏠 Hub";
     const rows = [{ n: me().name || "Moi", c: "#ffd23f", t: s.total, rb: s.rb, me: 1 }];
     const pl = (getLobby() && getLobby().players) || {};
     Object.entries(others).forEach(([u, o]) => { if (pl[u]) rows.push({ n: pl[u].name, c: pl[u].color, t: o.t || 0, rb: o.rb || 0 }); });
     rows.sort((a, b) => b.t - a.t); const key = rows.map(r => r.n + r.t + r.rb).join("|");
-    if (force || hud.k !== key) { hud.k = key; $("sboard").replaceChildren(h("b", "🏆 Classement"), ...rows.slice(0, 8).map((r, i) => { const d = h("div", `${i + 1}. ${r.n}${r.rb ? " ⭐" + r.rb : ""} · ${fmt(r.t)}`); d.style.color = r.c; if (r.me) d.style.fontWeight = 700; return d; })); }
-    $("spets").textContent = C.equipped(s).map(p => PETS[p].e).join(" ") || "Aucun pet · va à l'œuf 🥚";
+    if (force || hud.k !== key) { hud.k = key; $("score").replaceChildren(...rows.slice(0, 6).map((r, i) => { const d = h("span", `${i + 1}. ${r.n}${r.rb ? " ⭐" + r.rb : ""} · ${fmt(r.t)}`); d.style.color = r.c; if (r.me) d.style.fontWeight = 700; return d; })); }
+  }
+  function drawHud() {
+    const mx = C.capacity(s.bagL), zi = ZONES.findIndex(z => inRect(px, py, z.r)), zn = zi >= 0 ? ZONES[zi].e + " " + ZONES[zi].n : "🏠 Hub";
+    x.fillStyle = "#0a0719cc"; rr(8, 8, 222, 112, 12); x.fill(); x.textAlign = "left";
+    x.font = "800 22px sans-serif"; x.fillStyle = "#ffd23f"; x.fillText("💰 " + fmt(s.coins), 18, 36);
+    x.font = "700 15px sans-serif"; x.fillStyle = "#fff"; x.fillText(`🎒 ${s.bn}/${mx}`, 18, 60);
+    x.fillStyle = "#ffffff22"; x.fillRect(104, 49, 116, 11); x.fillStyle = s.bn >= mx ? "#ff4d6d" : "#3ee6c4"; x.fillRect(104, 49, 116 * Math.min(1, s.bn / mx), 11);
+    x.fillStyle = "#3ee6c4"; x.fillText(`×${C.mult(s).toFixed(1)}${s.rb ? "   ⭐" + s.rb : ""}`, 18, 84);
+    x.fillStyle = "#ffffffbb"; x.fillText(zn, 18, 106);
+    x.font = "18px sans-serif"; x.fillText(C.equipped(s).map(p => PETS[p].e).join(" "), 120, 106);
   }
   const nameOf = u => { const p = getLobby() && getLobby().players && getLobby().players[u]; return p ? p.name : "?"; };
   const colOf = u => { const p = getLobby() && getLobby().players && getLobby().players[u]; return p ? p.color : "#fff"; };
@@ -242,6 +246,7 @@ export function createSimClient(env) {
     floats.forEach(f => { x.globalAlpha = Math.max(0, Math.min(1, f.l)); label(f.t, f.x, f.y, f.col, 18); }); x.globalAlpha = 1;
     // joystick (écran)
     x.setTransform(1, 0, 0, 1, 0, 0);
+    drawHud();
     if (stick) { x.strokeStyle = "#ffffff55"; x.lineWidth = 3; x.beginPath(); x.arc(stick.ox, stick.oy, 55, 0, 7); x.stroke(); x.fillStyle = "#ffffff88"; x.beginPath(); x.arc(stick.ox + stick.dx * 55, stick.oy + stick.dy * 55, 22, 0, 7); x.fill(); }
   }
   function frame(now) {
@@ -256,13 +261,13 @@ export function createSimClient(env) {
     enter(c) {
       active = true; loaded = false; s = C.fresh(); dirty = false; px = 1000 + (Math.random() - .5) * 120; py = 700; face = 1; Object.keys(others).forEach(k => delete others[k]);
       floats.length = 0; padIn = {}; keys.clear(); stick = null; myEmo = null; mod.hidden = true; $("semo").hidden = true; lastHatch = ""; trail.forEach(t => { t.x = px; t.y = py; }); send.last = null;
-      $("sov").textContent = "Chargement de ta sauvegarde…"; env.show("sim");
+      $("ov").style.fontSize = "min(22px,4.5vw)"; $("ov").textContent = "Chargement de ta sauvegarde…"; $("ghelp").textContent = "ZQSD / WASD / flèches pour bouger · glisse sur mobile";
       const myUid = me().uid;
-      get(path()).then(r => { if (!active) return; s = C.sanitize(r.val()); loaded = true; $("sov").textContent = ""; hud(true);
+      get(path()).then(r => { if (!active) return; s = C.sanitize(r.val()); loaded = true; $("ov").textContent = ""; hud(true);
         toast(s.total > 0 ? `Bon retour ! 💰 ${fmt(s.coins)}` : "Bienvenue ! Marche vers un filon pour miner 🍄, puis vends au 💰");
-        if (!raf) raf = requestAnimationFrame(frame); }).catch(() => { if (!active) return; loaded = true; $("sov").textContent = ""; toast("⚠️ Sauvegarde illisible : tu démarres à zéro (vérifie les règles Firebase)"); if (!raf) raf = requestAnimationFrame(frame); });
+        if (!raf) raf = requestAnimationFrame(frame); }).catch(() => { if (!active) return; loaded = true; $("ov").textContent = ""; toast("⚠️ Sauvegarde illisible : tu démarres à zéro (vérifie les règles Firebase)"); if (!raf) raf = requestAnimationFrame(frame); });
       const un = onValue(R(`games/${c}/inputs`), snap => { inputs = snap.val() || {}; Object.entries(inputs).forEach(([u, v]) => { if (u !== myUid) parse(u, v); }); Object.keys(others).forEach(u => { if (!inputs[u]) delete others[u]; }); });
-      return () => { if (active && loaded) save(true); active = false; un(); raf = 0; };
+      return () => { if (active && loaded) save(true); active = false; un(); raf = 0; mod.hidden = true; emo.hidden = true; $("ov").textContent = ""; $("score").replaceChildren(); x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.setLineDash([]); x.textBaseline = "alphabetic"; };
     }
   };
 }

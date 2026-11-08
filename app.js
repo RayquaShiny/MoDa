@@ -14,7 +14,7 @@ const h=(t,txt,fn)=>{const e=document.createElement(t);if(txt!=null)e.textConten
 const R=p=>ref(db,p);
 const TOUCH=matchMedia("(hover:none) and (pointer:coarse)").matches,LOW=TOUCH||(navigator.hardwareConcurrency||8)<=4; // écran tactile : mode plein écran + effets allégés
 const COLORS=["#ff4d6d","#3ee6c4","#ffd23f","#6c8cff","#ff9f1c","#c77dff","#80ed99","#f8f9fa"];
-const VIEWS=["auth","home","stats","lobby","game","sim"];
+const VIEWS=["auth","home","stats","lobby","game"];
 const OW=["rayqua","8x"],ownerMail=n=>`${n}@moda.owner`;
 const ownerOf=u=>OW.find(n=>u.email===ownerMail(n));
 let adm=false,unStats=[];try{adm=localStorage.getItem("moda.stats")==="1"}catch{}
@@ -244,8 +244,8 @@ function enter(c){
     if((l.status==="lobby"||l.game==="sim")&&l.host!==me.uid&&!(l.players&&l.players[me.uid])){ // coupure puis retour : on se réinscrit
       set(R(`lobbies/${c}/players/${me.uid}`),{name:me.name,color:firstColor(l.players),ready:false});onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();return}
     renderLobby();
-    if(l.status==="playing"&&cur!==(l.game==="sim"?"sim":"game"))enterGame(c);
-    if(l.status==="lobby"&&(cur==="game"||cur==="sim")){unState&&unState();unState=null;show("lobby")}
+    if(l.status==="playing"&&cur!=="game")enterGame(c);
+    if(l.status==="lobby"&&cur==="game"){unState&&unState();unState=null;show("lobby")}
   });
 }
 function renderLobby(){
@@ -335,7 +335,7 @@ function unwake(){try{wl&&wl.release()}catch{}wl=null}
 let hinted=0;
 function orientHint(){if(!TOUCH||hinted||gk==="snake")return;if(matchMedia("(orientation:portrait)").matches){hinted=1;setTimeout(()=>{if(cur==="game")toast("📱 Astuce : tourne ton téléphone en paysage pour une vue plus grande")},1600)}}
 function enterGame(c){
-  if(lobby&&lobby.game==="sim"){unState=enterSimGame(c);return}
+  if(lobby&&lobby.game==="sim"){show("game");st=pv=null;gk="sim";held.clear();lastMv="";scoreKey="";document.body.dataset.g="sim";wake();orientHint();unState=enterSimGame(c);return}
   show("game");lastDir=null;st=pv=null;parts=[];gk=lobby&&["surv","br","lab"].includes(lobby.game)?lobby.game:"snake";held.clear();lastMv="";$("ov").style.fontSize=gk==="snake"?"min(56px,11vw)":"min(34px,6.5vw)";mine=-1;vk="";vbox.style.display="none";
   pred=null;scoreKey="";document.body.dataset.g=gk;ctlUI();calcVs();wake();orientHint();gameSetup();
   unState=onValue(R(`games/${c}/state`),s=>{if(s.val())onState(JSON.parse(s.val()))});
@@ -453,7 +453,7 @@ function frame(now){
 }
 const KEYS={ArrowUp:"U",w:"U",z:"U",ArrowDown:"D",s:"D",ArrowLeft:"L",a:"L",q:"L",ArrowRight:"R",d:"R"};
 const held=new Set();let seqN=0;
-const mv=()=>{if(cur!=="game"||!code||!me||gk==="lab")return;if(gk==="br")return brSend();const m=`${(held.has("R")?1:0)-(held.has("L")?1:0)},${(held.has("D")?1:0)-(held.has("U")?1:0)}`;if(m!==lastMv){lastMv=m;set(R(`games/${code}/inputs/${me.uid}`),m+","+(++seqN)).catch(()=>{})}};
+const mv=()=>{if(cur!=="game"||!code||!me||gk==="lab"||gk==="sim")return;if(gk==="br")return brSend();const m=`${(held.has("R")?1:0)-(held.has("L")?1:0)},${(held.has("D")?1:0)-(held.has("U")?1:0)}`;if(m!==lastMv){lastMv=m;set(R(`games/${code}/inputs/${me.uid}`),m+","+(++seqN)).catch(()=>{})}};
 const send=d=>{if(cur!=="game"||gk!=="snake"||d===lastDir)return;lastDir=d;set(R(`games/${code}/inputs/${me.uid}`),d+(++seqN)).catch(()=>{})};
 addEventListener("keydown",e=>{if(cur!=="game"||/^(INPUT|TEXTAREA)$/.test(e.target.tagName))return;const d=KEYS[e.key.length>1?e.key:e.key.toLowerCase()];if(d){e.preventDefault();if(gk!=="snake"){held.add(d);mv()}else send(d)}});
 addEventListener("keyup",e=>{const d=KEYS[e.key.length>1?e.key:e.key.toLowerCase()];if(d&&(gk!=="snake")&&cur==="game"){held.delete(d);mv()}});
@@ -487,7 +487,7 @@ function endStick(k){const s=tp[k];if(!s)return;tp[k]=null;s.el.classList.remove
   if(k==="mv")setHeld(0,0,0,0);else{ptrDown=0;aimLock=0;if(cur==="game"&&gk==="br")setFire()}}
 function resetTouch(){["mv","aim"].forEach(endStick);tp.sw=null;held.clear();ptrDown=0;aimLock=0;if(cur==="game"){if(gk==="br")setFire();else if(gk==="surv"||gk==="lab")mv()}}
 gameEl.addEventListener("pointerdown",e=>{
-  if(!touchy(e)||cur!=="game"||e.target.closest("button"))return;
+  if(!touchy(e)||cur!=="game"||gk==="sim"||e.target.closest("button"))return;
   e.preventDefault();const x=e.clientX,y=e.clientY;
   if(gk==="snake"){if(tp.sw)return;tp.sw={id:e.pointerId,ox:x,oy:y}}
   else if(gk==="br"&&(ctlMode==="pad"||x>=innerWidth*.5)){if(tp.aim)return;tp.aim=mkStick(sR,x,y,e.pointerId);ptrDown=1;setFire()}

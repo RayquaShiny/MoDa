@@ -136,25 +136,19 @@ body.gm #gbar button{min-width:44px;opacity:.92}
 body.gm.padon #pad{display:grid;position:fixed;left:calc(14px + env(safe-area-inset-left));bottom:calc(14px + env(safe-area-inset-bottom));grid-template-columns:repeat(3,62px);grid-template-rows:repeat(2,62px);margin:0;z-index:16;opacity:.9}
 body.gm.padon #pad button{background:#3a3068cc;border-radius:14px}
 
-/* ===== Mine Simulator ===== */
-#sim .sm{padding:12px}
-.shud{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font:800 18px 'Bricolage Grotesque'}
-.shud #sCoins{color:var(--a)}.shud #sMult{color:var(--b)}.shud #sZone{color:var(--mute);font-size:15px;margin-left:auto}
-.sbar{height:8px;background:#14102b;border-radius:6px;margin:8px 0;overflow:hidden}.sbar i{display:block;height:100%;width:0;border-radius:6px;transition:width .15s}
-.smain{display:grid;grid-template-columns:1fr 220px;gap:12px}
-@media(max-width:800px){.smain{grid-template-columns:1fr}}
-.scv{position:relative}
-#scv{background:#16281e;border-radius:12px;cursor:grab}
-#sov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;font:800 20px 'Bricolage Grotesque';text-shadow:0 2px 10px #000}
-#smod{position:absolute;inset:8px;background:#14102bf2;border:2px solid #3a3068;border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px;overflow:auto;z-index:5}
+/* ===== Mine Simulator (dans l'écran de jeu commun) ===== */
+#sbtns{display:none;position:absolute;right:8px;bottom:8px;gap:8px;z-index:6}
+body[data-g=sim] #sbtns{display:flex}
+body[data-g=sim] #pad,body[data-g=sim] #gctl{display:none!important}
+#sbtns button{font-size:16px;padding:8px 12px;min-width:44px}
+#smod{position:absolute;inset:6px;background:#14102bf2;border:2px solid #3a3068;border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px;overflow:auto;z-index:7;touch-action:pan-y;-webkit-user-select:none;user-select:none}
 .stabs{display:flex;gap:6px;flex-wrap:wrap}.stabs button{padding:6px 10px;font-size:14px}
 .smoney{font:800 17px 'Bricolage Grotesque';color:var(--a)}
 .sbody{display:flex;flex-direction:column;gap:8px}
-.scard{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#2c2358;border-radius:12px;padding:10px 12px}
+.scard{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#2c2358;border-radius:12px;padding:10px 12px;font-size:14px}
 .scard button{white-space:nowrap}.shatch{background:#3ee6c422;border:1px solid #3ee6c466;color:var(--b);border-radius:10px;padding:8px 10px;font-weight:600}
-#semo{position:absolute;left:8px;bottom:8px;display:flex;gap:6px;background:#14102bec;border-radius:12px;padding:6px;z-index:4}
+#semo{position:absolute;right:8px;bottom:60px;display:flex;gap:6px;background:#14102bec;border-radius:12px;padding:6px;z-index:6}
 #semo button{font-size:22px;padding:4px 8px;background:#3a3068}
-.sside{display:flex;flex-direction:column;gap:10px;font-size:14px}#sboard{display:flex;flex-direction:column;gap:2px}#spets{font-size:24px}
 </style></head><body>
 <div id="boot"><div class="logo">Mo<b>Da</b></div><div class="spinner"></div><div id="bootmsg"></div></div>
 <div id="net" hidden>🔌 Reconnexion…</div>
@@ -205,20 +199,10 @@ body.gm.padon #pad button{background:#3a3068cc;border-radius:14px}
   <div class="row"><button id="ready">Prêt</button><button id="start" hidden>Lancer la partie</button><button class="alt" id="leave">Quitter</button></div>
   <p style="color:var(--mute)">Invite un ami avec le bouton « Inviter » de la liste à droite, ou donne-lui le code.</p>
  </section>
- <section id="sim" hidden>
-  <div class="panel sm">
-   <div class="shud"><span id="sCoins">💰 0</span><span id="sBag"></span><span id="sMult"></span><span id="sZone"></span><button class="alt mini" id="sShop">🛒 Boutique</button><button class="alt mini" id="sEmo">😀</button><button class="alt mini" id="sExit">✕</button></div>
-   <div class="sbar"><i id="sBarFill"></i></div>
-   <div class="smain">
-    <div class="scv"><canvas id="scv" width="800" height="560"></canvas><div id="smod" hidden></div><div id="semo" hidden></div><div id="sov"></div></div>
-    <div class="sside"><div id="sboard"></div><div><div class="hint">Tes pets</div><div id="spets"></div></div>
-     <p class="hint">Marche près des filons pour les miner (automatique). Remplis ton sac 🎒 puis va sur le 💰 pour vendre. Améliore ta pioche et ton sac, éclos des pets 🥚, débloque les zones 🔒 et renais ⭐ pour des gains permanents.<br><br>Clavier : ZQSD / WASD / flèches · Mobile : glisse le doigt.</p></div>
-   </div>
-  </div>
- </section>
  <section id="game" hidden>
   <div id="gw"><canvas id="cv" width="800" height="560"></canvas>
-  <div id="ov" style="position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center;font:800 56px 'Bricolage Grotesque';text-shadow:0 2px 12px #000;text-align:center"></div></div>
+  <div id="ov" style="position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center;font:800 56px 'Bricolage Grotesque';text-shadow:0 2px 12px #000;text-align:center"></div>
+  <div id="sbtns"><button class="alt mini" id="sShop" aria-label="Boutique">🛒 Boutique</button><button class="alt mini" id="sEmo" aria-label="Emotes">😀</button></div><div id="semo" hidden></div><div id="smod" hidden></div></div>
   <div id="pad"><span></span><button data-d="U" aria-label="Haut">▲</button><span></span><button data-d="L" aria-label="Gauche">◀</button><button data-d="D" aria-label="Bas">▼</button><button data-d="R" aria-label="Droite">▶</button></div>
   <div id="score" class="row"></div>
   <div class="row" id="gbar"><button class="alt mini" id="gctl" aria-label="Commandes"></button><button class="alt mini" id="mute" aria-label="Son"></button><button class="alt mini" id="gexit" aria-label="Quitter la partie">✕</button><span id="ghelp" style="color:var(--mute)"></span></div>

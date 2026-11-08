@@ -5,7 +5,7 @@ import {getDatabase,ref,get,set,update,remove,onValue,onDisconnect,serverTimesta
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="13";
+const VER="14";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -988,11 +988,11 @@ function drawLab(now){
   // gardiens
   st.g.forEach((q,i)=>{const r=ip(o&&o.g[i],q),gx=r[0],gy=r[1],rr=13*(1+.06*Math.sin(now/110+i));let t=null,bd=1e12;P.forEach(e=>{const d=(e.x-gx)**2+(e.y-gy)**2;if(d<bd){bd=d;t=e}});
     const a=t?Math.atan2(t.y-gy,t.x-gx):0;
-    x.drawImage(glow("#e63946",30),gx-42,gy-42);
+    x.globalAlpha=q[2]?.4:1;if(!q[2])x.drawImage(glow("#e63946",30),gx-42,gy-42);
     x.fillStyle="#0006";x.beginPath();x.ellipse(gx,gy+rr*.8,rr*.9,rr*.35,0,0,7);x.fill();
     x.fillStyle="#e63946";x.beginPath();x.arc(gx,gy,rr,0,7);x.fill();x.strokeStyle="#0005";x.lineWidth=2;x.stroke();
     [-1,1].forEach(sd=>{const ex2=gx+Math.cos(a)*rr*.35-Math.sin(a)*rr*.4*sd,ey2=gy+Math.sin(a)*rr*.35+Math.cos(a)*rr*.4*sd;
-      x.fillStyle="#fff";x.beginPath();x.arc(ex2,ey2,rr*.26,0,7);x.fill();x.fillStyle="#14102b";x.beginPath();x.arc(ex2+Math.cos(a)*rr*.1,ey2+Math.sin(a)*rr*.1,rr*.13,0,7);x.fill()})});
+      x.fillStyle="#fff";x.beginPath();x.arc(ex2,ey2,rr*.26,0,7);x.fill();x.fillStyle="#14102b";x.beginPath();x.arc(ex2+Math.cos(a)*rr*.1,ey2+Math.sin(a)*rr*.1,rr*.13,0,7);x.fill()});x.globalAlpha=1});
   // joueurs
   P.forEach(e=>{const{u,q,x:px,y:py}=e,old=lab.pos[u];let a=lab.ang[u]||0;if(old&&Math.hypot(px-old[0],py-old[1])>.4&&Math.hypot(px-old[0],py-old[1])<60)a=lab.ang[u]=Math.atan2(py-old[1],px-old[0]);lab.pos[u]=[px,py];
     x.save();x.globalAlpha=q[2]?.45+.3*Math.sin(now/60):1;
@@ -1031,16 +1031,16 @@ async function startLab(){
   // les joueurs se répartissent autour du point de départ / de réapparition (au lieu de s'empiler)
   const spot=u=>{const i=ids.indexOf(u),a=i*6.2832/N;return N>1?[cp[0]+Math.cos(a)*8,cp[1]+Math.sin(a)*8]:cp};
   const place=u=>{const s=spot(u);P[u].x=s[0];P[u].y=s[1]};
-  const home=(g,i)=>{const[sx,sy]=m.gs[i];g.x=(sx+.5)*LT;g.y=(sy+.5)*LT;g.tx=sx;g.ty=sy;g.dx=g.dy=0};
+  const home=(g,i)=>{const[sx,sy]=m.gs[i];g.x=(sx+.5)*LT;g.y=(sy+.5)*LT;g.tx=sx;g.ty=sy;g.dx=g.dy=0;g.st=0};
   const newLevel=()=>{
     lv++;sd=Math.floor(Math.random()*2147483647);m=genLab(sd,N,lv);keys=m.keys.map((_,i)=>i);kk=0;pm=pp=go=0;gr=m.gates.map(()=>0);
-    cp=ctr(...m.sp);G=m.gs.map(()=>({x:0,y:0,tx:0,ty:0,dx:0,dy:0}));G.forEach(home);
+    cp=ctr(...m.sp);G=m.gs.map(()=>({x:0,y:0,tx:0,ty:0,dx:0,dy:0,st:0}));G.forEach(home);
     ids.forEach(u=>{place(u);P[u].inv=15;P[u].ex=0});
     if(lv>1)lives=Math.min(N+5,lives+1);
     msg=`Niveau ${lv}`;brk=20;
   };
   const pub=(x={})=>set(R(`games/${c}/state`),JSON.stringify({k:"lab",n:N,lv,sd,kk,lf:lives,go,pp,pm,ky:keys,fz:brk>0?1:0,msg,
-    g:G.map(g=>[Math.round(g.x),Math.round(g.y)]),
+    g:G.map(g=>[Math.round(g.x),Math.round(g.y),g.st>0?1:0]),
     p:Object.fromEntries(act.map(u=>{const q=P[u];return[u,[Math.round(q.x),Math.round(q.y),q.inv>0?1:0,q.n,q.c,q.ex]]})),...x}));
   const step=()=>{
     if(code!==c){un();return}
@@ -1053,8 +1053,8 @@ async function startLab(){
       // Tout seul (ou si les autres sont partis) : la plaque suffit, elle verrouille la porte ouverte.
       m.gates.forEach((g,i)=>{
         const[px,py]=ctr(g.px,g.py),[lx,ly]=ctr(g.lx,g.ly),on=act.some(u=>near(u,px,py,22));
-        if(on){pp|=1<<i;gr[i]=solo?0:10;if(solo&&!((pm>>i)&1)){pm|=1<<i;cp=ctr(g.x,g.y)}}else{pp&=~(1<<i);if(gr[i]>0)gr[i]--}
-        if(!((pm>>i)&1)&&act.some(u=>near(u,lx,ly,22))){pm|=1<<i;cp=[lx,ly]}});
+        if(on){pp|=1<<i;gr[i]=solo?0:10;if(solo&&!((pm>>i)&1))pm|=1<<i}else{pp&=~(1<<i);if(gr[i]>0)gr[i]--}
+        if(!((pm>>i)&1)&&act.some(u=>near(u,lx,ly,22)))pm|=1<<i});
       go=pm;m.gates.forEach((g,i)=>{const[gx,gy]=ctr(g.x,g.y); // une porte ne se referme jamais sur quelqu'un (joueur ou gardien)
         if(((pp>>i)&1)||gr[i]>0||act.some(u=>Math.abs(P[u].x-gx)<LT/2+9&&Math.abs(P[u].y-gy)<LT/2+9)||G.some(q=>Math.abs(q.x-gx)<LT/2&&Math.abs(q.y-gy)<LT/2))go|=1<<i});
       // déplacements : 120 px/s, par petits pas pour coller aux murs
@@ -1067,7 +1067,7 @@ async function startLab(){
       keys=keys.filter(ki=>{const[kx,ky]=ctr(...m.keys[ki]);if(act.some(u=>near(u,kx,ky,24))){kk++;return false}return true});
       // gardiens : vitesse régulière (le reste du pas est reporté après un virage), tournent aux intersections, ne traversent JAMAIS une porte fermée
       const gsp=(42+Math.min(lv,8)*2.5)*dt,closed=(tx,ty)=>{const gi=m.gm.get(ty*m.TW+tx);return gi!=null&&!((go>>gi)&1)};
-      G.forEach(g=>{let rem=gsp;
+      G.forEach(g=>{if(g.st>0){g.st--;return}let rem=gsp;
         for(let it=0;it<6&&rem>0;it++){
           // la porte devant vient de se fermer : demi-tour (sauf si le gardien est déjà dedans : elle reste alors ouverte)
           if((g.dx||g.dy)&&closed(g.tx,g.ty)&&Math.hypot(g.x-(g.tx+.5)*LT,g.y-(g.ty+.5)*LT)>=18){g.tx-=g.dx;g.ty-=g.dy;g.dx=-g.dx;g.dy=-g.dy}
@@ -1079,11 +1079,11 @@ async function startLab(){
           const fw=dirs.filter(([a,b])=>!(a===-g.dx&&b===-g.dy)),pool=fw.length?fw:dirs,same=pool.find(([a,b])=>a===g.dx&&b===g.dy),
             [a,b]=same&&Math.random()<.75?same:pool[Math.floor(Math.random()*pool.length)];
           g.dx=a;g.dy=b;g.tx+=a;g.ty+=b}});
-      // un gardien touche un joueur (contact net : rayon 19 px) : une vie de l'équipe en moins, retour au dernier point de passage,
-      // 4 s d'invincibilité, et les gardiens qui rôdaient près de ce point sont renvoyés à leur poste
+      // un gardien touche un ou plusieurs joueurs (contact net : rayon 19 px) : UNE vie de l'équipe en moins (même si le groupe est touché
+      // ensemble), on reste sur place, 4 s d'invincibilité pour s'éloigner, et le(s) gardien(s) touché(s) sont étourdis 2,5 s
       let hit=0;
-      act.forEach(u=>{const q=P[u];if(q.inv>0)return;if(G.some(g=>(g.x-q.x)**2+(g.y-q.y)**2<19*19)){lives--;hit=1;place(u);q.inv=40}});
-      if(hit)G.forEach((g,i)=>{if(Math.hypot(g.x-cp[0],g.y-cp[1])<160){const[sx,sy]=ctr(...m.gs[i]);if(Math.hypot(sx-cp[0],sy-cp[1])>=160)home(g,i)}});
+      act.forEach(u=>{const q=P[u];if(q.inv>0)return;const hg=G.filter(g=>(g.x-q.x)**2+(g.y-q.y)**2<19*19);if(hg.length){hit=1;q.inv=40;hg.forEach(g=>g.st=25)}});
+      if(hit)lives--;
       // sortie : toutes les clés + tout le monde dessus
       const[exx,eyy]=ctr(...m.ex),all=kk>=m.keys.length;
       act.forEach(u=>{P[u].ex=all&&near(u,exx,eyy,30)?1:0});

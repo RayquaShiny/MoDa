@@ -5,7 +5,7 @@ import {getDatabase,ref,get,set,update,remove,onValue,onDisconnect,serverTimesta
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="14";
+const VER="15";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -447,7 +447,7 @@ function frame(now){
 }
 const KEYS={ArrowUp:"U",w:"U",z:"U",ArrowDown:"D",s:"D",ArrowLeft:"L",a:"L",q:"L",ArrowRight:"R",d:"R"};
 const held=new Set();let seqN=0;
-const mv=()=>{if(cur!=="game"||!code||!me)return;if(gk==="br")return brSend();const m=`${(held.has("R")?1:0)-(held.has("L")?1:0)},${(held.has("D")?1:0)-(held.has("U")?1:0)}`;if(m!==lastMv){lastMv=m;set(R(`games/${code}/inputs/${me.uid}`),m+","+(++seqN)).catch(()=>{})}};
+const mv=()=>{if(cur!=="game"||!code||!me||gk==="lab")return;if(gk==="br")return brSend();const m=`${(held.has("R")?1:0)-(held.has("L")?1:0)},${(held.has("D")?1:0)-(held.has("U")?1:0)}`;if(m!==lastMv){lastMv=m;set(R(`games/${code}/inputs/${me.uid}`),m+","+(++seqN)).catch(()=>{})}};
 const send=d=>{if(cur!=="game"||gk!=="snake"||d===lastDir)return;lastDir=d;set(R(`games/${code}/inputs/${me.uid}`),d+(++seqN)).catch(()=>{})};
 addEventListener("keydown",e=>{if(cur!=="game"||/^(INPUT|TEXTAREA)$/.test(e.target.tagName))return;const d=KEYS[e.key.length>1?e.key:e.key.toLowerCase()];if(d){e.preventDefault();if(gk!=="snake"){held.add(d);mv()}else send(d)}});
 addEventListener("keyup",e=>{const d=KEYS[e.key.length>1?e.key:e.key.toLowerCase()];if(d&&(gk!=="snake")&&cur==="game"){held.delete(d);mv()}});
@@ -939,7 +939,8 @@ function labBg(m){
 let labM=null;
 function labMapFor(n){const k=n.sd+"|"+n.n+"|"+n.lv;if(!labM||labM.key!==k){labM=genLab(n.sd,n.n,n.lv);labM.key=k}return labM}
 function onLab(n){
-  const now=performance.now();if(st)tDt=Math.min(250,Math.max(60,tDt*.6+(now-tAt)*.4));
+  const now=performance.now(),first=!st||st.k!=="lab";if(st)tDt=Math.min(250,Math.max(60,tDt*.6+(now-tAt)*.4));
+  if(first){lab.me=null;lab.ep=-1;lab.sent=0;lab.pos={};lab.ang={}}
   pv=st;st=n;tAt=now;const m=labMapFor(n);
   if(pv&&pv.k==="lab"){
     if(pv.lv!==n.lv)beep(440,.2,"triangle",.05,880);
@@ -959,8 +960,20 @@ function drawLab(now){
   const o=pv&&pv.k==="lab"&&pv.sd===st.sd?pv:null,p=Math.min(1,(now-tAt)/tDt),dt=Math.min(.05,(now-(drawLab.t||now))/1000);drawLab.t=now;
   const ip=(a,b)=>!a||Math.hypot(a[0]-b[0],a[1]-b[1])>90?[b[0],b[1]]:[a[0]+(b[0]-a[0])*p,a[1]+(b[1]-a[1])*p]; // pas d'interpolation après une téléportation
   const P=Object.entries(st.p).map(([u,q])=>{const r=ip(o&&o.p[u],q);return{u,q,x:r[0],y:r[1]}});
-  const mpl=me&&P.find(e=>e.u===me.uid);
-  if(mpl){const r=predict(dt,mpl.x,mpl.y,120,11,m.TW*LT-11,11,m.TH*LT-11,(a,b)=>labBlocked(m,st.go,a,b));mpl.x=r[0];mpl.y=r[1]}else pred=null;
+  const mpl=me&&P.find(e=>e.u===me.uid);pred=null;
+  if(mpl){
+    // Ma position m'appartient : je me déplace tout de suite et je la signale à l'hôte (10 fois/s). L'hôte ne me recale (ep change)
+    // que si elle est invalide (porte refermée entre-temps...) : plus de retour en arrière à l'arrêt ou quand le réseau saccade.
+    if(!lab.me||mpl.q[6]!==lab.ep){lab.me={x:mpl.q[0],y:mpl.q[1]};lab.ep=mpl.q[6]}
+    const p2=lab.me,a=(held.has("R")?1:0)-(held.has("L")?1:0),b=(held.has("D")?1:0)-(held.has("U")?1:0);
+    if((a||b)&&!st.fz&&!st.o){const n=a&&b?.707:1,sub=Math.max(1,Math.ceil(dt*120/5)),s=120*dt*n/sub;
+      for(let i=0;i<sub;i++){const Rr=labBlocked(m,st.go,p2.x,p2.y)?7:11; // coincé dans un mur/une porte : on peut toujours en sortir
+        if(a){const nx=p2.x+a*s;if(!labBlocked(m,st.go,nx,p2.y,Rr))p2.x=nx}
+        if(b){const ny=p2.y+b*s;if(!labBlocked(m,st.go,p2.x,ny,Rr))p2.y=ny}}}
+    mpl.x=p2.x;mpl.y=p2.y;
+    const rx=Math.round(p2.x),ry=Math.round(p2.y);
+    if(code&&now-lab.sent>=90&&(rx!==lab.lx||ry!==lab.ly||now-lab.sent>1000)){lab.sent=now;lab.lx=rx;lab.ly=ry;
+      set(R(`games/${code}/inputs/${me.uid}`),`p,${rx},${ry},${lab.ep},${++seqN}`).catch(()=>{})}}
   const Z=TOUCH?1.35:1,VW=800/Z,VH=560/Z,WW=m.TW*LT,WH=m.TH*LT,hs=vsc,ns=Math.min(1.5,hs),f=mpl||P[0],K=m.keys.length,ok=st.kk>=K;
   const camX=WW<=VW?(WW-VW)/2:Math.max(0,Math.min(WW-VW,(f?f.x:WW/2)-VW/2)),camY=WH<=VH?(WH-VH)/2:Math.max(0,Math.min(WH-VH,(f?f.y:WH/2)-VH/2));
   x.fillStyle="#0e0a22";x.fillRect(0,0,800,560);
@@ -1016,21 +1029,23 @@ function drawLab(now){
   x.fillStyle="#fff";x.font=`700 ${18*hs}px sans-serif`;x.textAlign="left";x.textBaseline="alphabetic";
   x.fillText(`Niveau ${st.lv}   🗝 ${st.kk}/${K}   ♥ ${Math.max(0,st.lf)}`,12,6+19*hs);
 }
-const lab={pos:{},ang:{},flash:0};
+const lab={pos:{},ang:{},flash:0,me:null,ep:-1,sent:0,lx:0,ly:0};
 
 // ---------- Évasion coop : boucle de l'hôte (10 images/s, vitesses calculées sur le temps réel) ----------
 async function startLab(){
   const pace=mkPace(),c=code,players=lobby.players,ids=Object.keys(players),N=ids.length,D4=[[1,0],[-1,0],[0,1],[0,-1]];
   await remove(R(`games/${c}`));await update(R(`lobbies/${c}`),{status:"playing"});
-  const P={},want={},seen={};
-  ids.forEach(u=>{P[u]={n:players[u].name,c:players[u].color,x:0,y:0,inv:0,ex:0};want[u]=[0,0]});
-  const un=onValue(R(`games/${c}/inputs`),s=>Object.entries(s.val()||{}).forEach(([u,v])=>{if(!P[u]||seen[u]===v)return;seen[u]=v;
-    const[a,b]=String(v).split(",").map(Number);if(a===a&&b===b)want[u]=[Math.max(-1,Math.min(1,a)),Math.max(-1,Math.min(1,b))]}));
+  const P={},tgt={},cr={},seen={};
+  ids.forEach(u=>{P[u]={n:players[u].name,c:players[u].color,x:0,y:0,inv:0,ex:0};cr[u]=0});
+  // chaque joueur signale sa position ("p,x,y,ep,n") ; ep = « époque » : l'hôte ignore les signalements d'avant son dernier recalage
+  const un=onValue(R(`games/${c}/inputs`),s=>Object.entries(s.val()||{}).forEach(([u,v])=>{if(!P[u]||!m||seen[u]===v)return;seen[u]=v;
+    const a=String(v).split(","),x=+a[1],y=+a[2],ep=+a[3];
+    if(a[0]==="p"&&x===x&&y===y&&ep===cr[u])tgt[u]={x:Math.max(11,Math.min(m.TW*LT-11,x)),y:Math.max(11,Math.min(m.TH*LT-11,y))}}));
   let lv=0,sd=0,m=null,keys=[],kk=0,pm=0,pp=0,go=0,gr=[],G=[],cp=[0,0],lives=N+3,brk=0,clr=0,msg="",act=ids.slice(),lastT=performance.now();
   const ctr=(tx,ty)=>[(tx+.5)*LT,(ty+.5)*LT],near=(u,x,y,d)=>(P[u].x-x)**2+(P[u].y-y)**2<d*d;
   // les joueurs se répartissent autour du point de départ / de réapparition (au lieu de s'empiler)
   const spot=u=>{const i=ids.indexOf(u),a=i*6.2832/N;return N>1?[cp[0]+Math.cos(a)*8,cp[1]+Math.sin(a)*8]:cp};
-  const place=u=>{const s=spot(u);P[u].x=s[0];P[u].y=s[1]};
+  const place=u=>{const s=spot(u);P[u].x=s[0];P[u].y=s[1];tgt[u]=null;cr[u]++}; // cr++ : le joueur est recalé sur cette position
   const home=(g,i)=>{const[sx,sy]=m.gs[i];g.x=(sx+.5)*LT;g.y=(sy+.5)*LT;g.tx=sx;g.ty=sy;g.dx=g.dy=0;g.st=0};
   const newLevel=()=>{
     lv++;sd=Math.floor(Math.random()*2147483647);m=genLab(sd,N,lv);keys=m.keys.map((_,i)=>i);kk=0;pm=pp=go=0;gr=m.gates.map(()=>0);
@@ -1041,7 +1056,7 @@ async function startLab(){
   };
   const pub=(x={})=>set(R(`games/${c}/state`),JSON.stringify({k:"lab",n:N,lv,sd,kk,lf:lives,go,pp,pm,ky:keys,fz:brk>0?1:0,msg,
     g:G.map(g=>[Math.round(g.x),Math.round(g.y),g.st>0?1:0]),
-    p:Object.fromEntries(act.map(u=>{const q=P[u];return[u,[Math.round(q.x),Math.round(q.y),q.inv>0?1:0,q.n,q.c,q.ex]]})),...x}));
+    p:Object.fromEntries(act.map(u=>{const q=P[u];return[u,[Math.round(q.x),Math.round(q.y),q.inv>0?1:0,q.n,q.c,q.ex,cr[u]]]})),...x}));
   const step=()=>{
     if(code!==c){un();return}
     const tn=performance.now(),dt=Math.min(.25,Math.max(.03,(tn-lastT)/1000));lastT=tn;
@@ -1056,13 +1071,14 @@ async function startLab(){
         if(on){pp|=1<<i;gr[i]=solo?0:10;if(solo&&!((pm>>i)&1))pm|=1<<i}else{pp&=~(1<<i);if(gr[i]>0)gr[i]--}
         if(!((pm>>i)&1)&&act.some(u=>near(u,lx,ly,22)))pm|=1<<i});
       go=pm;m.gates.forEach((g,i)=>{const[gx,gy]=ctr(g.x,g.y); // une porte ne se referme jamais sur quelqu'un (joueur ou gardien)
-        if(((pp>>i)&1)||gr[i]>0||act.some(u=>Math.abs(P[u].x-gx)<LT/2+9&&Math.abs(P[u].y-gy)<LT/2+9)||G.some(q=>Math.abs(q.x-gx)<LT/2&&Math.abs(q.y-gy)<LT/2))go|=1<<i});
-      // déplacements : 120 px/s, par petits pas pour coller aux murs
-      const SP=120*dt,sub=Math.ceil(SP/6);
-      act.forEach(u=>{const q=P[u];if(q.inv>0)q.inv--;const[a,b]=want[u],n=a&&b?.707:1,s=SP*n/sub;
-        for(let t=0;t<sub;t++){
-          if(a){const nx=q.x+a*s;if(!labBlocked(m,go,nx,q.y))q.x=nx}
-          if(b){const ny=q.y+b*s;if(!labBlocked(m,go,q.x,ny))q.y=ny}}});
+        if(((pp>>i)&1)||gr[i]>0||act.some(u=>[P[u],tgt[u]].some(q=>q&&Math.abs(q.x-gx)<LT/2+9&&Math.abs(q.y-gy)<LT/2+9))||G.some(q=>Math.abs(q.x-gx)<LT/2&&Math.abs(q.y-gy)<LT/2))go|=1<<i});
+      // déplacements : l'hôte suit la position signalée par chaque joueur et la VALIDE (vitesse max, mur, porte fermée).
+      // Position invalide => refusée et le joueur est recalé (cr+1). Sinon il n'est jamais déplacé de force.
+      act.forEach(u=>{const q=P[u];if(q.inv>0)q.inv--;const t=tgt[u];if(!t)return;
+        let dx=t.x-q.x,dy=t.y-q.y,d=Math.hypot(dx,dy);if(d<.5)return;
+        const allow=120*1.5*dt+8;if(d>allow){dx*=allow/d;dy*=allow/d}
+        if(labBlocked(m,go,q.x+dx,q.y+dy,8)){tgt[u]=null;cr[u]++;return}
+        q.x+=dx;q.y+=dy});
       // clés (partagées par toute l'équipe)
       keys=keys.filter(ki=>{const[kx,ky]=ctr(...m.keys[ki]);if(act.some(u=>near(u,kx,ky,24))){kk++;return false}return true});
       // gardiens : vitesse régulière (le reste du pas est reporté après un virage), tournent aux intersections, ne traversent JAMAIS une porte fermée

@@ -7,7 +7,7 @@ import {startSumo,createSumoClient} from "./sumo.js";
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="32";
+const VER="34";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -1569,7 +1569,7 @@ async function startBr(){
 
 // ---------- Owners : interrupteur + statistiques ----------
 function applyNeon(){const on=!!(me&&me.owner&&adm);document.documentElement.classList.toggle("neon",on);
-  const m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",on?"#050204":"#14102b")}
+  const m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",on?"#050204":(window.__season?window.__season.tc:"#14102b"))}
 function showHome(){applyNeon();if(me&&me.owner&&adm){show("stats");startStats()}else{stopStats();show("home")}}
 $("sw").onclick=()=>{adm=!adm;try{localStorage.setItem("moda.stats",adm?"1":"0")}catch{}
   $("sw").setAttribute("aria-checked",String(adm));applyNeon();if(cur==="home"||cur==="stats")showHome()};

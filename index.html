@@ -2,10 +2,10 @@
 <html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#14102b">
+<meta name="theme-color" content="var(--bg)">
 <!-- ⚠️ À CONSERVER À CHAQUE MISE À JOUR : à chaque nouvelle version (chaque modification), la version affichée doit faire +1.
      Changer le numéro aux 3 endroits, toujours identique : ce <meta name="moda-v">, `const VER` dans app.js, et `VERSION` dans sw.js. -->
-<meta name="moda-v" content="32">
+<meta name="moda-v" content="34">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -16,56 +16,56 @@
 <title>MoDa – jeux entre potes</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;800&family=DM+Sans:wght@400;600&display=swap">
 <style>
-:root{--bg:#14102b;--card:#211a44;--ink:#f3f0ff;--mute:#9d94c9;--a:#ffd23f;--b:#3ee6c4;--r:14px}
+:root{--bg:#14102b;--card:#211a44;--s1:#2c2358;--s2:#3a3068;--deep:#0e0a22;--ink:#f3f0ff;--mute:#9d94c9;--a:#ffd23f;--b:#3ee6c4;--on-a:#241a00;--on-b:#06231d;--r:14px}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 'DM Sans',sans-serif}
 h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0}
-header{padding-top:max(14px,env(safe-area-inset-top))!important;flex-wrap:wrap;display:flex;align-items:center;gap:16px;padding:14px 24px;background:#0e0a22}
+header{padding-top:max(14px,env(safe-area-inset-top))!important;flex-wrap:wrap;display:flex;align-items:center;gap:16px;padding:14px 24px;background:var(--deep)}
 .logo{font-size:30px;font-weight:800;letter-spacing:-1px}.logo b{color:var(--a)}
-#inst{background:var(--b);color:#06231d}
+#inst{background:var(--b);color:var(--on-b)}
 #who{margin-left:auto;color:var(--mute)}
 #adm{display:flex;align-items:center;gap:8px;color:var(--mute);font-size:14px}
-#sw{width:51px;height:31px;padding:0;border-radius:16px;background:#3a3068;position:relative;transition:background .2s}
+#sw{width:51px;height:31px;padding:0;border-radius:16px;background:var(--s2);position:relative;transition:background .2s}
 #sw::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px #0006;transition:transform .2s}
 #sw[aria-checked=true]{background:#34c759}#sw[aria-checked=true]::after{transform:translateX(20px)}
 .stgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:12px}
-.stat{background:#2c2358;border-radius:12px;padding:14px}.stat b{display:block;font:800 36px 'Bricolage Grotesque';color:var(--a)}.stat span{color:var(--mute);font-size:14px}
-.chip{display:inline-block;background:#2c2358;border-radius:20px;padding:2px 12px;margin:3px 6px 3px 0}
+.stat{background:var(--s1);border-radius:12px;padding:14px}.stat b{display:block;font:800 36px 'Bricolage Grotesque';color:var(--a)}.stat span{color:var(--mute);font-size:14px}
+.chip{display:inline-block;background:var(--s1);border-radius:20px;padding:2px 12px;margin:3px 6px 3px 0}
 main{display:grid;grid-template-columns:1fr 280px;gap:20px;padding:20px 24px;max-width:1200px;margin:auto}
 @media(max-width:800px){main{grid-template-columns:1fr}}
 section[hidden]{display:none}
 .panel{background:var(--card);border-radius:var(--r);padding:18px}
-button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:9px 16px;background:var(--a);color:#241a00;cursor:pointer}
-button.alt{background:#3a3068;color:var(--ink)}button.mini{padding:2px 10px;font-size:13px}
+button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:9px 16px;background:var(--a);color:var(--on-a);cursor:pointer}
+button.alt{background:var(--s2);color:var(--ink)}button.mini{padding:2px 10px;font-size:13px}
 button:disabled{opacity:.4;cursor:default}button:focus-visible,input:focus-visible{outline:3px solid var(--b)}
-input{font:inherit;padding:9px 12px;border-radius:10px;border:2px solid #3a3068;background:#14102b;color:var(--ink);width:100%;margin:4px 0}
+input{font:inherit;padding:9px 12px;border-radius:10px;border:2px solid var(--s2);background:var(--bg);color:var(--ink);width:100%;margin:4px 0}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}.row input{flex:1;min-width:120px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;margin-top:14px}
-.tile{aspect-ratio:1;border-radius:var(--r);display:flex;align-items:flex-end;padding:12px;font:800 20px 'Bricolage Grotesque';background:#2c2358;color:var(--mute)}
+.tile{aspect-ratio:1;border-radius:var(--r);display:flex;align-items:flex-end;padding:12px;font:800 20px 'Bricolage Grotesque';background:var(--s1);color:var(--mute)}
 .tile.surv{background:linear-gradient(135deg,#c0392b,#ff9f1c);color:#2b0a00;cursor:pointer}
-.tile.snake{background:linear-gradient(135deg,#0b8f78,var(--b));color:#06231d;cursor:pointer}
+.tile.snake{background:linear-gradient(135deg,#0b8f78,var(--b));color:var(--on-b);cursor:pointer}
 .code{font:800 44px 'Bricolage Grotesque';letter-spacing:6px;color:var(--a)}
 .pl{display:flex;align-items:center;gap:10px;padding:6px 0}.sw{width:18px;height:18px;border-radius:5px}
-.dot{color:#4b4380;margin-right:4px}.dot.on{color:var(--b)}
+.dot{color:var(--s2);margin-right:4px}.dot.on{color:var(--b)}
 #friends>div,#reqs>div{padding:4px 0}
-canvas{touch-action:none;-webkit-user-select:none;user-select:none;width:100%;max-width:800px;border-radius:var(--r);display:block;background:#0e0a22}
+canvas{touch-action:none;-webkit-user-select:none;user-select:none;width:100%;max-width:800px;border-radius:var(--r);display:block;background:var(--deep)}
 #pad{display:none;grid-template-columns:repeat(3,72px);grid-template-rows:repeat(2,72px);gap:8px;justify-content:center;margin:14px auto;user-select:none;-webkit-user-select:none;touch-action:manipulation}
-#pad button{font-size:28px;padding:0;background:#3a3068;color:var(--ink)}
+#pad button{font-size:28px;padding:0;background:var(--s2);color:var(--ink)}
 @media(pointer:coarse){button:not(#sw):not(.eye):not(.mini){min-height:44px}button.mini{padding:8px 12px;min-height:40px}}
 @media(max-width:500px){header{padding:10px 14px}main{padding:14px 12px}.code{font-size:36px}}
-#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--a);color:#241a00;padding:10px 18px;border-radius:10px;font-weight:600}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--a);color:var(--on-a);padding:10px 18px;border-radius:10px;font-weight:600}
 #upd{display:flex;gap:10px;align-items:center;justify-content:space-between}
 #upd button{white-space:nowrap;flex-shrink:0}
 #upd[hidden],#iosHelp[hidden],#adm[hidden],#inst[hidden]{display:none}
 #toast:empty{display:none}
 [hidden]{display:none!important}
 #auth{max-width:460px;width:100%;margin:12px auto}
-.tabs{display:flex;background:#14102b;border-radius:12px;padding:4px;gap:4px;margin-bottom:18px}
+.tabs{display:flex;background:var(--bg);border-radius:12px;padding:4px;gap:4px;margin-bottom:18px}
 .tab{flex:1;background:none;color:var(--mute);padding:10px 8px}
-.tab[aria-selected=true]{background:#3a3068;color:var(--ink)}
+.tab[aria-selected=true]{background:var(--s2);color:var(--ink)}
 .sub{color:var(--mute);margin:4px 0 16px}
 .gbtn{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:#1f1f1f;padding:12px 16px}
 .or{display:flex;align-items:center;gap:12px;color:var(--mute);font-size:13px;margin:16px 0 4px}
-.or::before,.or::after{content:"";flex:1;height:1px;background:#3a3068}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--s2)}
 label{display:block;font-size:14px;font-weight:600;color:var(--mute);margin-top:12px}
 input.err{border-color:#ff4d6d}
 .hint{font-size:13px;color:var(--mute)}.hint.good{color:var(--b)}
@@ -91,7 +91,7 @@ section:not([hidden]){animation:fade .28s ease backwards}
 #auth.busy h2::after{content:"";display:inline-block;width:16px;height:16px;margin-left:10px;border:3px solid var(--mute);border-top-color:var(--a);border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px}
 #boot{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .3s}
 #boot .logo{font-size:52px}#boot.off{opacity:0;pointer-events:none}
-.spinner{width:34px;height:34px;border:4px solid #3a3068;border-top-color:var(--a);border-radius:50%;animation:spin .8s linear infinite}
+.spinner{width:34px;height:34px;border:4px solid var(--s2);border-top-color:var(--a);border-radius:50%;animation:spin .8s linear infinite}
 #bootmsg{color:var(--mute);font-size:14px;min-height:21px}
 #net{position:fixed;top:calc(10px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);background:#ff4d6d;color:#fff;padding:6px 14px;border-radius:20px;font-weight:600;font-size:14px;z-index:40;animation:fade .25s}
 #net[hidden]{display:none}
@@ -138,25 +138,63 @@ body.gm #gbar button{min-width:44px;opacity:.92}
 }
 /* croix directionnelle (option) : en bas à gauche, par-dessus le jeu */
 body.gm.padon #pad{display:grid;position:fixed;left:calc(14px + env(safe-area-inset-left));bottom:calc(14px + env(safe-area-inset-bottom));grid-template-columns:repeat(3,62px);grid-template-rows:repeat(2,62px);margin:0;z-index:16;opacity:.9}
-body.gm.padon #pad button{background:#3a3068cc;border-radius:14px}
+body.gm.padon #pad button{background:var(--s2)cc;border-radius:14px}
 
 /* ===== Mine Simulator (dans l'écran de jeu commun) ===== */
 #sbtns{display:none;position:absolute;right:8px;bottom:8px;gap:8px;z-index:6}
 body[data-g=sim] #sbtns{display:flex}
 body[data-g=sim] #pad,body[data-g=sim] #gctl{display:none!important}
 #sbtns button{font-size:16px;padding:8px 12px;min-width:44px}
-#smod{position:absolute;inset:6px;background:#14102bf2;border:2px solid #3a3068;border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px;overflow:auto;z-index:7;touch-action:pan-y;-webkit-user-select:none;user-select:none}
+#smod{position:absolute;inset:6px;background:#14102bf2;border:2px solid var(--s2);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px;overflow:auto;z-index:7;touch-action:pan-y;-webkit-user-select:none;user-select:none}
 .stabs{display:flex;gap:6px;flex-wrap:wrap}.stabs button{padding:6px 10px;font-size:14px}
 .smoney{font:800 17px 'Bricolage Grotesque';color:var(--a)}
 .sbody{display:flex;flex-direction:column;gap:8px}
-.scard{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#2c2358;border-radius:12px;padding:10px 12px;font-size:14px}
+.scard{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--s1);border-radius:12px;padding:10px 12px;font-size:14px}
 .scard button{white-space:nowrap}.shatch{background:#3ee6c422;border:1px solid #3ee6c466;color:var(--b);border-radius:10px;padding:8px 10px;font-weight:600}
 /* ===== Sumo Arena ===== */
 body[data-g=sumo] #pad,body[data-g=sumo] #gctl,body[data-g=sumo] #score{display:none!important}
 #sdash{display:none;position:absolute;right:10px;bottom:10px;width:78px;height:78px;padding:0;border-radius:50%;font-size:34px;z-index:6;align-items:center;justify-content:center;background:#ff4d6dd0;color:#fff;touch-action:none;-webkit-user-select:none;user-select:none;opacity:.45}
 body[data-g=sumo] #sdash{display:flex}
 #semo{position:absolute;right:8px;bottom:60px;display:flex;gap:6px;background:#14102bec;border-radius:12px;padding:6px;z-index:6}
-#semo button{font-size:22px;padding:4px 8px;background:#3a3068}
+#semo button{font-size:22px;padding:4px 8px;background:var(--s2)}
+
+/* ---- Thèmes de saison (automatiques, selon la date ; ?season=winter|spring|summer|autumn pour tester) ---- */
+html[data-season=autumn]{--bg:#231410;--bg2:#3a1d12;--card:#3a2217;--s1:#4d2e1d;--s2:#6b4228;--deep:#170c08;--ink:#fff3e6;--mute:#d1a785;--a:#ff9f1c;--b:#e4572e;--on-a:#2b1600;--on-b:#fff;--edge:#ff9f1c}
+html[data-season=winter]{--bg:#0f1e33;--bg2:#1d3a62;--card:#1a3050;--s1:#254266;--s2:#34567f;--deep:#0a1526;--ink:#eef7ff;--mute:#9dbbd8;--a:#7fd6ff;--b:#ffffff;--on-a:#04202e;--on-b:#0f1e33;--edge:#ffffff}
+html[data-season=spring]{--bg:#1b2b22;--bg2:#2c4a35;--card:#24402f;--s1:#2f5640;--s2:#3f6d52;--deep:#12201a;--ink:#f2fff5;--mute:#9fd0ae;--a:#ff8fc7;--b:#b8f06a;--on-a:#3a0020;--on-b:#14260a;--edge:#ff8fc7}
+html[data-season=summer]{--bg:#0d2a3a;--bg2:#146088;--card:#123f56;--s1:#1a5270;--s2:#256a8c;--deep:#081c28;--ink:#f0fbff;--mute:#8fc9e0;--a:#ffd23f;--b:#ff7a45;--on-a:#241a00;--on-b:#2b0f00;--edge:#3ec6ff}
+html[data-season]{background:linear-gradient(180deg,var(--bg),var(--bg2)) fixed}
+html[data-season] body{background:transparent}
+/* décor du haut : guirlande lumineuse (hiver) ou frise (autres saisons) */
+html[data-season] header{position:relative;margin-bottom:12px}
+html[data-season] header::before,html[data-season] header::after{position:absolute;left:0;right:0;top:100%;height:16px;pointer-events:none;z-index:3;overflow:hidden;white-space:nowrap;font-size:13px;line-height:16px;letter-spacing:12px}
+html[data-season] header::before{content:none}
+html[data-season=autumn] header::after{content:"🍂🍁🍄🍂🎃🍁🍂🍁🍄🍂🍁🎃🍂🍁🍄🍂🍁🍂🎃🍁🍂🍁🍄🍂🍁🎃🍂🍁🍄🍂"}
+html[data-season=spring] header::after{content:"🌷🌸🌼🌿🌷🌸🌼🦋🌷🌸🌼🌿🌷🌸🌼🌿🌷🌸🌼🦋🌷🌸🌼🌿🌷🌸🌼🌿🌷🌸"}
+html[data-season=summer] header::after{content:"🌊🐚🌴🌊🏖️🌊🐚🌴🌊🐚🌊🌴🌊🐚🌴🌊🏖️🌊🐚🌴🌊🐚🌊🌴🌊🐚🌴🌊🏖️🌊"}
+html[data-season=winter] header::before,html[data-season=winter] header::after{content:"";height:14px;letter-spacing:0;background-size:80px 14px;background-repeat:repeat-x}
+html[data-season=winter] header::after{background-image:radial-gradient(circle at 10px 8px,#ff4d6d 4px,transparent 5px),radial-gradient(circle at 30px 8px,#ffd23f 4px,transparent 5px),radial-gradient(circle at 50px 8px,#3ee6c4 4px,transparent 5px),radial-gradient(circle at 70px 8px,#6ab7ff 4px,transparent 5px);filter:drop-shadow(0 0 4px #fff8);animation:lt 1.4s steps(1) infinite}
+html[data-season=winter] header::before{background-image:linear-gradient(#0008,#0008),radial-gradient(circle at 10px 8px,#3ee6c4 4px,transparent 5px),radial-gradient(circle at 30px 8px,#6ab7ff 4px,transparent 5px),radial-gradient(circle at 50px 8px,#ff4d6d 4px,transparent 5px),radial-gradient(circle at 70px 8px,#ffd23f 4px,transparent 5px);background-size:100% 1px,80px 14px,80px 14px,80px 14px,80px 14px;background-position:0 2px,0 0,0 0,0 0,0 0;filter:drop-shadow(0 0 4px #fff8);animation:lt 1.4s steps(1) infinite reverse}
+@keyframes lt{50%{opacity:.25}}
+html[data-season] header .logo::after{font-size:.8em}
+html[data-season=autumn] header .logo::after{content:" 🍁"}
+html[data-season=winter] header .logo::after{content:" ⛄"}
+html[data-season=spring] header .logo::after{content:" 🌷"}
+html[data-season=summer] header .logo::after{content:" 😎"}
+/* bords des cartes : neige / feuilles / pétales / vagues */
+html[data-season] .panel{background-image:linear-gradient(var(--edge),var(--edge)),radial-gradient(circle at 50% 0,var(--edge) 6px,transparent 7px);background-size:100% 3px,16px 8px;background-repeat:no-repeat,repeat-x;background-position:0 0,0 0}
+/* paysage du bas et particules */
+#seasonbg{position:fixed;left:0;right:0;bottom:0;height:130px;z-index:-1;pointer-events:none;background-repeat:repeat-x;background-position:center bottom;background-size:auto 130px}
+#seasonfx{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:1}
+#seasonfx i{position:absolute;top:-8vh;font-style:normal;animation:sfall linear infinite,ssway ease-in-out infinite alternate;will-change:transform}
+#seasonfx.winter i{color:#fff;text-shadow:0 0 6px #fffa}
+#seasonfx.up i{top:auto;bottom:-8vh;animation-name:srise,ssway}
+@keyframes sfall{to{transform:translate3d(var(--dx),112vh,0) rotate(360deg)}}
+@keyframes srise{to{transform:translate3d(var(--dx),-112vh,0) scale(.6)}}
+@keyframes ssway{from{margin-left:-14px}to{margin-left:14px}}
+html.neon #seasonfx,html.neon #seasonbg,html.neon header::before,html.neon header::after,html.neon header .logo::after,body[data-g] #seasonfx,body[data-g] #seasonbg{display:none}
+html.neon .panel{background-image:none}
+@media(prefers-reduced-motion:reduce){#seasonfx{display:none}html[data-season] header::before,html[data-season] header::after{animation:none}}
 
 /* ---- Thème noir-rouge néon (actif quand l'interrupteur Stats est sur ON) ---- */
 html.neon{--bg:#050204;--card:#12060a;--ink:#ffeef0;--mute:#ff8a9b;--a:#ff1f4b;--b:#ff4d6d}
@@ -192,14 +230,14 @@ html.neon ::selection{background:#ff1f4b;color:#fff}
 @keyframes pulse{50%{opacity:.35}}
 .stsec{margin:18px 0 0;font-size:15px;color:var(--mute);font-weight:700}
 .stat .ic{display:block;font-size:20px;margin-bottom:2px}
-.bar{display:flex;align-items:center;gap:10px;margin-top:12px;color:var(--mute);font-size:13px}.bar>div{flex:1;height:8px;border-radius:6px;background:#2c2358;overflow:hidden}.bar i{display:block;height:100%;width:0;border-radius:6px;background:linear-gradient(90deg,var(--b),var(--a));transition:width .5s}
+.bar{display:flex;align-items:center;gap:10px;margin-top:12px;color:var(--mute);font-size:13px}.bar>div{flex:1;height:8px;border-radius:6px;background:var(--s1);overflow:hidden}.bar i{display:block;height:100%;width:0;border-radius:6px;background:linear-gradient(90deg,var(--b),var(--a));transition:width .5s}
 .chip .on{display:inline-block;width:8px;height:8px;border-radius:50%;background:#2ecc71;box-shadow:0 0 6px #2ecc71;margin-right:6px}
 .lrow,.nrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #ffffff14}.lrow:first-child,.nrow:first-child{border-top:0}
 .lrow .g{flex:1;font-weight:700}.lrow small,.nrow small{color:var(--mute);font-size:13px}
 .lrow code{font:800 15px 'Bricolage Grotesque';letter-spacing:2px;color:var(--a)}
 .badge{display:inline-block;font:800 11px 'DM Sans',sans-serif;letter-spacing:.5px;text-transform:uppercase;padding:2px 8px;border-radius:20px;background:#2ecc7133;color:#7dffb0}.badge.pl2{background:#ff9f1c33;color:#ffc766}
 .nrow .n{flex:1}.empty{color:var(--mute)}
-.tile.soon{background:repeating-linear-gradient(135deg,#2c2358 0 14px,#251d4c 14px 28px);color:#b9b2e8;cursor:default;position:relative;opacity:.9;border:2px dashed #4b4380}
+.tile.soon{background:repeating-linear-gradient(135deg,var(--s1) 0 14px,var(--card) 14px 28px);color:var(--mute);cursor:default;position:relative;opacity:.9;border:2px dashed var(--s2)}
 .tile.soon .badge{position:absolute;top:12px;left:12px;background:#ffd20033;color:#ffe066;font-size:12px}
 html.neon .stat .ic{filter:drop-shadow(0 0 6px #ff1f4b)}
 html.neon .live i{background:#ff1f4b;box-shadow:0 0 10px #ff1f4b}
@@ -209,7 +247,7 @@ html.neon .tile.soon{background:repeating-linear-gradient(135deg,#1a060c 0 14px,
 html.neon .tile.soon .badge{background:#ff1f4b;color:#fff;box-shadow:0 0 10px #ff1f4b}
 
 /* ---- Onglets Stats / Admin ---- */
-.stabs{display:flex;gap:8px;margin-bottom:14px}.stabs button{flex:1;background:#2c2358;color:var(--mute);box-shadow:none}.stabs button.on{background:var(--a);color:#fff}
+.stabs{display:flex;gap:8px;margin-bottom:14px}.stabs button{flex:1;background:var(--s1);color:var(--mute);box-shadow:none}.stabs button.on{background:var(--a);color:#fff}
 .danger{background:#d63a3a!important;color:#fff}
 #stView .panel+.panel{margin-top:14px}
 .adl{border-top:1px solid #ffffff14;padding:10px 0}.adl:first-child{border-top:0}
@@ -217,7 +255,75 @@ html.neon .tile.soon .badge{background:#ff1f4b;color:#fff;box-shadow:0 0 10px #f
 .adp{margin:6px 0}.adp .chip{padding:2px 6px 2px 12px}.adp .chip button{background:none;box-shadow:none;color:#ff6b81;padding:0 6px;font-size:15px;min-width:0}
 html.neon .stabs button{background:#1a060c;border:1px solid #ff1f4b88;color:#ff8a9b}html.neon .stabs button.on{background:#ff1f4b;color:#fff;box-shadow:0 0 12px #ff1f4b}
 html.neon .adl{border-top-color:#ff1f4b33}
-</style></head><body>
+</style>
+<script>
+/* Thème de saison : hémisphère nord, saisons météorologiques (déc-fév hiver, mars-mai printemps, juin-août été, sept-nov automne) */
+(function(){
+  var S={
+    autumn:{tc:"#231410",n:22,fx:["🍂","🍁","🍂","🍁","🍄","🍃"]},
+    winter:{tc:"#0f1e33",n:44,fx:["❄","❅","❆","•","•","❄","•","❅"]},
+    spring:{tc:"#1b2b22",n:22,fx:["🌸","🌷","🌸","🦋","🌼","🌸"]},
+    summer:{tc:"#0d2a3a",n:20,fx:["✨","☀️","✨","🫧","✨","🌴"],up:1}
+  };
+  var q=(location.search.match(/[?&]season=(\w+)/)||[])[1],m=new Date().getMonth();
+  var k=S[q]?q:(m===11||m<2?"winter":m<5?"spring":m<8?"summer":"autumn");
+  document.documentElement.setAttribute("data-season",k);window.__season=S[k];
+  var t=document.querySelector('meta[name="theme-color"]');if(t)t.setAttribute("content",S[k].tc);
+
+  /* Paysage du bas (SVG répété horizontalement, 1200×130) */
+  function tree(x,s,c,snow){var g='<g transform="translate('+x+' 112) scale('+s+')"><rect x="-4" y="-14" width="8" height="14" fill="#5b3a29"/>'+
+    '<path d="M-26 -12L0 -52L26 -12Z" fill="'+c+'"/><path d="M-21 -34L0 -72L21 -34Z" fill="'+c+'"/><path d="M-15 -56L0 -92L15 -56Z" fill="'+c+'"/>';
+    if(snow)g+='<path d="M-12 -22L0 -52L12 -22Q0 -15 -12 -22Z" fill="#fff"/><path d="M-10 -45L0 -72L10 -45Q0 -39 -10 -45Z" fill="#fff"/><path d="M-7 -68L0 -92L7 -68Q0 -63 -7 -68Z" fill="#fff"/>'+
+      '<circle cx="-9" cy="-28" r="2.6" fill="#ff4d6d"/><circle cx="8" cy="-42" r="2.6" fill="#ffd23f"/><circle cx="-4" cy="-60" r="2.4" fill="#6ab7ff"/><path d="M0 -92l2.5 5h-5z" fill="#ffd23f"/>';
+    return g+'</g>'}
+  function bush(x,r,c){return '<circle cx="'+x+'" cy="112" r="'+r+'" fill="'+c+'"/>'}
+  function oak(x,s,c1,c2){return '<g transform="translate('+x+' 112) scale('+s+')"><rect x="-4" y="-40" width="8" height="40" fill="#4a2a18"/><circle cx="0" cy="-58" r="26" fill="'+c1+'"/><circle cx="-18" cy="-46" r="17" fill="'+c2+'"/><circle cx="18" cy="-46" r="17" fill="'+c2+'"/><circle cx="0" cy="-74" r="14" fill="'+c2+'"/></g>'}
+  function flower(x,y,c){return '<line x1="'+x+'" y1="'+y+'" x2="'+x+'" y2="118" stroke="#3a8a3f" stroke-width="2"/><circle cx="'+x+'" cy="'+y+'" r="5" fill="'+c+'"/><circle cx="'+x+'" cy="'+y+'" r="2" fill="#ffd23f"/>'}
+  function pumpkin(x,r){return '<ellipse cx="'+x+'" cy="'+(112-r*.8)+'" rx="'+r+'" ry="'+r*.8+'" fill="#ff7a1a"/><path d="M'+x+' '+(112-r*1.6)+'v'+(r*1.5)+'" stroke="#c4560a" stroke-width="2"/><rect x="'+(x-2)+'" y="'+(112-r*1.8)+'" width="4" height="'+(r*.4)+'" fill="#4d7a2a"/>'}
+  var SC={
+    winter:function(){var p='<path d="M0 88Q150 60 300 84T600 78T900 82T1200 88V130H0Z" fill="#b7d4f2" opacity=".35"/>';
+      [[60,.7],[150,.95],[255,.6],[470,.85],[760,1],[890,.65],[1010,.9],[1120,.75]].forEach(function(t){p+=tree(t[0],t[1],"#1f5a4a",1)});
+      p+='<path d="M0 108Q100 98 220 106T460 104T700 108T950 100T1200 108V130H0Z" fill="#f4faff"/><path d="M0 120Q300 112 600 120T1200 120V130H0Z" fill="#dcebfa"/>';
+      p+='<g stroke="#bcd3ea" stroke-width="1.5"><circle cx="610" cy="92" r="16" fill="#fff"/><circle cx="610" cy="71" r="12" fill="#fff"/><circle cx="610" cy="55" r="9" fill="#fff"/></g>'+
+        '<rect x="601" y="36" width="18" height="12" fill="#2b2b3a"/><rect x="597" y="46" width="26" height="4" fill="#2b2b3a"/><rect x="601" y="44" width="18" height="3" fill="#ff4d6d"/>'+
+        '<circle cx="606" cy="54" r="1.4" fill="#222"/><circle cx="614" cy="54" r="1.4" fill="#222"/><path d="M610 57l11 2-11 2z" fill="#ff8a1c"/>'+
+        '<circle cx="610" cy="70" r="1.6" fill="#222"/><circle cx="610" cy="77" r="1.6" fill="#222"/><path d="M598 68l-14-8M622 68l14-8" stroke="#5b3a29" stroke-width="2"/>';
+      p+='<rect x="330" y="108" width="16" height="14" fill="#ff4d6d"/><rect x="336" y="108" width="4" height="14" fill="#ffd23f"/><rect x="348" y="112" width="12" height="10" fill="#3ee6c4"/><rect x="352" y="112" width="4" height="10" fill="#fff"/>';
+      return p},
+    autumn:function(){var p='<path d="M0 90Q200 62 400 86T800 80T1200 90V130H0Z" fill="#7a3b16" opacity=".6"/>';
+      [[70,.7,"#e4572e","#ff9f1c"],[170,.95,"#ff9f1c","#c0392b"],[470,.8,"#c0392b","#ff9f1c"],[760,1,"#e4572e","#ffb347"],[900,.65,"#ff9f1c","#e4572e"],[1030,.9,"#c0392b","#ff9f1c"],[1130,.7,"#ffb347","#e4572e"]].forEach(function(t){p+=oak(t[0],t[1],t[2],t[3])});
+      p+='<path d="M0 108Q100 98 220 106T460 104T700 108T950 100T1200 108V130H0Z" fill="#5a2d14"/><path d="M0 120Q300 112 600 120T1200 120V130H0Z" fill="#43200e"/>';
+      p+=pumpkin(300,13)+pumpkin(325,9)+pumpkin(610,15)+pumpkin(1080,10);
+      [[120,122],[220,118],[400,121],[540,119],[690,122],[840,118],[960,121],[1160,119]].forEach(function(l,i){p+='<ellipse cx="'+l[0]+'" cy="'+l[1]+'" rx="6" ry="3" fill="'+["#ff9f1c","#e4572e","#ffb347"][i%3]+'"/>'});
+      return p},
+    spring:function(){var p='<path d="M0 88Q200 58 400 84T800 76T1200 88V130H0Z" fill="#3f8a4a" opacity=".6"/>';
+      p+=bush(90,16,"#2f6b3a")+bush(480,14,"#2f6b3a")+bush(780,18,"#2f6b3a")+bush(1110,15,"#2f6b3a");
+      p+='<path d="M0 108Q100 98 220 106T460 104T700 108T950 100T1200 108V130H0Z" fill="#3a8a44"/><path d="M0 120Q300 112 600 120T1200 120V130H0Z" fill="#2f6b3a"/>';
+      var c=["#ff8fc7","#fff","#ffd23f","#b48cff","#ff6b81"];
+      for(var i=0;i<26;i++){p+=flower(25+i*45,96+(i*7)%16,c[i%5])}
+      p+='<line x1="590" y1="90" x2="590" y2="122" stroke="#3a8a3f" stroke-width="3"/><path d="M578 74Q578 92 590 92Q602 92 602 74L596 80L590 70L584 80Z" fill="#ff6b81"/><path d="M590 120Q574 112 572 100Q584 104 590 120Z" fill="#3a8a3f"/>';
+      return p},
+    summer:function(){var p='<circle cx="1040" cy="40" r="26" fill="#ffd23f" opacity=".9"/><g stroke="#ffd23f" stroke-width="3" opacity=".7"><path d="M1040 2v12M1040 66v12M1002 40h12M1066 40h12M1013 13l8 8M1059 59l8 8M1067 13l-8 8M1021 59l-8 8"/></g>';
+      p+='<path d="M0 96Q150 88 300 96T600 96T900 96T1200 96V130H0Z" fill="#1f8fc9"/><path d="M0 100Q50 94 100 100T200 100T300 100T400 100T500 100T600 100T700 100T800 100T900 100T1000 100T1100 100T1200 100" stroke="#fff" stroke-width="2.5" fill="none" opacity=".7"/>';
+      p+='<path d="M0 110Q150 100 320 108T700 106T1000 110T1200 110V130H0Z" fill="#f2d49b"/><path d="M0 122Q300 116 600 122T1200 122V130H0Z" fill="#e0bf82"/>';
+      p+='<path d="M250 114Q262 80 256 50" stroke="#8a5a2b" stroke-width="7" fill="none"/><g fill="#2f9e44"><path d="M256 50Q226 34 206 52Q232 44 256 56Z"/><path d="M256 50Q286 34 306 52Q280 44 256 56Z"/><path d="M256 50Q240 22 218 24Q242 30 256 54Z"/><path d="M256 50Q272 22 294 24Q270 30 256 54Z"/></g><circle cx="253" cy="58" r="4" fill="#6b3f1a"/>';
+      p+='<circle cx="700" cy="112" r="11" fill="#fff"/><path d="M700 101a11 11 0 0 1 9.5 5.5h-19a11 11 0 0 1 9.5-5.5z" fill="#ff4d6d"/><path d="M690.5 117.5h19a11 11 0 0 1-9.5 5.5a11 11 0 0 1-9.5-5.5z" fill="#3ec6ff"/>';
+      p+='<path d="M880 118l8-14l8 14z" fill="#ff7a45"/><path d="M880 118h16" stroke="#8a5a2b" stroke-width="2"/><path d="M470 112q6-8 12 0q-6 5-12 0z" fill="#ff8fc7"/>';
+      return p}
+  };
+  document.addEventListener("DOMContentLoaded",function(){
+    var bg=document.createElement("div");bg.id="seasonbg";bg.setAttribute("aria-hidden","true");
+    var svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 130" width="1200" height="130">'+SC[k]()+'</svg>';
+    bg.style.backgroundImage='url("data:image/svg+xml,'+encodeURIComponent(svg)+'")';document.body.appendChild(bg);
+    var d=document.createElement("div");d.id="seasonfx";d.setAttribute("aria-hidden","true");d.className=k+(S[k].up?" up":"");
+    for(var i=0;i<S[k].n;i++){var e=document.createElement("i"),z=10+Math.random()*20;e.textContent=S[k].fx[i%S[k].fx.length];
+      e.style.left=(i*(100/S[k].n)+Math.random()*3)+"vw";e.style.fontSize=z+"px";e.style.opacity=(.3+z/45).toFixed(2);if(z>26)e.style.filter="blur(1.2px)";
+      e.style.animationDuration=(8+Math.random()*10)+"s,"+(2.5+Math.random()*3)+"s";e.style.animationDelay=(-Math.random()*18)+"s,"+(-Math.random()*5)+"s";
+      e.style.setProperty("--dx",(Math.random()*120-60)+"px");d.appendChild(e)}
+    document.body.appendChild(d)});
+})();
+</script>
+</head><body>
 <div id="boot"><div class="logo">Mo<b>Da</b></div><div class="spinner"></div><div id="bootmsg"></div></div>
 <div id="net" hidden>🔌 Reconnexion…</div>
 <header><div class="logo">Mo<b>Da</b></div><div id="who"></div>

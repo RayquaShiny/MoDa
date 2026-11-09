@@ -5,7 +5,7 @@
 <meta name="theme-color" content="var(--bg)">
 <!-- ⚠️ À CONSERVER À CHAQUE MISE À JOUR : à chaque nouvelle version (chaque modification), la version affichée doit faire +1.
      Changer le numéro aux 3 endroits, toujours identique : ce <meta name="moda-v">, `const VER` dans app.js, et `VERSION` dans sw.js. -->
-<meta name="moda-v" content="35">
+<meta name="moda-v" content="37">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -159,11 +159,11 @@ body[data-g=sumo] #sdash{display:flex}
 #semo button{font-size:22px;padding:4px 8px;background:var(--s2)}
 
 /* ---- Thèmes de saison (automatiques, selon la date ; ?season=winter|spring|summer|autumn pour tester) ---- */
-html[data-season=autumn]{--bg:#231410;--bg2:#3a1d12;--card:#3a2217;--s1:#4d2e1d;--s2:#6b4228;--deep:#170c08;--ink:#fff3e6;--mute:#d1a785;--a:#ff9f1c;--b:#e4572e;--on-a:#2b1600;--on-b:#fff;--edge:#ff9f1c}
-html[data-season=winter]{--bg:#0f1e33;--bg2:#1d3a62;--card:#1a3050;--s1:#254266;--s2:#34567f;--deep:#0a1526;--ink:#eef7ff;--mute:#9dbbd8;--a:#7fd6ff;--b:#ffffff;--on-a:#04202e;--on-b:#0f1e33;--edge:#ffffff}
-html[data-season=spring]{--bg:#1b2b22;--bg2:#2c4a35;--card:#24402f;--s1:#2f5640;--s2:#3f6d52;--deep:#12201a;--ink:#f2fff5;--mute:#9fd0ae;--a:#ff8fc7;--b:#b8f06a;--on-a:#3a0020;--on-b:#14260a;--edge:#ff8fc7}
-html[data-season=summer]{--bg:#0d2a3a;--bg2:#146088;--card:#123f56;--s1:#1a5270;--s2:#256a8c;--deep:#081c28;--ink:#f0fbff;--mute:#8fc9e0;--a:#ffd23f;--b:#ff7a45;--on-a:#241a00;--on-b:#2b0f00;--edge:#3ec6ff}
-html[data-season]{background:linear-gradient(180deg,var(--bg),var(--bg2)) fixed}
+[data-season=autumn]{--bg:#231410;--bg2:#3a1d12;--card:#3a2217;--s1:#4d2e1d;--s2:#6b4228;--deep:#170c08;--ink:#fff3e6;--mute:#d1a785;--a:#ff9f1c;--b:#e4572e;--on-a:#2b1600;--on-b:#fff;--edge:#ff9f1c}
+[data-season=winter]{--bg:#0f1e33;--bg2:#1d3a62;--card:#1a3050;--s1:#254266;--s2:#34567f;--deep:#0a1526;--ink:#eef7ff;--mute:#9dbbd8;--a:#7fd6ff;--b:#ffffff;--on-a:#04202e;--on-b:#0f1e33;--edge:#ffffff}
+[data-season=spring]{--bg:#1b2b22;--bg2:#2c4a35;--card:#24402f;--s1:#2f5640;--s2:#3f6d52;--deep:#12201a;--ink:#f2fff5;--mute:#9fd0ae;--a:#ff8fc7;--b:#b8f06a;--on-a:#3a0020;--on-b:#14260a;--edge:#ff8fc7}
+[data-season=summer]{--bg:#0d2a3a;--bg2:#146088;--card:#123f56;--s1:#1a5270;--s2:#256a8c;--deep:#081c28;--ink:#f0fbff;--mute:#8fc9e0;--a:#ffd23f;--b:#ff7a45;--on-a:#241a00;--on-b:#2b0f00;--edge:#3ec6ff}
+html[data-season]{background-color:var(--bg2);background-image:linear-gradient(180deg,var(--bg),var(--bg2));background-repeat:no-repeat;background-size:100% 100%;min-height:100%}
 html[data-season] body{background:transparent}
 html[data-season] body::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top,0px);background:var(--deep);z-index:60;pointer-events:none}
 html.neon body::before,body[data-g]::before{display:none}
@@ -190,6 +190,20 @@ html[data-season] .panel{background-image:linear-gradient(var(--edge),var(--edge
 html.neon #seasonbg,html.neon header::before,html.neon header::after,html.neon header .logo::after,body[data-g] #seasonbg{display:none}
 html.neon .panel{background-image:none}
 @media(prefers-reduced-motion:reduce){html[data-season] header::before,html[data-season] header::after{animation:none}}
+
+/* aperçus des thèmes (panneau admin) */
+.thgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;margin:14px 0}
+.thcard{display:flex;flex-direction:column;gap:8px}
+.thm{position:relative;height:200px;border-radius:12px;overflow:hidden;background:linear-gradient(180deg,var(--bg),var(--bg2));color:var(--ink);border:2px solid transparent}
+.thcard.cur .thm{border-color:var(--a)}
+.thm .thh{background:var(--deep);padding:8px 12px;font:800 18px 'Bricolage Grotesque'}.thm .thh span{color:var(--a)}
+.thm .thfr{height:14px;font-size:11px;line-height:14px;letter-spacing:8px;overflow:hidden;white-space:nowrap}
+.thm[data-season=winter] .thfr{background:radial-gradient(circle at 10px 7px,#ff4d6d 3px,transparent 4px),radial-gradient(circle at 30px 7px,#ffd23f 3px,transparent 4px),radial-gradient(circle at 50px 7px,#3ee6c4 3px,transparent 4px),radial-gradient(circle at 70px 7px,#6ab7ff 3px,transparent 4px);background-size:80px 14px;background-repeat:repeat-x}
+.thm .thp{margin:8px 10px 0;padding:12px 10px 8px;border-radius:10px;background-color:var(--card);background-image:linear-gradient(var(--edge),var(--edge)),radial-gradient(circle at 50% 0,var(--edge) 5px,transparent 6px);background-size:100% 3px,14px 7px;background-repeat:no-repeat,repeat-x}
+.thm .thp b{display:block;font:800 13px 'Bricolage Grotesque'}.thm .thp small{color:var(--mute);font-size:11px}
+.thm .thb{display:flex;gap:6px;margin-top:6px}.thm .thb i{font-style:normal;font-weight:700;font-size:11px;padding:3px 8px;border-radius:7px;background:var(--a);color:var(--on-a)}.thm .thb i+i{background:var(--b);color:var(--on-b)}
+.thm .thsc{position:absolute;left:0;right:0;bottom:0;height:60px;background-repeat:repeat-x;background-position:center bottom;background-size:auto 60px}
+.thcard .thn{display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:700}
 
 /* ---- Thème noir-rouge néon (actif quand l'interrupteur Stats est sur ON) ---- */
 html.neon{--bg:#050204;--card:#12060a;--ink:#ffeef0;--mute:#ff8a9b;--a:#ff1f4b;--b:#ff4d6d}
@@ -255,14 +269,14 @@ html.neon .adl{border-top-color:#ff1f4b33}
 /* Thème de saison : hémisphère nord, saisons météorologiques (déc-fév hiver, mars-mai printemps, juin-août été, sept-nov automne) */
 (function(){
   var S={
-    autumn:{tc:"#231410",n:22,fx:["🍂","🍁","🍂","🍁","🍄","🍃"]},
-    winter:{tc:"#0f1e33",n:44,fx:["❄","❅","❆","•","•","❄","•","❅"]},
-    spring:{tc:"#1b2b22",n:22,fx:["🌸","🌷","🌸","🦋","🌼","🌸"]},
-    summer:{tc:"#0d2a3a",n:20,fx:["✨","☀️","✨","🫧","✨","🌴"],up:1}
+    autumn:{n:"Automne",e:"🍂",tc:"#231410",fr:"🍂🍁🍄🍂🎃🍁🍂🍁🍄🍂"},
+    winter:{n:"Hiver",e:"❄️",tc:"#0f1e33",fr:""},
+    spring:{n:"Printemps",e:"🌸",tc:"#1b2b22",fr:"🌷🌸🌼🌿🌷🌸🌼🦋🌷🌸"},
+    summer:{n:"Été",e:"☀️",tc:"#0d2a3a",fr:"🌊🐚🌴🌊🏖️🌊🐚🌴🌊🐚"}
   };
-  var q=(location.search.match(/[?&]season=(\w+)/)||[])[1],m=new Date().getMonth();
+  var auto,q=(location.search.match(/[?&]season=(\w+)/)||[])[1],m=new Date().getMonth();
   var k=S[q]?q:(m===11||m<2?"winter":m<5?"spring":m<8?"summer":"autumn");
-  document.documentElement.setAttribute("data-season",k);window.__season=S[k];
+  auto=k;document.documentElement.setAttribute("data-season",k);window.__season=S[k];
   var t=document.querySelector('meta[name="theme-color"]');if(t)t.setAttribute("content",S[k].tc);
 
   /* Paysage du bas (SVG répété horizontalement, 1200×130) */
@@ -306,10 +320,15 @@ html.neon .adl{border-top-color:#ff1f4b33}
       p+='<path d="M880 118l8-14l8 14z" fill="#ff7a45"/><path d="M880 118h16" stroke="#8a5a2b" stroke-width="2"/><path d="M470 112q6-8 12 0q-6 5-12 0z" fill="#ff8fc7"/>';
       return p}
   };
-  document.addEventListener("DOMContentLoaded",function(){
-    var bg=document.createElement("div");bg.id="seasonbg";bg.setAttribute("aria-hidden","true");
-    var svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 130" width="1200" height="130">'+SC[k]()+'</svg>';
-    bg.style.backgroundImage='url("data:image/svg+xml,'+encodeURIComponent(svg)+'")';document.body.appendChild(bg);});
+  function svgUri(x){var v='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 130" width="1200" height="130">'+SC[x]()+'</svg>';return 'url("data:image/svg+xml,'+encodeURIComponent(v)+'")'}
+  function paint(){var bg=document.getElementById("seasonbg");
+    if(!bg){bg=document.createElement("div");bg.id="seasonbg";bg.setAttribute("aria-hidden","true");document.body.appendChild(bg)}
+    bg.style.backgroundImage=svgUri(k)}
+  document.addEventListener("DOMContentLoaded",paint);
+  /* Utilisés par le panneau admin (aperçu des thèmes) */
+  window.__seasons=S;window.__seasonAuto=function(){return auto};window.__seasonCur=function(){return k};window.__seasonUri=svgUri;
+  window.__setSeason=function(x){k=S[x]?x:auto;document.documentElement.setAttribute("data-season",k);window.__season=S[k];
+    var t2=document.querySelector('meta[name="theme-color"]');if(t2)t2.setAttribute("content",S[k].tc);if(document.body)paint()};
 })();
 </script>
 </head><body>
@@ -368,6 +387,10 @@ html.neon .adl{border-top-color:#ff1f4b33}
     <p class="sub">Les actions s'appliquent tout de suite pour tout le monde.</p>
     <h3 class="stsec" id="adLobH">Lobbys</h3><div id="adLob"></div>
     <div class="row"><button type="button" class="danger" id="adAll" hidden>Fermer tous les lobbys</button></div></div>
+   <div class="panel" style="margin-top:14px"><h3>🎨 Thèmes de saison</h3>
+    <p class="sub">Aperçu des 4 thèmes. Le thème normal suit la date. « Tester » l'applique sur ton appareil seulement, jusqu'au rechargement de la page.</p>
+    <div class="thgrid" id="thGrid"></div>
+    <div class="row"><button type="button" class="alt" id="thAuto">↺ Revenir au thème automatique</button></div></div>
    <div class="panel" style="margin-top:14px"><h3>Outils</h3>
     <div class="row"><button type="button" class="alt" id="adReset">Remettre à zéro « parties jouées »</button></div></div>
   </div>

@@ -7,7 +7,7 @@ import {startSumo,createSumoClient} from "./sumo.js";
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="37";
+const VER="38";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -1868,10 +1868,10 @@ function renderThemes(){
     const m=h("div");m.className="thm";m.setAttribute("data-season",k);
     m.innerHTML=`<div class="thh">Mo<span>Da</span> ${S[k].e}</div><div class="thfr">${S[k].fr}</div><div class="thp"><b>Jouer avec tes potes</b><small>Choisis un jeu pour créer un lobby</small><div class="thb"><i>Rejoindre</i><i>Snake</i></div></div><div class="thsc"></div>`;
     m.querySelector(".thsc").style.backgroundImage=window.__seasonUri(k);
-    const n=h("div");n.className="thn";const nm=h("span",`${S[k].e} ${S[k].n}${k===au?" · saison actuelle":""}`);
+    const n=h("div");n.className="thn";const ic=h("img");ic.src=`icon-${k}-192.png`;ic.alt="";ic.style.cssText="width:34px;height:34px;border-radius:8px";const nm=h("span",`${S[k].e} ${S[k].n}${k===au?" · saison actuelle":""}`);nm.style.flex="1";
     const b=h("button","Tester");b.type="button";b.className="alt mini";
     b.onclick=()=>{window.__setSeason(k);adm=false;try{localStorage.setItem("moda.stats","0")}catch{}$("sw").setAttribute("aria-checked","false");applyNeon();showHome();toast(`Aperçu : ${S[k].n} (jusqu'au rechargement)`)};
-    n.append(nm,b);c.append(m,n);return c}))}
+    n.append(ic,nm,b);c.append(m,n);return c}))}
 $("thAuto").onclick=()=>{window.__setSeason(null);applyNeon();renderThemes();toast("Thème automatique rétabli")};
 async function admClose(c){try{await remove(R(`games/${c}`));await remove(R(`lobbies/${c}`));toast(`Lobby ${c} fermé`)}catch{admErr()}}
 async function admKick(c,u,name){

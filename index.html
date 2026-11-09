@@ -5,7 +5,7 @@
 <meta name="theme-color" content="var(--bg)">
 <!-- ⚠️ À CONSERVER À CHAQUE MISE À JOUR : à chaque nouvelle version (chaque modification), la version affichée doit faire +1.
      Changer le numéro aux 3 endroits, toujours identique : ce <meta name="moda-v">, `const VER` dans app.js, et `VERSION` dans sw.js. -->
-<meta name="moda-v" content="37">
+<meta name="moda-v" content="38">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -274,10 +274,25 @@ html.neon .adl{border-top-color:#ff1f4b33}
     spring:{n:"Printemps",e:"🌸",tc:"#1b2b22",fr:"🌷🌸🌼🌿🌷🌸🌼🦋🌷🌸"},
     summer:{n:"Été",e:"☀️",tc:"#0d2a3a",fr:"🌊🐚🌴🌊🏖️🌊🐚🌴🌊🐚"}
   };
+  /* Icônes de l'app selon la saison : onglet, écran d'accueil iPhone (apple-touch-icon) et manifeste (Android/Chrome) */
+  var mfUrl=null;
+  function setIcons(x){
+    try{
+      var i1=document.querySelector('link[rel="icon"]'),i2=document.querySelector('link[rel="apple-touch-icon"]');
+      if(i1)i1.setAttribute("href","icon-"+x+"-192.png");if(i2)i2.setAttribute("href","apple-touch-icon-"+x+".png");
+      var mf=document.querySelector('link[rel="manifest"]');if(!mf||!window.Blob||!window.URL)return;
+      var B=new URL("./",location.href).href,ic=function(f,sz,pu){return{src:B+f,sizes:sz,type:"image/png",purpose:pu}};
+      var o={name:"MoDa – jeux entre potes",short_name:"MoDa",description:"Jeux multijoueurs avec lobbys, amis et comptes.",lang:"fr",start_url:B,scope:B,display:"standalone",orientation:"any",background_color:S[x].tc,theme_color:S[x].tc,
+        icons:[ic("icon-"+x+"-192.png","192x192","any"),ic("icon-"+x+"-512.png","512x512","any"),ic("icon-"+x+"-maskable-512.png","512x512","maskable")]};
+      var u=URL.createObjectURL(new Blob([JSON.stringify(o)],{type:"application/manifest+json"}));mf.setAttribute("href",u);
+      if(mfUrl)URL.revokeObjectURL(mfUrl);mfUrl=u;
+    }catch(e){}
+  }
   var auto,q=(location.search.match(/[?&]season=(\w+)/)||[])[1],m=new Date().getMonth();
   var k=S[q]?q:(m===11||m<2?"winter":m<5?"spring":m<8?"summer":"autumn");
   auto=k;document.documentElement.setAttribute("data-season",k);window.__season=S[k];
   var t=document.querySelector('meta[name="theme-color"]');if(t)t.setAttribute("content",S[k].tc);
+  setIcons(k);
 
   /* Paysage du bas (SVG répété horizontalement, 1200×130) */
   function tree(x,s,c,snow){var g='<g transform="translate('+x+' 112) scale('+s+')"><rect x="-4" y="-14" width="8" height="14" fill="#5b3a29"/>'+
@@ -328,7 +343,7 @@ html.neon .adl{border-top-color:#ff1f4b33}
   /* Utilisés par le panneau admin (aperçu des thèmes) */
   window.__seasons=S;window.__seasonAuto=function(){return auto};window.__seasonCur=function(){return k};window.__seasonUri=svgUri;
   window.__setSeason=function(x){k=S[x]?x:auto;document.documentElement.setAttribute("data-season",k);window.__season=S[k];
-    var t2=document.querySelector('meta[name="theme-color"]');if(t2)t2.setAttribute("content",S[k].tc);if(document.body)paint()};
+    var t2=document.querySelector('meta[name="theme-color"]');if(t2)t2.setAttribute("content",S[k].tc);setIcons(k);if(document.body)paint()};
 })();
 </script>
 </head><body>

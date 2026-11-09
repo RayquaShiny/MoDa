@@ -7,7 +7,7 @@ import {startSumo,createSumoClient} from "./sumo.js";
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="30";
+const VER="31";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -1426,6 +1426,15 @@ async function startLab(){
 }
 
 // ---------- Battle Royale (l'hôte simule : 10 images/s, zone qui rétrécit, butin, tirs) ----------
+// Bots : évitement d'obstacles. Essaie le cap voulu, sinon dévie d'un côté (mémorisé dans m.sd pour ne pas hésiter), demi-tour si tout est bloqué.
+function botSteer(m,x,y,h,blocked,dist){
+  const sd=m.sd||1,p1=Math.min(28,dist),p2=Math.min(60,dist);
+  for(const o of [0,.45,-.45,.9,-.9,1.4,-1.4,2]){const g=h+o*sd,c=Math.cos(g),s=Math.sin(g);
+    if(!blocked(x+c*p1,y+s*p1)&&!blocked(x+c*p2,y+s*p2)){if(o<0)m.sd=-sd;return g}}
+  return h+Math.PI;
+}
+// cap -> commande (a,b) : les valeurs quasi nulles sont mises à 0 et la diagonale est compensée (la simulation multiplie par .707 quand a et b sont non nuls)
+const botMv=h=>{let a=Math.cos(h),b=Math.sin(h);if(Math.abs(a)<.02)a=0;if(Math.abs(b)<.02)b=0;return a&&b?[a/.7071,b/.7071]:[a,b]};
 async function startBr(){
   const pace=mkPace(),c=code,players=withBots(lobby),ids=Object.keys(players);
   if(ids.length<2)return toast("Il faut au moins 2 joueurs pour lancer un battle royale (ajoute un bot 🤖 dans le lobby)");
@@ -1465,31 +1474,34 @@ async function startBr(){
   // bots : vont vers la zone, ramassent le butin utile, visent et tirent sur le plus proche s'ils le voient
   const bm={};
   const brBot=u=>{
-    const q=P[u],m=bm[u]||(bm[u]={wp:null,t:0,px:q.x,py:q.y,sk:0,off:0,so:0,ig:0});
+    const q=P[u],m=bm[u]||(bm[u]={wp:null,t:0,px:q.x,py:q.y,sk:0,mv:0,sd:1,ig:0,tl:0});
     let e=null,bd=1e12;
     alive().forEach(o=>{if(o===u)return;const d=(P[o].x-q.x)**2+(P[o].y-q.y)**2;if(d<bd){bd=d;e=o}});
     const d=Math.sqrt(bd),w=WP[q.w];let seen=false;
     if(e&&d<w[4]*w[5]*.9){const E=P[e];seen=true;for(let i=1;i<8;i++)if(solidAt(map,q.x+(E.x-q.x)*i/8,q.y+(E.y-q.y)*i/8,2)){seen=false;break}}
-    if(Math.hypot(q.x-m.px,q.y-m.py)<2)m.sk++;else m.sk=0;m.px=q.x;m.py=q.y;
-    if(m.sk>=3){m.off=(Math.random()<.5?-1:1)*(1+Math.random());m.so=10;m.sk=0;m.wp=null;m.ig=tk+60} // coincé : contourne
+    // coincé = il voulait avancer mais n'a pas bougé : il change de côté de contournement et abandonne sa cible un moment
+    if(m.mv&&Math.hypot(q.x-m.px,q.y-m.py)<2)m.sk++;else m.sk=0;m.px=q.x;m.py=q.y;
+    if(m.sk>=4){m.sd=-m.sd;m.sk=0;m.wp=null;m.tl=0;m.ig=tk+50}
     let gx=null,gy=null;
     const storm=Math.hypot(q.x-zx,q.y-zy)>zr*.9||(ph<ZP.length&&(shr||zt<120)&&Math.hypot(q.x-nx,q.y-ny)>nr*.85);
     if(storm){gx=nx;gy=ny}
-    else if(tk>=m.ig){
-      let bl=null,bld=650*650;
-      Lt.forEach(l=>{const need=l[3]<5?l[3]>q.w:l[3]===5?q.hp<100:q.sh<100;if(!need)return;const dd=(l[1]-q.x)**2+(l[2]-q.y)**2;if(dd<bld){bld=dd;bl=l}});
-      if(bl){gx=bl[1];gy=bl[2]}
+    else if(!seen&&tk>=m.ig){ // ramasse le butin utile (cible mémorisée : plus d'aller-retour entre deux objets), sauf s'il voit un ennemi
+      const need=l=>l[3]<5?l[3]>q.w:l[3]===5?q.hp<100:q.sh<100;
+      let bl=Lt.find(l=>l[0]===m.tl&&need(l))||null;
+      if(!bl){let bld=650*650;Lt.forEach(l=>{if(!need(l))return;const dd=(l[1]-q.x)**2+(l[2]-q.y)**2;if(dd<bld){bld=dd;bl=l}})}
+      m.tl=bl?bl[0]:0;if(bl){gx=bl[1];gy=bl[2]}
     }
     if(gx==null&&!seen){if(!m.wp||--m.t<=0||Math.hypot(q.x-m.wp[0],q.y-m.wp[1])<40){m.wp=free(20);m.t=100}gx=m.wp[0];gy=m.wp[1]}
-    let a=0,b=0;
-    if(gx!=null){let h=Math.atan2(gy-q.y,gx-q.x);if(m.so-->0)h+=m.off;a=Math.cos(h);b=Math.sin(h)}
-    else if(seen){const ta=Math.atan2(P[e].y-q.y,P[e].x-q.x),f=d>300?1:d<150?-1:0,sg=(Math.floor(tk/20)+ids.indexOf(u))%2?1:-1;
-      a=Math.cos(ta)*f-Math.sin(ta)*sg*.8;b=Math.sin(ta)*f+Math.cos(ta)*sg*.8}
-    const nm=Math.hypot(a,b);want[u]=nm?[a/nm,b/nm]:[0,0];
+    let h=null,dist=99;
+    if(gx!=null){dist=Math.hypot(gx-q.x,gy-q.y);if(dist>(storm?30:12))h=Math.atan2(gy-q.y,gx-q.x)} // arrivé : il s'arrête (plus de tremblote autour du centre)
+    else if(seen){const ta=Math.atan2(P[e].y-q.y,P[e].x-q.x),f=d>300?1:d<150?-1:0,sg=(Math.floor(tk/20)+ids.indexOf(u))%2?1:-1,
+      a=Math.cos(ta)*f-Math.sin(ta)*sg*.8,b=Math.sin(ta)*f+Math.cos(ta)*sg*.8;h=Math.atan2(b,a)}
+    if(h!=null)h=botSteer(m,q.x,q.y,h,(x,y)=>solidAt(map,x,y,15),dist);
+    want[u]=h!=null?botMv(h):[0,0];m.mv=h!=null?1:0;
     let ta=q.ang;
-    if(seen||(e&&d<350))ta=Math.atan2(P[e].y-q.y,P[e].x-q.x);else if(nm)ta=Math.atan2(b,a);
+    if(seen)ta=Math.atan2(P[e].y-q.y,P[e].x-q.x);else if(h!=null)ta=h;
     let da=ta-q.ang;da=Math.atan2(Math.sin(da),Math.cos(da));
-    q.ang+=Math.max(-.5,Math.min(.5,da))+(seen?(Math.random()-.5)*.05:0);
+    q.ang+=Math.max(-.45,Math.min(.45,da))+(seen?(Math.random()-.5)*.05:0);
     q.fire=seen&&Math.abs(da)<.22?1:0;
   };
   const step=()=>{
@@ -1649,8 +1661,8 @@ async function startTk(){
     if(Math.hypot(q.x-m.px,q.y-m.py)<2)m.sk++;else m.sk=0;m.px=q.x;m.py=q.y;
     if(m.sk>=3||--m.t<=0){m.d=-m.d;m.sk=0;m.t=12+Math.floor(Math.random()*18)}
     const f=d>240?1:d<130?-1:0;
-    const a=Math.cos(ta)*f-Math.sin(ta)*m.d*.8,b=Math.sin(ta)*f+Math.cos(ta)*m.d*.8,nm=Math.hypot(a,b)||1;
-    want[u]=[a/nm,b/nm];
+    const a=Math.cos(ta)*f-Math.sin(ta)*m.d*.8,b=Math.sin(ta)*f+Math.cos(ta)*m.d*.8;
+    want[u]=botMv(botSteer(m,q.x,q.y,Math.atan2(b,a),(x,y)=>tkHit(W,x,y,17),99));
     q.fire=Math.abs(da)<.25&&d<520&&Math.random()<.8&&shot(u)===1?1:0; // ne tire que si l'obus touche un adversaire sans revenir sur soi
   };
   const step=()=>{

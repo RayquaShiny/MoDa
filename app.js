@@ -7,7 +7,7 @@ import {startSumo,createSumoClient} from "./sumo.js";
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="31";
+const VER="32";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -1426,12 +1426,20 @@ async function startLab(){
 }
 
 // ---------- Battle Royale (l'hôte simule : 10 images/s, zone qui rétrécit, butin, tirs) ----------
-// Bots : évitement d'obstacles. Essaie le cap voulu, sinon dévie d'un côté (mémorisé dans m.sd pour ne pas hésiter), demi-tour si tout est bloqué.
-function botSteer(m,x,y,h,blocked,dist){
-  const sd=m.sd||1,p1=Math.min(28,dist),p2=Math.min(60,dist);
-  for(const o of [0,.45,-.45,.9,-.9,1.4,-1.4,2]){const g=h+o*sd,c=Math.cos(g),s=Math.sin(g);
-    if(!blocked(x+c*p1,y+s*p1)&&!blocked(x+c*p2,y+s*p2)){if(o<0)m.sd=-sd;return g}}
-  return h+Math.PI;
+// Bots : évitement d'obstacles. Essaie le cap voulu ; sinon dévie d'un côté et GARDE cette déviation tant que la voie directe n'est pas libre
+// depuis 5 tests de suite (sinon il zigzague). Le cap réel tourne au plus de `turn` rad par tick (plus de virages à angle droit instantanés).
+function botSteer(m,x,y,h,blocked,dist,turn=.6){
+  const sd=m.sd||1,p1=Math.min(28,dist),p2=Math.min(60,dist),
+    ok=o=>{const g=h+o,c=Math.cos(g),s=Math.sin(g);return !blocked(x+c*p1,y+s*p1)&&!blocked(x+c*p2,y+s*p2)};
+  m.clr=m.clr||0;let o=m.off||0,g=null;
+  if(o){if(ok(0)){if(++m.clr>=5){o=0;m.clr=0}}else m.clr=0}
+  if(!o&&ok(0))g=h;
+  else{for(const c of [...(o?[o]:[]),.45*sd,-.45*sd,.9*sd,-.9*sd,1.4*sd,-1.4*sd,2*sd])if(ok(c)){o=c;g=h+c;if(c*sd<0)m.sd=-sd;break}
+    if(g==null){o=0;g=h+Math.PI}}
+  m.off=o;
+  if(m.hd==null)m.hd=g;
+  let d=g-m.hd;d=Math.atan2(Math.sin(d),Math.cos(d));
+  m.hd+=Math.max(-turn,Math.min(turn,d));return m.hd;
 }
 // cap -> commande (a,b) : les valeurs quasi nulles sont mises à 0 et la diagonale est compensée (la simulation multiplie par .707 quand a et b sont non nuls)
 const botMv=h=>{let a=Math.cos(h),b=Math.sin(h);if(Math.abs(a)<.02)a=0;if(Math.abs(b)<.02)b=0;return a&&b?[a/.7071,b/.7071]:[a,b]};
@@ -1479,6 +1487,7 @@ async function startBr(){
     alive().forEach(o=>{if(o===u)return;const d=(P[o].x-q.x)**2+(P[o].y-q.y)**2;if(d<bd){bd=d;e=o}});
     const d=Math.sqrt(bd),w=WP[q.w];let seen=false;
     if(e&&d<w[4]*w[5]*.9){const E=P[e];seen=true;for(let i=1;i<8;i++)if(solidAt(map,q.x+(E.x-q.x)*i/8,q.y+(E.y-q.y)*i/8,2)){seen=false;break}}
+    const los=seen;if(los)m.eng=tk+12;seen=!!e&&(los||tk<(m.eng||0)); // reste « en combat » 1,2 s après avoir perdu l'ennemi de vue
     // coincé = il voulait avancer mais n'a pas bougé : il change de côté de contournement et abandonne sa cible un moment
     if(m.mv&&Math.hypot(q.x-m.px,q.y-m.py)<2)m.sk++;else m.sk=0;m.px=q.x;m.py=q.y;
     if(m.sk>=4){m.sd=-m.sd;m.sk=0;m.wp=null;m.tl=0;m.ig=tk+50}
@@ -1496,13 +1505,13 @@ async function startBr(){
     if(gx!=null){dist=Math.hypot(gx-q.x,gy-q.y);if(dist>(storm?30:12))h=Math.atan2(gy-q.y,gx-q.x)} // arrivé : il s'arrête (plus de tremblote autour du centre)
     else if(seen){const ta=Math.atan2(P[e].y-q.y,P[e].x-q.x),f=d>300?1:d<150?-1:0,sg=(Math.floor(tk/20)+ids.indexOf(u))%2?1:-1,
       a=Math.cos(ta)*f-Math.sin(ta)*sg*.8,b=Math.sin(ta)*f+Math.cos(ta)*sg*.8;h=Math.atan2(b,a)}
-    if(h!=null)h=botSteer(m,q.x,q.y,h,(x,y)=>solidAt(map,x,y,15),dist);
+    if(h!=null)h=botSteer(m,q.x,q.y,h,(x,y)=>solidAt(map,x,y,15),dist);else m.hd=null;
     want[u]=h!=null?botMv(h):[0,0];m.mv=h!=null?1:0;
     let ta=q.ang;
     if(seen)ta=Math.atan2(P[e].y-q.y,P[e].x-q.x);else if(h!=null)ta=h;
     let da=ta-q.ang;da=Math.atan2(Math.sin(da),Math.cos(da));
     q.ang+=Math.max(-.45,Math.min(.45,da))+(seen?(Math.random()-.5)*.05:0);
-    q.fire=seen&&Math.abs(da)<.22?1:0;
+    q.fire=los&&Math.abs(da)<.22?1:0;
   };
   const step=()=>{
     if(code!==c){un();return} // l'hôte a quitté : on arrête tout

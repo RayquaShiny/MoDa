@@ -7,7 +7,7 @@ import {startSumo,createSumoClient} from "./sumo.js";
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="29";
+const VER="30";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -1602,17 +1602,29 @@ async function startTk(){
   const pace=mkPace(),c=code,players=withBots(lobby),ids=Object.keys(players);
   if(ids.length<2)return toast("Il faut au moins 2 joueurs pour lancer Tanks (ajoute un bot 🤖 dans le lobby)");
   await remove(R(`games/${c}`));await update(R(`lobbies/${c}`),{status:"playing"});
-  const W=[[360,250,80,60]]; // carte symétrique gauche/droite : équitable pour tout le monde
-  for(let i=0;i<5;i++){const hz=Math.random()<.5,w=Math.round(hz?70+Math.random()*70:26),hh=Math.round(hz?26:70+Math.random()*70),a=Math.round(110+Math.random()*250),b=Math.round(50+Math.random()*(TH-100-hh));
-    W.push([a,b,w,hh],[TW-a-w,b,w,hh])}
+  // carte symétrique gauche/droite : murs jamais collés entre eux ni aux bords, couloir libre au centre, aucun mur sur un point de départ
+  const W=[[360,250,80,60]],off=Math.random()*6.28,sp=ids.map((_,i)=>{const an=off+i/ids.length*6.28;return[400+Math.cos(an)*330,280+Math.sin(an)*220]});
+  const near=(a,b,w,hh,m)=>W.some(o=>a<o[0]+o[2]+m&&a+w>o[0]-m&&b<o[1]+o[3]+m&&b+hh>o[1]-m);
+  for(let t=0,n=0;t<300&&n<5;t++){const hz=Math.random()<.5,w=Math.round(hz?70+Math.random()*70:26),hh=Math.round(hz?26:70+Math.random()*70),a=Math.round(90+Math.random()*(260-w)),b=Math.round(60+Math.random()*(TH-120-hh)),a2=TW-a-w;
+    if(near(a,b,w,hh,60)||near(a2,b,w,hh,60))continue;
+    if(sp.some(([x,y])=>y>b-50&&y<b+hh+50&&((x>a-50&&x<a+w+50)||(x>a2-50&&x<a2+w+50))))continue;
+    W.push([a,b,w,hh],[a2,b,w,hh]);n++}
   const P={},want={},seen={};let B=[],kf=[],tk=0;
-  const off=Math.random()*6.28;
   ids.forEach((u,i)=>{let f=1,x,y;const an=off+i/ids.length*6.28;
     do{x=400+Math.cos(an)*330*f;y=280+Math.sin(an)*220*f;f-=.05}while(tkHit(W,x,y,22)&&f>0);
     P[u]={n:players[u].name,c:players[u].color,x,y,hp:100,a:1,ang:0,ba:0,fire:0,cd:0,k:0,inv:20};want[u]=[0,0]});
   const alive=()=>ids.filter(u=>P[u].a);
   const kill=(v,k,why)=>{const q=P[v];if(!q.a)return;q.a=0;
     if(k&&k!==v&&P[k]){P[k].k++;kf.push([`${P[k].n} ✖ ${q.n}`,tk+50])}else kf.push([`${q.n} ${why||"s'est détruit"}`,tk+50])};
+  // simule un obus tiré maintenant (mêmes règles que la partie : 4 pas par tick, 2 rebonds max) : 1 = touche un adversaire, -1 = reviendrait sur le tireur, 0 = rien
+  const shot=u=>{const q=P[u];let x=q.x+Math.cos(q.ang)*20,y=q.y+Math.sin(q.ang)*20;if(tkHit(W,x,y,2)){x=q.x;y=q.y}
+    let vx=Math.cos(q.ang)*15,vy=Math.sin(q.ang)*15,nb=0;
+    for(let t=0;t<70;t++)for(let i=0;i<4;i++){const nx=x+vx/4,ny=y+vy/4;let fx=nx<0||nx>TW||tkHit(W,nx,y,2),fy=ny<0||ny>TH||tkHit(W,x,ny,2);
+      if(!fx&&!fy&&tkHit(W,nx,ny,2))fx=fy=true;
+      if(fx||fy){if(fx)vx=-vx;if(fy)vy=-vy;if(++nb>2)return 0;continue}
+      x=nx;y=ny;
+      for(const o of ids){const p=P[o];if(!p.a||(o===u&&nb===0))continue;if((p.x-x)**2+(p.y-y)**2<16*16)return o===u?-1:1}}
+    return 0};
   const pub=(x={})=>{
     const o={k:"tk",p:Object.fromEntries(ids.map(u=>{const q=P[u];return[u,[Math.round(q.x),Math.round(q.y),Math.round(q.hp),q.a,+q.ang.toFixed(2),+q.ba.toFixed(2),q.k,q.inv>0?1:0]]})),
       b:B.map(b=>[Math.round(b[0]),Math.round(b[1]),Math.round(b[2]),Math.round(b[3]),ids.indexOf(b[5])]),al:alive().length,kf:kf.map(e=>e[0]),...x};
@@ -1639,7 +1651,7 @@ async function startTk(){
     const f=d>240?1:d<130?-1:0;
     const a=Math.cos(ta)*f-Math.sin(ta)*m.d*.8,b=Math.sin(ta)*f+Math.cos(ta)*m.d*.8,nm=Math.hypot(a,b)||1;
     want[u]=[a/nm,b/nm];
-    q.fire=Math.abs(da)<.25&&d<520&&Math.random()<.8?1:0;
+    q.fire=Math.abs(da)<.25&&d<520&&Math.random()<.8&&shot(u)===1?1:0; // ne tire que si l'obus touche un adversaire sans revenir sur soi
   };
   const step=()=>{
     if(code!==c){un();return}

@@ -6,7 +6,7 @@ import {startSim,createSimClient} from "./sim.js";
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="19";
+const VER="20";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -1497,13 +1497,26 @@ function startStats(){
     .forEach(([p,k])=>unStats.push(onValue(R(p),s=>{D[k]=s.val();renderStats(D)},()=>toast("Statistiques : accès refusé, vérifie les règles"))));
 }
 function renderStats(D){
-  const pr=D.presence||{},us=D.users||{},lo=Object.values(D.lobbies||{}),fr=D.friends||{},now=Date.now();
-  const online=Object.keys(pr).filter(u=>pr[u]),made=Object.values(us).map(u=>u.createdAt||0);
-  const cards=[[online.length,"connectés"],[Object.keys(us).length,"comptes créés"],[made.filter(t=>t>now-864e5).length,"nouveaux (24 h)"],[made.filter(t=>t>now-6048e5).length,"nouveaux (7 j)"],
-    [lo.filter(l=>l.status==="lobby").length,"lobbys ouverts"],[lo.filter(l=>l.status==="playing").length,"parties en cours"],
-    [Object.values(fr).reduce((s,f)=>s+Object.keys(f).length,0)/2,"amitiés"],[D.games||0,"parties jouées"]];
-  $("stgrid").replaceChildren(...cards.map(([v,l])=>{const d=h("div");d.className="stat";const b=h("b",String(v));d.append(b,h("span",l));return d}));
-  $("onl").replaceChildren(...(online.length?online.map(u=>{const c=h("span",us[u]?.name||"?");c.className="chip";return c}):[h("span","Personne pour l'instant")]));
+  const pr=D.presence||{},us=D.users||{},lobs=Object.entries(D.lobbies||{}),fr=D.friends||{},now=Date.now();
+  const online=Object.keys(pr).filter(u=>pr[u]),made=Object.values(us).map(u=>u.createdAt||0),nUsers=Object.keys(us).length;
+  const GN={snake:["🐍","Snake"],surv:["🧟","Survie coop"],br:["🔫","Battle Royale"],lab:["🧩","Évasion coop"],sim:["⛏️","Mine Simulator"]};
+  const ago=t=>{if(!t)return"date inconnue";const m=Math.floor((now-t)/6e4);return m<1?"à l'instant":m<60?`il y a ${m} min`:m<1440?`il y a ${Math.floor(m/60)} h`:`il y a ${Math.floor(m/1440)} j`};
+  const card=([ic,v,l])=>{const d=h("div");d.className="stat";const i=h("span",ic);i.className="ic";d.append(i,h("b",String(v)),h("span",l));return d};
+  const playing=lobs.filter(([,l])=>l&&l.status==="playing"),open=lobs.filter(([,l])=>l&&l.status==="lobby");
+  const inLob=lobs.reduce((s,[,l])=>s+Object.keys((l&&l.players)||{}).length,0);
+  $("stgrid").replaceChildren(...[["🟢",online.length,"connectés"],["👤",nUsers,"comptes créés"],["✨",made.filter(t=>t>now-864e5).length,"nouveaux (24 h)"],["📅",made.filter(t=>t>now-6048e5).length,"nouveaux (7 j)"]].map(card));
+  $("stbar").hidden=!nUsers;$("stfill").style.width=Math.round(100*online.length/Math.max(1,nUsers))+"%";
+  $("stpct").textContent=`${Math.round(100*online.length/Math.max(1,nUsers))} % des comptes en ligne`;
+  $("stgrid2").replaceChildren(...[["🚪",open.length,"lobbys ouverts"],["🎯",playing.length,"parties en cours"],["🕹️",inLob,"joueurs en lobby / partie"],["🏁",D.games||0,"parties jouées"],["🤝",Object.values(fr).reduce((s,f)=>s+Object.keys(f||{}).length,0)/2,"amitiés"]].map(card));
+  $("onlh").textContent=`En ligne maintenant (${online.length})`;
+  $("onl").replaceChildren(...(online.length?online.map(u=>{const c=h("span");c.className="chip";const p=h("i");p.className="on";c.append(p,us[u]?.name||"?");return c}):[h("span","Personne pour l'instant")]));
+  const rows=[...playing,...open].map(([c,l])=>{const g=GN[l.game]||["🎲",l.game||"Jeu"],n=Object.keys(l.players||{}).length,r=h("div");r.className="lrow";
+    const t=h("span",`${g[0]} ${g[1]}`);t.className="g";const cd=h("code",c);const b=h("span",l.status==="playing"?"En partie":"Lobby");b.className="badge"+(l.status==="playing"?" pl2":"");
+    r.append(t,cd,h("small",`${n} joueur${n>1?"s":""}`),b);return r});
+  $("stlob").replaceChildren(...(rows.length?rows:[Object.assign(h("span","Aucun lobby pour l'instant"),{className:"empty"})]));
+  const news=Object.values(us).filter(u=>u&&u.name).sort((x,y)=>(y.createdAt||0)-(x.createdAt||0)).slice(0,5).map(u=>{const r=h("div");r.className="nrow";const n=h("span",u.name);n.className="n";r.append(n,h("small",ago(u.createdAt)));return r});
+  $("stnew").replaceChildren(...(news.length?news:[Object.assign(h("span","Personne"),{className:"empty"})]));
+  $("stup").textContent="en direct · "+new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
 }
 
 // ---------- Installation (PWA) ----------

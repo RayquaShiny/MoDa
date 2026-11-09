@@ -5,7 +5,7 @@
 <meta name="theme-color" content="#14102b">
 <!-- ⚠️ À CONSERVER À CHAQUE MISE À JOUR : à chaque nouvelle version (chaque modification), la version affichée doit faire +1.
      Changer le numéro aux 3 endroits, toujours identique : ce <meta name="moda-v">, `const VER` dans app.js, et `VERSION` dans sw.js. -->
-<meta name="moda-v" content="19">
+<meta name="moda-v" content="20">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -179,6 +179,28 @@ html.neon #toast{background:#ff1f4b;color:#fff;box-shadow:0 0 16px #ff1f4b}
 html.neon #semo{background:#0a0204ec;border:1px solid #ff1f4b88}
 html.neon #semo button{background:#1a060c}
 html.neon ::selection{background:#ff1f4b;color:#fff}
+
+/* ---- Menu stats + tuile Bientôt ---- */
+.sthead{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.sthead h2{margin:0}
+.live{display:inline-flex;align-items:center;gap:6px;color:var(--mute);font-size:13px}.live i{width:8px;height:8px;border-radius:50%;background:#2ecc71;box-shadow:0 0 8px #2ecc71;animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+.stsec{margin:18px 0 0;font-size:15px;color:var(--mute);font-weight:700}
+.stat .ic{display:block;font-size:20px;margin-bottom:2px}
+.bar{display:flex;align-items:center;gap:10px;margin-top:12px;color:var(--mute);font-size:13px}.bar>div{flex:1;height:8px;border-radius:6px;background:#2c2358;overflow:hidden}.bar i{display:block;height:100%;width:0;border-radius:6px;background:linear-gradient(90deg,var(--b),var(--a));transition:width .5s}
+.chip .on{display:inline-block;width:8px;height:8px;border-radius:50%;background:#2ecc71;box-shadow:0 0 6px #2ecc71;margin-right:6px}
+.lrow,.nrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #ffffff14}.lrow:first-child,.nrow:first-child{border-top:0}
+.lrow .g{flex:1;font-weight:700}.lrow small,.nrow small{color:var(--mute);font-size:13px}
+.lrow code{font:800 15px 'Bricolage Grotesque';letter-spacing:2px;color:var(--a)}
+.badge{display:inline-block;font:800 11px 'DM Sans',sans-serif;letter-spacing:.5px;text-transform:uppercase;padding:2px 8px;border-radius:20px;background:#2ecc7133;color:#7dffb0}.badge.pl2{background:#ff9f1c33;color:#ffc766}
+.nrow .n{flex:1}.empty{color:var(--mute)}
+.tile.soon{background:repeating-linear-gradient(135deg,#2c2358 0 14px,#251d4c 14px 28px);color:#b9b2e8;cursor:default;position:relative;opacity:.9;border:2px dashed #4b4380}
+.tile.soon .badge{position:absolute;top:12px;left:12px;background:#ffd20033;color:#ffe066;font-size:12px}
+html.neon .stat .ic{filter:drop-shadow(0 0 6px #ff1f4b)}
+html.neon .live i{background:#ff1f4b;box-shadow:0 0 10px #ff1f4b}
+html.neon .bar>div{background:#2a0a12}html.neon .bar i{box-shadow:0 0 10px #ff1f4b}
+html.neon .lrow,html.neon .nrow{border-top-color:#ff1f4b33}
+html.neon .tile.soon{background:repeating-linear-gradient(135deg,#1a060c 0 14px,#12060a 14px 28px);color:#ff8a9b;border:2px dashed #ff1f4b;box-shadow:0 0 14px #ff1f4b55}
+html.neon .tile.soon .badge{background:#ff1f4b;color:#fff;box-shadow:0 0 10px #ff1f4b}
 </style></head><body>
 <div id="boot"><div class="logo">Mo<b>Da</b></div><div class="spinner"></div><div id="bootmsg"></div></div>
 <div id="net" hidden>🔌 Reconnexion…</div>
@@ -215,11 +237,16 @@ html.neon ::selection{background:#ff1f4b;color:#fff}
   <div class="panel"><h2>Jouer avec tes potes</h2>
    <p class="sub">Choisis un jeu ci-dessous pour créer un lobby, puis invite tes amis. Ou rejoins un pote avec son code.</p>
    <div class="row"><input id="joincode" placeholder="Code du lobby" maxlength="5" autocapitalize="characters" autocorrect="off" spellcheck="false" autocomplete="off" enterkeyhint="go" style="max-width:160px;text-transform:uppercase"><button class="alt" id="join">Rejoindre</button></div></div>
-  <div class="grid"><div class="tile snake" id="tsnake">Snake<small>1 à 8 joueurs</small></div><div class="tile surv" id="tsurv">Survie coop<small>1 à 8 joueurs</small></div><div class="tile br" id="tbr">Battle Royale<small>2 à 8 joueurs · dernier en vie</small></div><div class="tile lab" id="tlab">Évasion coop<small>1 à 8 joueurs · labyrinthe</small></div><div class="tile sim" id="tsim">Mine Simulator<small>1 à 8 joueurs · farme, améliore, renais</small></div></div>
+  <div class="grid"><div class="tile snake" id="tsnake">Snake<small>1 à 8 joueurs</small></div><div class="tile surv" id="tsurv">Survie coop<small>1 à 8 joueurs</small></div><div class="tile br" id="tbr">Battle Royale<small>2 à 8 joueurs · dernier en vie</small></div><div class="tile lab" id="tlab">Évasion coop<small>1 à 8 joueurs · labyrinthe</small></div><div class="tile sim" id="tsim">Mine Simulator<small>1 à 8 joueurs · farme, améliore, renais</small></div><div class="tile soon" id="tsoon" aria-disabled="true"><span class="badge">Bientôt</span>Nouveau jeu<small>En préparation…</small></div></div>
  </section>
  <section id="stats" hidden>
-  <div class="panel"><h2>Statistiques</h2><div class="stgrid" id="stgrid"></div></div>
-  <div class="panel" style="margin-top:14px"><h3>En ligne maintenant</h3><div id="onl"></div></div>
+  <div class="panel"><div class="sthead"><h2>Statistiques</h2><span class="live"><i></i><span id="stup">en direct</span></span></div>
+   <h3 class="stsec">👥 Comptes</h3><div class="stgrid" id="stgrid"></div>
+   <div class="bar" id="stbar" hidden><div><i id="stfill"></i></div><span id="stpct"></span></div>
+   <h3 class="stsec">🎮 Activité</h3><div class="stgrid" id="stgrid2"></div></div>
+  <div class="panel"><h3 id="onlh">En ligne maintenant</h3><div id="onl"></div></div>
+  <div class="panel"><h3>Lobbys et parties</h3><div id="stlob"></div></div>
+  <div class="panel"><h3>Derniers inscrits</h3><div id="stnew"></div></div>
  </section>
  <section id="lobby" class="panel" hidden>
   <h2 id="ltitle">Lobby</h2><div class="code" id="lcode"></div>

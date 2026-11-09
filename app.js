@@ -7,7 +7,7 @@ import {startSumo,createSumoClient} from "./sumo.js";
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="28";
+const VER="29";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -278,8 +278,8 @@ function renderLobby(){
   const op=lobby.opts||{};$("oSp").textContent="⚡ Vitesse : "+["lente","normale","rapide"][op.sp??1];
   $("oWr").textContent=op.wr?"🌀 Murs : traversables":"🧱 Murs : mortels";$("oBo").textContent=op.bo===0?"🎁 Bonus : non":"🎁 Bonus : oui";
   ["oSp","oWr","oBo"].forEach(i=>$(i).disabled=!host);
-  $("botrow").style.display=botGame(lobby)?"":"none";$("oBt").textContent="🤖 Bots : "+nb;$("oBt").disabled=!host;
   const nb=botCount(lobby),need=lobby.game==="br"||lobby.game==="tk"||lobby.game==="sumo"?2:1,cnt=Object.keys(pl).length+nb,all=Object.values(pl).every(p=>p.ready); // le battle royale ne se lance jamais seul
+  $("botrow").style.display=botGame(lobby)?"":"none";$("oBt").textContent="🤖 Bots : "+nb;$("oBt").disabled=!host;
   $("start").hidden=!host;$("start").disabled=!all||cnt<need;
   $("lneed").textContent=cnt<need?`⏳ Il faut au moins ${need} joueurs pour lancer la partie (${cnt}/${need}) : invite un pote${botGame(lobby)?" ou ajoute un bot 🤖":""} !`:!all?"En attente que tout le monde soit prêt…":"";
 }
@@ -1838,7 +1838,7 @@ $("adReset").onclick=async()=>{if(!confirm("Remettre le compteur « parties jou�
   try{await set(R("stats/gamesPlayed"),0);await remove(R("stats/byGame"));await remove(R("stats/hours"));toast("Statistiques remises à zéro")}catch{admErr()}};
 function renderAdmin(D){
   if(!me||!me.owner)return;
-  const GN={tk:"💥 Tanks",snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator"};
+  const GN={tk:"💥 Tanks",snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena"};
   const lobs=Object.entries(D.lobbies||{}).filter(([,l])=>l).sort((x,y)=>(y[1].status==="playing")-(x[1].status==="playing"));
   $("adLobH").textContent=`Lobbys (${lobs.length})`;$("adAll").hidden=!lobs.length;
   $("adLob").replaceChildren(...(lobs.length?lobs.map(([c,l])=>{

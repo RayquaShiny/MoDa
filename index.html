@@ -5,7 +5,7 @@
 <meta name="theme-color" content="var(--bg)">
 <!-- ⚠️ À CONSERVER À CHAQUE MISE À JOUR : à chaque nouvelle version (chaque modification), la version affichée doit faire +1.
      Changer le numéro aux 3 endroits, toujours identique : ce <meta name="moda-v">, `const VER` dans app.js, et `VERSION` dans sw.js. -->
-<meta name="moda-v" content="34">
+<meta name="moda-v" content="35">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -165,6 +165,8 @@ html[data-season=spring]{--bg:#1b2b22;--bg2:#2c4a35;--card:#24402f;--s1:#2f5640;
 html[data-season=summer]{--bg:#0d2a3a;--bg2:#146088;--card:#123f56;--s1:#1a5270;--s2:#256a8c;--deep:#081c28;--ink:#f0fbff;--mute:#8fc9e0;--a:#ffd23f;--b:#ff7a45;--on-a:#241a00;--on-b:#2b0f00;--edge:#3ec6ff}
 html[data-season]{background:linear-gradient(180deg,var(--bg),var(--bg2)) fixed}
 html[data-season] body{background:transparent}
+html[data-season] body::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top,0px);background:var(--deep);z-index:60;pointer-events:none}
+html.neon body::before,body[data-g]::before{display:none}
 /* décor du haut : guirlande lumineuse (hiver) ou frise (autres saisons) */
 html[data-season] header{position:relative;margin-bottom:12px}
 html[data-season] header::before,html[data-season] header::after{position:absolute;left:0;right:0;top:100%;height:16px;pointer-events:none;z-index:3;overflow:hidden;white-space:nowrap;font-size:13px;line-height:16px;letter-spacing:12px}
@@ -185,16 +187,9 @@ html[data-season=summer] header .logo::after{content:" 😎"}
 html[data-season] .panel{background-image:linear-gradient(var(--edge),var(--edge)),radial-gradient(circle at 50% 0,var(--edge) 6px,transparent 7px);background-size:100% 3px,16px 8px;background-repeat:no-repeat,repeat-x;background-position:0 0,0 0}
 /* paysage du bas et particules */
 #seasonbg{position:fixed;left:0;right:0;bottom:0;height:130px;z-index:-1;pointer-events:none;background-repeat:repeat-x;background-position:center bottom;background-size:auto 130px}
-#seasonfx{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:1}
-#seasonfx i{position:absolute;top:-8vh;font-style:normal;animation:sfall linear infinite,ssway ease-in-out infinite alternate;will-change:transform}
-#seasonfx.winter i{color:#fff;text-shadow:0 0 6px #fffa}
-#seasonfx.up i{top:auto;bottom:-8vh;animation-name:srise,ssway}
-@keyframes sfall{to{transform:translate3d(var(--dx),112vh,0) rotate(360deg)}}
-@keyframes srise{to{transform:translate3d(var(--dx),-112vh,0) scale(.6)}}
-@keyframes ssway{from{margin-left:-14px}to{margin-left:14px}}
-html.neon #seasonfx,html.neon #seasonbg,html.neon header::before,html.neon header::after,html.neon header .logo::after,body[data-g] #seasonfx,body[data-g] #seasonbg{display:none}
+html.neon #seasonbg,html.neon header::before,html.neon header::after,html.neon header .logo::after,body[data-g] #seasonbg{display:none}
 html.neon .panel{background-image:none}
-@media(prefers-reduced-motion:reduce){#seasonfx{display:none}html[data-season] header::before,html[data-season] header::after{animation:none}}
+@media(prefers-reduced-motion:reduce){html[data-season] header::before,html[data-season] header::after{animation:none}}
 
 /* ---- Thème noir-rouge néon (actif quand l'interrupteur Stats est sur ON) ---- */
 html.neon{--bg:#050204;--card:#12060a;--ink:#ffeef0;--mute:#ff8a9b;--a:#ff1f4b;--b:#ff4d6d}
@@ -314,13 +309,7 @@ html.neon .adl{border-top-color:#ff1f4b33}
   document.addEventListener("DOMContentLoaded",function(){
     var bg=document.createElement("div");bg.id="seasonbg";bg.setAttribute("aria-hidden","true");
     var svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 130" width="1200" height="130">'+SC[k]()+'</svg>';
-    bg.style.backgroundImage='url("data:image/svg+xml,'+encodeURIComponent(svg)+'")';document.body.appendChild(bg);
-    var d=document.createElement("div");d.id="seasonfx";d.setAttribute("aria-hidden","true");d.className=k+(S[k].up?" up":"");
-    for(var i=0;i<S[k].n;i++){var e=document.createElement("i"),z=10+Math.random()*20;e.textContent=S[k].fx[i%S[k].fx.length];
-      e.style.left=(i*(100/S[k].n)+Math.random()*3)+"vw";e.style.fontSize=z+"px";e.style.opacity=(.3+z/45).toFixed(2);if(z>26)e.style.filter="blur(1.2px)";
-      e.style.animationDuration=(8+Math.random()*10)+"s,"+(2.5+Math.random()*3)+"s";e.style.animationDelay=(-Math.random()*18)+"s,"+(-Math.random()*5)+"s";
-      e.style.setProperty("--dx",(Math.random()*120-60)+"px");d.appendChild(e)}
-    document.body.appendChild(d)});
+    bg.style.backgroundImage='url("data:image/svg+xml,'+encodeURIComponent(svg)+'")';document.body.appendChild(bg);});
 })();
 </script>
 </head><body>

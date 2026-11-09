@@ -5,7 +5,7 @@
 <meta name="theme-color" content="#14102b">
 <!-- ⚠️ À CONSERVER À CHAQUE MISE À JOUR : à chaque nouvelle version (chaque modification), la version affichée doit faire +1.
      Changer le numéro aux 3 endroits, toujours identique : ce <meta name="moda-v">, `const VER` dans app.js, et `VERSION` dans sw.js. -->
-<meta name="moda-v" content="21">
+<meta name="moda-v" content="23">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -202,6 +202,16 @@ html.neon .bar>div{background:#2a0a12}html.neon .bar i{box-shadow:0 0 10px #ff1f
 html.neon .lrow,html.neon .nrow{border-top-color:#ff1f4b33}
 html.neon .tile.soon{background:repeating-linear-gradient(135deg,#1a060c 0 14px,#12060a 14px 28px);color:#ff8a9b;border:2px dashed #ff1f4b;box-shadow:0 0 14px #ff1f4b55}
 html.neon .tile.soon .badge{background:#ff1f4b;color:#fff;box-shadow:0 0 10px #ff1f4b}
+
+/* ---- Onglets Stats / Admin ---- */
+.stabs{display:flex;gap:8px;margin-bottom:14px}.stabs button{flex:1;background:#2c2358;color:var(--mute);box-shadow:none}.stabs button.on{background:var(--a);color:#fff}
+.danger{background:#d63a3a!important;color:#fff}
+#stView .panel+.panel{margin-top:14px}
+.adl{border-top:1px solid #ffffff14;padding:10px 0}.adl:first-child{border-top:0}
+.adh{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.adh .g{font-weight:700}.adh code{font:800 15px 'Bricolage Grotesque';letter-spacing:2px;color:var(--a)}.adh .sp{flex:1}
+.adp{margin:6px 0}.adp .chip{padding:2px 6px 2px 12px}.adp .chip button{background:none;box-shadow:none;color:#ff6b81;padding:0 6px;font-size:15px;min-width:0}
+html.neon .stabs button{background:#1a060c;border:1px solid #ff1f4b88;color:#ff8a9b}html.neon .stabs button.on{background:#ff1f4b;color:#fff;box-shadow:0 0 12px #ff1f4b}
+html.neon .adl{border-top-color:#ff1f4b33}
 </style></head><body>
 <div id="boot"><div class="logo">Mo<b>Da</b></div><div class="spinner"></div><div id="bootmsg"></div></div>
 <div id="net" hidden>🔌 Reconnexion…</div>
@@ -241,6 +251,8 @@ html.neon .tile.soon .badge{background:#ff1f4b;color:#fff;box-shadow:0 0 10px #f
   <div class="grid"><div class="tile snake" id="tsnake">Snake<small>1 à 8 joueurs</small></div><div class="tile surv" id="tsurv">Survie coop<small>1 à 8 joueurs</small></div><div class="tile br" id="tbr">Battle Royale<small>2 à 8 joueurs · dernier en vie</small></div><div class="tile lab" id="tlab">Évasion coop<small>1 à 8 joueurs · labyrinthe</small></div><div class="tile sim" id="tsim">Mine Simulator<small>1 à 8 joueurs · farme, améliore, renais</small></div><div class="tile tk" id="ttk">Tanks<small>2 à 8 joueurs · obus qui rebondissent</small></div></div>
  </section>
  <section id="stats" hidden>
+  <div class="stabs" role="tablist"><button type="button" id="tbStats" class="on" role="tab" aria-selected="true">📊 Stats</button><button type="button" id="tbAdm" role="tab" aria-selected="false">🛠️ Admin</button></div>
+  <div id="stView">
   <div class="panel"><div class="sthead"><h2>Statistiques</h2><span class="live"><i></i><span id="stup">en direct</span></span></div>
    <h3 class="stsec">👥 Comptes</h3><div class="stgrid" id="stgrid"></div>
    <div class="bar" id="stbar" hidden><div><i id="stfill"></i></div><span id="stpct"></span></div>
@@ -248,6 +260,15 @@ html.neon .tile.soon .badge{background:#ff1f4b;color:#fff;box-shadow:0 0 10px #f
   <div class="panel"><h3 id="onlh">En ligne maintenant</h3><div id="onl"></div></div>
   <div class="panel"><h3>Lobbys et parties</h3><div id="stlob"></div></div>
   <div class="panel"><h3>Derniers inscrits</h3><div id="stnew"></div></div>
+  </div>
+  <div id="admView" hidden>
+   <div class="panel"><div class="sthead"><h2>Admin</h2><span class="live"><i></i><span>owner</span></span></div>
+    <p class="sub">Les actions s'appliquent tout de suite pour tout le monde.</p>
+    <h3 class="stsec" id="adLobH">Lobbys</h3><div id="adLob"></div>
+    <div class="row"><button type="button" class="danger" id="adAll" hidden>Fermer tous les lobbys</button></div></div>
+   <div class="panel" style="margin-top:14px"><h3>Outils</h3>
+    <div class="row"><button type="button" class="alt" id="adReset">Remettre à zéro « parties jouées »</button></div></div>
+  </div>
  </section>
  <section id="lobby" class="panel" hidden>
   <h2 id="ltitle">Lobby</h2><div class="code" id="lcode"></div>

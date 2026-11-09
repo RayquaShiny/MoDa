@@ -6,15 +6,16 @@
    - Aucun nouveau chemin Firebase : les règles existantes suffisent. */
 
 const W = 800, H = 560, CX = 400, CY = 285, BR = 20;      // scène 800×560, centre de l'arène, rayon d'une bille
-const RMIN = 80, SHRINK = 22, FIRST = 9, EVERY = 6;       // rayon minimal, pas de rétrécissement, 1er palier (s), délai entre paliers (s)
+const RMIN = 60, SHRINK = 22, FIRST = 9, EVERY = 6;       // rayon minimal, pas de rétrécissement, 1er palier (s), délai entre paliers (s)
 const ACC = 900, DAMP = 3.0;                              // accélération (px/s²) et frottement (1/s) : vitesse max ≈ 300 px/s
 const DASH_V = 300, DASH_CD = 1.6, DASH_T = .28, DASH_M = 1.7, REST = .95, DT = 1 / 30;
 
 // ---------------------------------------------------------------- Hôte
 export async function startSumo(env) {
   const { R, update, remove, set, onValue, increment, getCode, getLobby, getMe, toast } = env;
-  const c = getCode(), players = (getLobby() || {}).players || {}, ids = Object.keys(players);
-  if (ids.length < 2) return toast("Il faut au moins 2 joueurs pour lancer Sumo Arena");
+  const c = getCode(), lob = getLobby() || {}, players = env.bots ? env.bots(lob) : lob.players || {}, ids = Object.keys(players);
+  const isBot = u => u.indexOf("bot_") === 0;
+  if (ids.length < 2) return toast("Il faut au moins 2 joueurs pour lancer Sumo Arena (ajoute un bot 🤖 dans le lobby)");
   await remove(R(`games/${c}`));
   await update(R(`lobbies/${c}`), { status: "playing" });
 
@@ -43,7 +44,28 @@ export async function startSumo(env) {
     if (k) { P[k].k++; kf.push([`${P[k].n} ➜ ${q.n}`, pubN + 40]); } else kf.push([`${q.n} est tombé`, pubN + 40]);
   };
 
+  // bots : se placent côté centre de l'adversaire pour le pousser vers le bord, reviennent au centre près du bord, chargent parfois
+  const bs = {};
+  const bot = u => {
+    const q = P[u], i = I[u], b = bs[u] || (bs[u] = { k: Math.floor(Math.random() * 5) });
+    if (b.k-- > 0) return; b.k = 3 + Math.floor(Math.random() * 4);   // réagit toutes les 0,1 à 0,2 s
+    let e = null, bd = 1e9;
+    alive().forEach(o => { if (o === u) return; const d = Math.hypot(P[o].x - q.x, P[o].y - q.y); if (d < bd) { bd = d; e = o; } });
+    const dx = CX - q.x, dy = CY - q.y, dc = Math.hypot(dx, dy) || 1;
+    let ax = 0, ay = 0;
+    if (dc > rad - 55) { ax = dx / dc; ay = dy / dc; }                // trop près du bord : retour au centre
+    else if (e) {
+      const E = P[e], od = Math.hypot(E.x - CX, E.y - CY) || 1;
+      const gx = bd > 90 ? E.x + (CX - E.x) / od * BR * 2 : E.x, gy = bd > 90 ? E.y + (CY - E.y) / od * BR * 2 : E.y;
+      const vx = gx - q.x, vy = gy - q.y, vm = Math.hypot(vx, vy) || 1; ax = vx / vm; ay = vy / vm;
+      ax += (Math.random() - .5) * .3; ay += (Math.random() - .5) * .3;
+      if (bd < 105 && q.cd <= 0 && dc < rad - 30 && Math.random() < (od > rad * .45 ? .6 : .3)) i.want = .25; // charge sur un adversaire proche
+    }
+    const m = Math.hypot(ax, ay) || 1, k = m > 1 ? 1 / m : 1; i.ax = ax * k; i.ay = ay * k;
+  };
+
   const step = () => {
+    ids.forEach(u => { if (isBot(u) && P[u].a) bot(u); });
     t += DT;
     if (t >= nextShrink && tgt > RMIN) { tgt = Math.max(RMIN, tgt - SHRINK); nextShrink += EVERY; }
     if (rad > tgt) rad = Math.max(tgt, rad - 24 * DT);
@@ -112,7 +134,7 @@ export async function startSumo(env) {
     if (getCode() !== c) { un(); return; }                // l'hôte a quitté : on arrête tout
     const now = performance.now(); acc = Math.min(.25, acc + (now - last) / 1000); last = now;
     const cp = (getLobby() || {}).players || {};
-    ids.forEach(u => { if (P[u].a && !cp[u]) { P[u].a = 0; kf.push([`${P[u].n} a quitté la partie`, pubN + 40]); } });
+    ids.forEach(u => { if (P[u].a && !cp[u] && !isBot(u)) { P[u].a = 0; kf.push([`${P[u].n} a quitté la partie`, pubN + 40]); } });
     for (let n = 0; acc >= DT && n < 6 && alive().length > 1; n++) { step(); acc -= DT; }
     const al = alive();
     if (al.length <= 1) return finish(al[0]);

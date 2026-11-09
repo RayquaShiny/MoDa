@@ -7,7 +7,7 @@ import {startSumo,createSumoClient} from "./sumo.js";
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="26";
+const VER="27";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -218,6 +218,16 @@ function watchSocial(){
 }
 
 // ---------- Lobby ----------
+// ---------- Bots 🤖 (Battle Royale, Tanks, Sumo Arena : jeux à 2 joueurs minimum) ----------
+const BOTN=["Rex","Zap","Bolt","Nova","Byte","Pixel","Turbo"];
+const isBot=u=>String(u).indexOf("bot_")===0;
+const botGame=l=>!!l&&["br","tk","sumo"].includes(l.game);
+const maxBots=l=>Math.max(0,8-Object.keys((l&&l.players)||{}).length);
+const botCount=l=>botGame(l)?Math.max(0,Math.min(maxBots(l),Math.floor(+((l.opts||{}).bots))||0)):0;
+function withBots(l){ // joueurs réels + bots (ids « bot_1 », « bot_2 »…, jamais écrits dans Firebase)
+  const pl={...((l&&l.players)||{})},used=new Set(Object.values(pl).map(p=>p.color)),n=botCount(l);
+  for(let i=0;i<n;i++){const c=COLORS.find(x=>!used.has(x))||COLORS[i%COLORS.length];used.add(c);pl["bot_"+(i+1)]={name:"🤖 "+BOTN[i],color:c,ready:true}}
+  return pl}
 const rcode=()=>Array.from({length:5},()=>"ABCDEFGHJKLMNPQRSTUVWXYZ"[Math.floor(Math.random()*24)]).join("");
 const firstColor=pl=>COLORS.find(c=>!Object.values(pl||{}).some(p=>p.color===c))||COLORS[0];
 const mkLobby=game=>async()=>{
@@ -261,12 +271,14 @@ function renderLobby(){
   const op=lobby.opts||{};$("oSp").textContent="⚡ Vitesse : "+["lente","normale","rapide"][op.sp??1];
   $("oWr").textContent=op.wr?"🌀 Murs : traversables":"🧱 Murs : mortels";$("oBo").textContent=op.bo===0?"🎁 Bonus : non":"🎁 Bonus : oui";
   ["oSp","oWr","oBo"].forEach(i=>$(i).disabled=!host);
-  const need=lobby.game==="br"||lobby.game==="tk"||lobby.game==="sumo"?2:1,cnt=Object.keys(pl).length,all=Object.values(pl).every(p=>p.ready); // le battle royale ne se lance jamais seul
+  $("botrow").style.display=botGame(lobby)?"":"none";$("oBt").textContent="🤖 Bots : "+nb;$("oBt").disabled=!host;
+  const nb=botCount(lobby),need=lobby.game==="br"||lobby.game==="tk"||lobby.game==="sumo"?2:1,cnt=Object.keys(pl).length+nb,all=Object.values(pl).every(p=>p.ready); // le battle royale ne se lance jamais seul
   $("start").hidden=!host;$("start").disabled=!all||cnt<need;
-  $("lneed").textContent=cnt<need?`⏳ Il faut au moins ${need} joueurs pour lancer la partie (${cnt}/${need}) : invite un pote !`:!all?"En attente que tout le monde soit prêt…":"";
+  $("lneed").textContent=cnt<need?`⏳ Il faut au moins ${need} joueurs pour lancer la partie (${cnt}/${need}) : invite un pote${botGame(lobby)?" ou ajoute un bot 🤖":""} !`:!all?"En attente que tout le monde soit prêt…":"";
 }
 const setOpt=(k,f)=>()=>{if(lobby&&lobby.host===me.uid)update(R(`lobbies/${code}/opts`),{[k]:f(lobby.opts||{})}).catch(err)};
 $("oSp").onclick=setOpt("sp",o=>((o.sp??1)+1)%3);$("oWr").onclick=setOpt("wr",o=>o.wr?0:1);$("oBo").onclick=setOpt("bo",o=>o.bo===0?1:0);
+$("oBt").onclick=()=>{if(!lobby||lobby.host!==me.uid||!botGame(lobby))return;const m=maxBots(lobby),n=botCount(lobby)+1>m?0:botCount(lobby)+1;update(R(`lobbies/${code}/opts`),{bots:n}).catch(err)};
 $("ready").onclick=()=>set(R(`lobbies/${code}/players/${me.uid}/ready`),!lobby.players[me.uid].ready);
 $("leave").onclick=leaveLobby;
 async function leaveLobby(){
@@ -276,7 +288,7 @@ async function leaveLobby(){
 }
 // ---------- Mine Simulator (sim.js + simcore.js) : monde partagé, progression sauvegardée dans users/<uid>/sim ----------
 let sc=null;
-const simEnv=()=>({R,get,set,update,remove,onValue,increment,$,h,toast,beep,show,leave:leaveLobby,getMe:()=>me,getCode:()=>code,getLobby:()=>lobby});
+const simEnv=()=>({R,get,set,update,remove,onValue,increment,$,h,toast,beep,show,leave:leaveLobby,getMe:()=>me,getCode:()=>code,getLobby:()=>lobby,bots:withBots});
 function enterSimGame(c){sc=sc||createSimClient(simEnv());return sc.enter(c)}
 // ---------- Sumo Arena (sumo.js) : l'hôte simule, tout le monde dessine dans le canvas commun ----------
 let su=null;
@@ -1407,8 +1419,8 @@ async function startLab(){
 
 // ---------- Battle Royale (l'hôte simule : 10 images/s, zone qui rétrécit, butin, tirs) ----------
 async function startBr(){
-  const pace=mkPace(),c=code,players=lobby.players,ids=Object.keys(players);
-  if(ids.length<2)return toast("Il faut au moins 2 joueurs pour lancer un battle royale");
+  const pace=mkPace(),c=code,players=withBots(lobby),ids=Object.keys(players);
+  if(ids.length<2)return toast("Il faut au moins 2 joueurs pour lancer un battle royale (ajoute un bot 🤖 dans le lobby)");
   const sd=Math.floor(Math.random()*1e9),map=genMap(sd);
   await remove(R(`games/${c}`));await update(R(`lobbies/${c}`),{status:"playing"});
   const P={},want={},seen={};let B=[],Lt=[],kf=[],nid=1,tk=0,lv=1,sent=-99;
@@ -1442,11 +1454,41 @@ async function startBr(){
     if(a===a&&b===b)want[u]=[Math.max(-1,Math.min(1,a)),Math.max(-1,Math.min(1,b))];
     if(Number.isFinite(g))P[u].ang=g;P[u].fire=sp[3]==="1"?1:0}));
   for(let n=3;n>0;n--){await pub({cd:n});await new Promise(r=>setTimeout(r,1000))}
+  // bots : vont vers la zone, ramassent le butin utile, visent et tirent sur le plus proche s'ils le voient
+  const bm={};
+  const brBot=u=>{
+    const q=P[u],m=bm[u]||(bm[u]={wp:null,t:0,px:q.x,py:q.y,sk:0,off:0,so:0,ig:0});
+    let e=null,bd=1e12;
+    alive().forEach(o=>{if(o===u)return;const d=(P[o].x-q.x)**2+(P[o].y-q.y)**2;if(d<bd){bd=d;e=o}});
+    const d=Math.sqrt(bd),w=WP[q.w];let seen=false;
+    if(e&&d<w[4]*w[5]*.9){const E=P[e];seen=true;for(let i=1;i<8;i++)if(solidAt(map,q.x+(E.x-q.x)*i/8,q.y+(E.y-q.y)*i/8,2)){seen=false;break}}
+    if(Math.hypot(q.x-m.px,q.y-m.py)<2)m.sk++;else m.sk=0;m.px=q.x;m.py=q.y;
+    if(m.sk>=3){m.off=(Math.random()<.5?-1:1)*(1+Math.random());m.so=10;m.sk=0;m.wp=null;m.ig=tk+60} // coincé : contourne
+    let gx=null,gy=null;
+    const storm=Math.hypot(q.x-zx,q.y-zy)>zr*.9||(ph<ZP.length&&(shr||zt<120)&&Math.hypot(q.x-nx,q.y-ny)>nr*.85);
+    if(storm){gx=nx;gy=ny}
+    else if(tk>=m.ig){
+      let bl=null,bld=650*650;
+      Lt.forEach(l=>{const need=l[3]<5?l[3]>q.w:l[3]===5?q.hp<100:q.sh<100;if(!need)return;const dd=(l[1]-q.x)**2+(l[2]-q.y)**2;if(dd<bld){bld=dd;bl=l}});
+      if(bl){gx=bl[1];gy=bl[2]}
+    }
+    if(gx==null&&!seen){if(!m.wp||--m.t<=0||Math.hypot(q.x-m.wp[0],q.y-m.wp[1])<40){m.wp=free(20);m.t=100}gx=m.wp[0];gy=m.wp[1]}
+    let a=0,b=0;
+    if(gx!=null){let h=Math.atan2(gy-q.y,gx-q.x);if(m.so-->0)h+=m.off;a=Math.cos(h);b=Math.sin(h)}
+    else if(seen){const ta=Math.atan2(P[e].y-q.y,P[e].x-q.x),f=d>300?1:d<150?-1:0,sg=(Math.floor(tk/20)+ids.indexOf(u))%2?1:-1;
+      a=Math.cos(ta)*f-Math.sin(ta)*sg*.8;b=Math.sin(ta)*f+Math.cos(ta)*sg*.8}
+    const nm=Math.hypot(a,b);want[u]=nm?[a/nm,b/nm]:[0,0];
+    let ta=q.ang;
+    if(seen||(e&&d<350))ta=Math.atan2(P[e].y-q.y,P[e].x-q.x);else if(nm)ta=Math.atan2(b,a);
+    let da=ta-q.ang;da=Math.atan2(Math.sin(da),Math.cos(da));
+    q.ang+=Math.max(-.5,Math.min(.5,da))+(seen?(Math.random()-.5)*.05:0);
+    q.fire=seen&&Math.abs(da)<.22?1:0;
+  };
   const step=()=>{
     if(code!==c){un();return} // l'hôte a quitté : on arrête tout
     tk++;
     const cp=(lobby&&lobby.players)||{};
-    ids.forEach(u=>{if(P[u].a&&!cp[u])kill(u,null,"a quitté la partie")});
+    ids.forEach(u=>{if(P[u].a&&!cp[u]&&!isBot(u))kill(u,null,"a quitté la partie")});
     // zone
     if(ph<ZP.length){
       if(!shr){if(--zt<=0){shr=true;zt=ZP[ph][1];z0=[zx,zy,zr]}}
@@ -1454,6 +1496,7 @@ async function startBr(){
         if(zt<=0){shr=false;ph++;if(ph<ZP.length){zt=ZP[ph][0];target()}}}
     }
     const zd=ZP[Math.min(ph,ZP.length-1)][3];
+    alive().filter(isBot).forEach(brBot);
     // joueurs : déplacement (avec glissement le long des murs), tir, ramassage, tempête
     alive().forEach(u=>{const q=P[u],[a,b]=want[u],n=a&&b?.707:1,s=11;
       let tx=q.x+a*n*s,ty=q.y+b*n*s;
@@ -1537,8 +1580,8 @@ const TW=800,TH=560;let wallsT=[];
 function isAim(){return gk==="br"||gk==="tk"}
 const tkHit=(W,x,y,r)=>W.some(w=>x+r>w[0]&&x-r<w[0]+w[2]&&y+r>w[1]&&y-r<w[1]+w[3]);
 async function startTk(){
-  const pace=mkPace(),c=code,players=lobby.players,ids=Object.keys(players);
-  if(ids.length<2)return toast("Il faut au moins 2 joueurs pour lancer Tanks");
+  const pace=mkPace(),c=code,players=withBots(lobby),ids=Object.keys(players);
+  if(ids.length<2)return toast("Il faut au moins 2 joueurs pour lancer Tanks (ajoute un bot 🤖 dans le lobby)");
   await remove(R(`games/${c}`));await update(R(`lobbies/${c}`),{status:"playing"});
   const W=[[360,250,80,60]]; // carte symétrique gauche/droite : équitable pour tout le monde
   for(let i=0;i<5;i++){const hz=Math.random()<.5,w=Math.round(hz?70+Math.random()*70:26),hh=Math.round(hz?26:70+Math.random()*70),a=Math.round(110+Math.random()*250),b=Math.round(50+Math.random()*(TH-100-hh));
@@ -1562,10 +1605,28 @@ async function startTk(){
     if(a===a&&b===b)want[u]=[Math.max(-1,Math.min(1,a)),Math.max(-1,Math.min(1,b))];
     if(Number.isFinite(g))P[u].ang=g;P[u].fire=sp[3]==="1"?1:0}));
   for(let n=3;n>0;n--){await pub({cd:n,w:W});await new Promise(r=>setTimeout(r,1000))}
+  // bots : visent le tank le plus proche, gardent leurs distances en tournant autour, tirent quand ils sont alignés
+  const bm={};
+  const tkBot=u=>{
+    const q=P[u],m=bm[u]||(bm[u]={d:Math.random()<.5?1:-1,t:0,px:q.x,py:q.y,sk:0});
+    let e=null,bd=1e12;
+    alive().forEach(o=>{if(o===u)return;const d=(P[o].x-q.x)**2+(P[o].y-q.y)**2;if(d<bd){bd=d;e=o}});
+    if(!e){want[u]=[0,0];q.fire=0;return}
+    const E=P[e],d=Math.sqrt(bd),ta=Math.atan2(E.y-q.y,E.x-q.x);
+    let da=ta-q.ang;da=Math.atan2(Math.sin(da),Math.cos(da));
+    q.ang+=Math.max(-.3,Math.min(.3,da))+(Math.random()-.5)*.06;
+    if(Math.hypot(q.x-m.px,q.y-m.py)<2)m.sk++;else m.sk=0;m.px=q.x;m.py=q.y;
+    if(m.sk>=3||--m.t<=0){m.d=-m.d;m.sk=0;m.t=12+Math.floor(Math.random()*18)}
+    const f=d>240?1:d<130?-1:0;
+    const a=Math.cos(ta)*f-Math.sin(ta)*m.d*.8,b=Math.sin(ta)*f+Math.cos(ta)*m.d*.8,nm=Math.hypot(a,b)||1;
+    want[u]=[a/nm,b/nm];
+    q.fire=Math.abs(da)<.25&&d<520&&Math.random()<.8?1:0;
+  };
   const step=()=>{
     if(code!==c){un();return}
     tk++;const cp=(lobby&&lobby.players)||{};
-    ids.forEach(u=>{if(P[u].a&&!cp[u])kill(u,null,"a quitté la partie")});
+    ids.forEach(u=>{if(P[u].a&&!cp[u]&&!isBot(u))kill(u,null,"a quitté la partie")});
+    alive().filter(isBot).forEach(tkBot);
     alive().forEach(u=>{const q=P[u],[a,b]=want[u],n=a&&b?.707:1,s=9;
       const tx=q.x+a*n*s,ty=q.y+b*n*s;
       if(!tkHit(W,tx,q.y,14))q.x=Math.max(14,Math.min(TW-14,tx));

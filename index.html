@@ -5,7 +5,7 @@
 <meta name="theme-color" content="#14102b">
 <!-- ⚠️ À CONSERVER À CHAQUE MISE À JOUR : à chaque nouvelle version (chaque modification), la version affichée doit faire +1.
      Changer le numéro aux 3 endroits, toujours identique : ce <meta name="moda-v">, `const VER` dans app.js, et `VERSION` dans sw.js. -->
-<meta name="moda-v" content="26">
+<meta name="moda-v" content="27">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -279,6 +279,7 @@ html.neon .adl{border-top-color:#ff1f4b33}
   <h2 id="ltitle">Lobby</h2><div class="code" id="lcode"></div>
   <div id="players"></div>
   <div class="row" id="opts"><button class="alt mini" id="oSp"></button><button class="alt mini" id="oWr"></button><button class="alt mini" id="oBo"></button></div>
+  <div class="row" id="botrow" style="display:none"><button class="alt mini" id="oBt"></button></div>
   <div class="hint" id="lneed" style="margin:8px 0"></div>
   <div class="row"><button id="ready">Prêt</button><button id="start" hidden>Lancer la partie</button><button class="alt" id="leave">Quitter</button></div>
   <p style="color:var(--mute)">Invite un ami avec le bouton « Inviter » de la liste à droite, ou donne-lui le code.</p>

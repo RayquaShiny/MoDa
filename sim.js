@@ -30,7 +30,7 @@ export async function startSim(env) {
   const { R, update, remove, set, increment, getCode } = env, c = getCode();
   await remove(R(`games/${c}`));
   await update(R(`lobbies/${c}`), { status: "playing" });
-  set(R("stats/gamesPlayed"), increment(1)).catch(() => { });
+  if (env.played) env.played("sim", true); else set(R("stats/gamesPlayed"), increment(1)).catch(() => { });
 }
 
 // ----- Client -----

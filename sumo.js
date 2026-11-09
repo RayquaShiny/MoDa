@@ -116,7 +116,7 @@ export async function startSumo(env) {
   };
 
   const finish = w => {
-    un(); set(R("stats/gamesPlayed"), increment(1)).catch(() => { });
+    un(); if (env.played) env.played("sumo"); else set(R("stats/gamesPlayed"), increment(1)).catch(() => { });
     pub({ o: 1, msg: w ? `🏆 ${P[w].n} gagne ! ☠ ${P[w].k}` : "Match nul" });
     setTimeout(async () => {
       if (getCode() !== c) return;                        // l'hôte a quitté entre-temps : on ne recrée rien

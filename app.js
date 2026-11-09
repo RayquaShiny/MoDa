@@ -7,7 +7,7 @@ import {startSumo,createSumoClient} from "./sumo.js";
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="27";
+const VER="28";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -228,11 +228,18 @@ function withBots(l){ // joueurs réels + bots (ids « bot_1 », « bot_2 »…,
   const pl={...((l&&l.players)||{})},used=new Set(Object.values(pl).map(p=>p.color)),n=botCount(l);
   for(let i=0;i<n;i++){const c=COLORS.find(x=>!used.has(x))||COLORS[i%COLORS.length];used.add(c);pl["bot_"+(i+1)]={name:"🤖 "+BOTN[i],color:c,ready:true}}
   return pl}
+const ownTag=()=>me&&me.owner?{ow:1}:{}; // badge 🛡️ affiché en lobby (purement visuel)
+let gStart=Date.now();
+// Compte une partie terminée : total, par jeu (nombre + secondes) et par heure UTC (open=true : partie sans fin, durée ignorée)
+const played=(g,open)=>{const sec=open?0:Math.max(1,Math.round((Date.now()-gStart)/1000)),hr=new Date().getUTCHours();
+  set(R("stats/gamesPlayed"),increment(1)).catch(()=>{});
+  update(R(`stats/byGame/${g}`),{n:increment(1),sec:increment(sec)}).catch(()=>{});
+  set(R(`stats/hours/${hr}`),increment(1)).catch(()=>{})};
 const rcode=()=>Array.from({length:5},()=>"ABCDEFGHJKLMNPQRSTUVWXYZ"[Math.floor(Math.random()*24)]).join("");
 const firstColor=pl=>COLORS.find(c=>!Object.values(pl||{}).some(p=>p.color===c))||COLORS[0];
 const mkLobby=game=>async()=>{
   const c=rcode();
-  await set(R(`lobbies/${c}`),{host:me.uid,game,status:"lobby",opts:{sp:1,wr:0,bo:1},players:{[me.uid]:{name:me.name,color:COLORS[0],ready:true}}});
+  await set(R(`lobbies/${c}`),{host:me.uid,game,status:"lobby",opts:{sp:1,wr:0,bo:1},players:{[me.uid]:{name:me.name,color:COLORS[0],ready:true,...ownTag()}}});
   onDisconnect(R(`lobbies/${c}`)).remove();enter(c);
 };
 $("tsnake").onclick=mkLobby("snake");$("tsurv").onclick=mkLobby("surv");$("tbr").onclick=mkLobby("br");$("ttk").onclick=mkLobby("tk");$("tlab").onclick=mkLobby("lab");$("tsim").onclick=mkLobby("sim");$("tsumo").onclick=mkLobby("sumo");
@@ -245,7 +252,7 @@ async function joinLobby(c){
   if(l.kick&&l.kick[me.uid])return toast("Tu as été retiré de ce lobby par un admin");
   if(l.status!=="lobby"&&l.game!=="sim")return toast("Partie déjà en cours");
   const pl=l.players||{};if(Object.keys(pl).length>=8&&!pl[me.uid])return toast("Lobby plein (8 max)");
-  await set(R(`lobbies/${c}/players/${me.uid}`),{name:me.name,color:firstColor(pl),ready:false});
+  await set(R(`lobbies/${c}/players/${me.uid}`),{name:me.name,color:firstColor(pl),ready:false,...ownTag()});
   onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();enter(c);
 }
 function enter(c){
@@ -255,7 +262,7 @@ function enter(c){
     if(l.kick&&l.kick[me.uid]){if(code){local();toast("Un admin t'a retiré du lobby")}return}
     lobby=l;
     if((l.status==="lobby"||l.game==="sim")&&l.host!==me.uid&&!(l.players&&l.players[me.uid])){ // coupure puis retour : on se réinscrit
-      set(R(`lobbies/${c}/players/${me.uid}`),{name:me.name,color:firstColor(l.players),ready:false});onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();return}
+      set(R(`lobbies/${c}/players/${me.uid}`),{name:me.name,color:firstColor(l.players),ready:false,...ownTag()});onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();return}
     renderLobby();
     if(l.status==="playing"&&cur!=="game")enterGame(c);
     if(l.status==="lobby"&&cur==="game"){unState&&unState();unState=null;show("lobby")}
@@ -264,7 +271,7 @@ function enter(c){
 function renderLobby(){
   const b=$("players"),host=lobby.host===me.uid,pl=lobby.players||{};b.replaceChildren();
   Object.entries(pl).forEach(([u,p])=>{const r=h("div",null);r.className="pl";const sw=h("span");sw.className="sw";sw.style.background=p.color;
-    r.append(sw,h("span",p.name+(u===lobby.host?" (hôte)":"")+(p.wins?` 🏆${p.wins}`:"")),h("span",p.ready?"✔ prêt":"…"));b.append(r)});
+    r.append(sw,h("span",(p.ow?"🛡️ ":"")+p.name+(u===lobby.host?" (hôte)":"")+(p.wins?` 🏆${p.wins}`:"")),h("span",p.ready?"✔ prêt":"…"));b.append(r)});
   $("ready").hidden=host;$("ready").textContent=pl[me.uid]?.ready?"Pas prêt":"Prêt";
   $("ltitle").textContent={snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",tk:"💥 Tanks",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena"}[lobby.game]||"Lobby";
   $("opts").style.display=lobby.game==="snake"?"":"none";
@@ -288,7 +295,7 @@ async function leaveLobby(){
 }
 // ---------- Mine Simulator (sim.js + simcore.js) : monde partagé, progression sauvegardée dans users/<uid>/sim ----------
 let sc=null;
-const simEnv=()=>({R,get,set,update,remove,onValue,increment,$,h,toast,beep,show,leave:leaveLobby,getMe:()=>me,getCode:()=>code,getLobby:()=>lobby,bots:withBots});
+const simEnv=()=>({R,get,set,update,remove,onValue,increment,$,h,toast,beep,show,leave:leaveLobby,getMe:()=>me,getCode:()=>code,getLobby:()=>lobby,bots:withBots,played});
 function enterSimGame(c){sc=sc||createSimClient(simEnv());return sc.enter(c)}
 // ---------- Sumo Arena (sumo.js) : l'hôte simule, tout le monde dessine dans le canvas commun ----------
 let su=null;
@@ -936,6 +943,7 @@ addEventListener("keyup",e=>{if(e.key===" "&&isAim()&&cur==="game"){spDown=0;set
 
 // ---------- Jeu : boucle de l'hôte ----------
 $("start").onclick=async()=>{
+  gStart=Date.now();
   if(lobby.game==="sim")return startSim(simEnv());
   if(lobby.game==="sumo")return startSumo(simEnv());
   if(lobby.game==="surv")return startSurv();
@@ -978,7 +986,7 @@ $("start").onclick=async()=>{
     if(bonus&&food.filter(f=>f[2]).length<2&&(tk===20||Math.random()<.04))food.push([...free(),Math.random()<.65?1:2,100]);
     const left=Object.keys(snakes).filter(u=>snakes[u].a);
     if(ids.length>1?left.length<=1:left.length===0){
-      un();set(R("stats/gamesPlayed"),increment(1)).catch(()=>{});pub({o:1,w:left[0]?snakes[left[0]].n:null});
+      un();played("snake");pub({o:1,w:left[0]?snakes[left[0]].n:null});
       setTimeout(async()=>{const cp=(lobby&&lobby.players)||{},up={status:"lobby"};
         ids.filter(u=>cp[u]).forEach(u=>up[`players/${u}/ready`]=u===me.uid);
         if(ids.length>1&&left[0]&&cp[left[0]])up[`players/${left[0]}/wins`]=(cp[left[0]].wins||0)+1;
@@ -1027,7 +1035,7 @@ async function startSurv(){
       if(!t)return;const d=Math.sqrt(bd)||1;m[1]+=(t.x-m[1])/d*SPD[m[4]];m[2]+=(t.y-m[2])/d*SPD[m[4]];
       if(d<RAD[m[4]]+13&&t.inv<=0){t.hp--;t.inv=12;if(t.hp<=0)t.a=0}});
     if(!ids.some(u=>P[u].a)){
-      un();set(R("stats/gamesPlayed"),increment(1)).catch(()=>{});pub({o:1,msg:`Défaite à la vague ${wv} · ☠ ${kills}`});
+      un();played("surv");pub({o:1,msg:`Défaite à la vague ${wv} · ☠ ${kills}`});
       setTimeout(async()=>{const cp=(lobby&&lobby.players)||{},u2={status:"lobby"};ids.filter(u=>cp[u]).forEach(u=>u2[`players/${u}/ready`]=u===me.uid);try{await update(R(`lobbies/${c}`),u2)}catch{}},6000);
       return;
     }
@@ -1408,7 +1416,7 @@ async function startLab(){
       act.forEach(u=>{P[u].ex=all&&near(u,exx,eyy,30)?1:0});
       if(all&&act.length&&act.every(u=>P[u].ex)){clr=1;brk=25;msg=`Niveau ${lv} réussi !`}
       if(lives<=0){
-        un();set(R("stats/gamesPlayed"),increment(1)).catch(()=>{});pub({o:1,lf:0,msg:`Défaite au niveau ${lv} · ${lv-1} réussi${lv>2?"s":""}`});
+        un();played("lab");pub({o:1,lf:0,msg:`Défaite au niveau ${lv} · ${lv-1} réussi${lv>2?"s":""}`});
         setTimeout(async()=>{const cp2=(lobby&&lobby.players)||{},u2={status:"lobby"};ids.filter(u=>cp2[u]).forEach(u=>u2[`players/${u}/ready`]=u===me.uid);try{await update(R(`lobbies/${c}`),u2)}catch{}},6000);
         return}
     }
@@ -1525,7 +1533,7 @@ async function startBr(){
     kf=kf.filter(e=>e[1]>tk);
     const al=alive();
     if(al.length<=1){
-      un();set(R("stats/gamesPlayed"),increment(1)).catch(()=>{});
+      un();played("br");
       const w=al[0];pub({o:1,msg:w?`🏆 ${P[w].n} gagne ! ☠ ${P[w].k}`:"Match nul"});
       setTimeout(async()=>{const cp2=(lobby&&lobby.players)||{},up={status:"lobby"};
         ids.filter(u=>cp2[u]).forEach(u=>up[`players/${u}/ready`]=u===me.uid);
@@ -1548,7 +1556,7 @@ let stD={};
 function stopStats(){unStats.forEach(f=>f());unStats=[]}
 function startStats(){
   stopStats();const D=stD={};
-  [["presence","presence"],["users","users"],["lobbies","lobbies"],["friends","friends"],["stats/gamesPlayed","games"]]
+  [["presence","presence"],["users","users"],["lobbies","lobbies"],["friends","friends"],["stats/gamesPlayed","games"],["stats/byGame","byGame"],["stats/hours","hours"]]
     .forEach(([p,k])=>unStats.push(onValue(R(p),s=>{D[k]=s.val();renderStats(D);renderAdmin(D)},()=>toast("Statistiques : accès refusé, vérifie les règles"))));
 }
 function renderStats(D){
@@ -1563,6 +1571,17 @@ function renderStats(D){
   $("stbar").hidden=!nUsers;$("stfill").style.width=Math.round(100*online.length/Math.max(1,nUsers))+"%";
   $("stpct").textContent=`${Math.round(100*online.length/Math.max(1,nUsers))} % des comptes en ligne`;
   $("stgrid2").replaceChildren(...[["🚪",open.length,"lobbys ouverts"],["🎯",playing.length,"parties en cours"],["🕹️",inLob,"joueurs en lobby / partie"],["🏁",D.games||0,"parties jouées"],["🤝",Object.values(fr).reduce((s,f)=>s+Object.keys(f||{}).length,0)/2,"amitiés"]].map(card));
+  const bg=D.byGame||{},totG=Object.values(bg).reduce((a,g)=>a+((g&&g.n)||0),0)||1;
+  $("stgames").replaceChildren(...Object.entries(GN).map(([k,[ic,nm]])=>[ic,nm,bg[k]||{}]).sort((a,b)=>(b[2].n||0)-(a[2].n||0)).map(([ic,nm,g])=>{
+    const n=g.n||0,avg=n&&g.sec?Math.round(g.sec/n):0,du=avg?(avg>=60?`${Math.floor(avg/60)} min ${String(avg%60).padStart(2,"0")} s`:`${avg} s`):"—";
+    const r=h("div");r.className="lrow";const t=h("span",`${ic} ${nm}`);t.className="g";
+    r.append(t,h("small",`${n} partie${n>1?"s":""} · ${Math.round(100*n/totG)} % · durée moy. ${du}`));return r}));
+  const hr=D.hours||{},off=Math.round(-new Date().getTimezoneOffset()/60),L=Array(24).fill(0);
+  for(let u=0;u<24;u++)L[(u+off+24)%24]+=+(hr[u]||0);
+  const mx=Math.max(1,...L),box=h("div");box.style.cssText="display:flex;align-items:flex-end;gap:3px;height:80px;margin-top:8px";
+  L.forEach((v,i)=>{const b=h("div");b.style.cssText=`flex:1;border-radius:4px 4px 0 0;background:linear-gradient(var(--b),var(--a));height:${Math.max(4,Math.round(v/mx*100))}%;opacity:${v?1:.25}`;b.title=`${i} h : ${v} partie${v>1?"s":""}`;box.append(b)});
+  const ax=h("div");ax.style.cssText="display:flex;justify-content:space-between;color:var(--mute);font-size:12px;margin-top:4px";["0 h","6 h","12 h","18 h","24 h"].forEach(t=>ax.append(h("span",t)));
+  $("sthours").replaceChildren(box,ax);
   $("onlh").textContent=`En ligne maintenant (${online.length})`;
   $("onl").replaceChildren(...(online.length?online.map(u=>{const c=h("span");c.className="chip";const p=h("i");p.className="on";c.append(p,us[u]?.name||"?");return c}):[h("span","Personne pour l'instant")]));
   const rows=[...playing,...open].map(([c,l])=>{const g=GN[l.game]||["🎲",l.game||"Jeu"],n=Object.keys(l.players||{}).length,r=h("div");r.className="lrow";
@@ -1651,7 +1670,7 @@ async function startTk(){
     kf=kf.filter(e=>e[1]>tk);
     const al=alive();
     if(al.length<=1){
-      un();set(R("stats/gamesPlayed"),increment(1)).catch(()=>{});
+      un();played("tk");
       const w=al[0];pub({o:1,msg:w?`🏆 ${P[w].n} gagne ! ☠ ${P[w].k}`:"Match nul"});
       setTimeout(async()=>{const cp2=(lobby&&lobby.players)||{},up={status:"lobby"};
         ids.filter(u=>cp2[u]).forEach(u=>up[`players/${u}/ready`]=u===me.uid);
@@ -1816,7 +1835,7 @@ $("adAll").onclick=async()=>{const cs=Object.keys(stD.lobbies||{});
   if(!cs.length||!confirm(`Fermer les ${cs.length} lobby(s) ? Les parties en cours s'arrêtent pour tout le monde.`))return;
   try{await Promise.all(cs.flatMap(c=>[remove(R(`games/${c}`)),remove(R(`lobbies/${c}`))]));toast("Tous les lobbys sont fermés")}catch{admErr()}};
 $("adReset").onclick=async()=>{if(!confirm("Remettre le compteur « parties jouées » à zéro ?"))return;
-  try{await set(R("stats/gamesPlayed"),0);toast("Compteur remis à zéro")}catch{admErr()}};
+  try{await set(R("stats/gamesPlayed"),0);await remove(R("stats/byGame"));await remove(R("stats/hours"));toast("Statistiques remises à zéro")}catch{admErr()}};
 function renderAdmin(D){
   if(!me||!me.owner)return;
   const GN={tk:"💥 Tanks",snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator"};

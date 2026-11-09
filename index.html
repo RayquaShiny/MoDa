@@ -5,7 +5,7 @@
 <meta name="theme-color" content="#14102b">
 <!-- ⚠️ À CONSERVER À CHAQUE MISE À JOUR : à chaque nouvelle version (chaque modification), la version affichée doit faire +1.
      Changer le numéro aux 3 endroits, toujours identique : ce <meta name="moda-v">, `const VER` dans app.js, et `VERSION` dans sw.js. -->
-<meta name="moda-v" content="27">
+<meta name="moda-v" content="28">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -261,7 +261,9 @@ html.neon .adl{border-top-color:#ff1f4b33}
   <div class="panel"><div class="sthead"><h2>Statistiques</h2><span class="live"><i></i><span id="stup">en direct</span></span></div>
    <h3 class="stsec">👥 Comptes</h3><div class="stgrid" id="stgrid"></div>
    <div class="bar" id="stbar" hidden><div><i id="stfill"></i></div><span id="stpct"></span></div>
-   <h3 class="stsec">🎮 Activité</h3><div class="stgrid" id="stgrid2"></div></div>
+   <h3 class="stsec">🎮 Activité</h3><div class="stgrid" id="stgrid2"></div>
+   <h3 class="stsec">📈 Par jeu</h3><div id="stgames"></div>
+   <h3 class="stsec">🕒 Heures de jeu <small>(ton fuseau horaire)</small></h3><div id="sthours"></div></div>
   <div class="panel"><h3 id="onlh">En ligne maintenant</h3><div id="onl"></div></div>
   <div class="panel"><h3>Lobbys et parties</h3><div id="stlob"></div></div>
   <div class="panel"><h3>Derniers inscrits</h3><div id="stnew"></div></div>

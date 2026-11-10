@@ -4,33 +4,27 @@
    Firebase : la progression de chacun est sauvegardée dans users/<uid>/fruit ; les positions passent par
    games/<code>/inputs/<uid> (même principe que le Mine Simulator). */
 import * as C from "./fruitcore.js";
-const { FRUITS, RAR, ZONES, WORLD, PADS, BAGS, BOOTS, fmt } = C;
+const { FRUITS, RAR, ZONES, WORLD, PADS, BAGS, BOOTS, PLOTS, SPOTS, BLOCKS, BRIDGE, HIDDEN, fmt } = C;
 
 const RANGE = 72, NEAR = 100, SAVE_EVERY = 8000, SEND_EVERY = 110;
 const BAGCOL = ["#9aa0a6", "#3fb950", "#e53935"];
 
-// Les arbres sont les mêmes pour tout le monde (graine commune) mais chacun cueille les siens
+// Les décors (arbres, cactus) sont les mêmes pour tout le monde (graine commune)
 const rng = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
-export function genTrees() {
-  const out = [], r = rng(4321);
-  [1, 2].forEach(zi => {
-    const list = []; Object.entries(C.TREES[zi]).forEach(([id, n]) => { for (let i = 0; i < n; i++) list.push(id); });
-    for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
-    const z = ZONES[zi].r, pts = [];
-    list.forEach(id => {
-      let p = null, tries = 0;
-      while (tries++ < 500) {
-        const X = z.x + 80 + r() * (z.w - 160), Y = z.y + 110 + r() * (z.h - 170);
-        if (Math.abs(Y - 640) < 70 && (X < z.x + 140 || X > z.x + z.w - 140)) continue; // on laisse le passage libre vers le Spawn
-        if (pts.every(q => (q.x - X) ** 2 + (q.y - Y) ** 2 > 130 * 130)) { p = { x: X, y: Y }; break; }
-      }
-      if (!p) p = { x: z.x + 80 + r() * (z.w - 160), y: z.y + 110 + r() * (z.h - 170) };
-      pts.push(p); out.push({ z: zi, id, x: p.x, y: p.y, f: [0, 0, 0] }); // f[i] = 0 : fruit mûr, sinon heure de repousse
-    });
+const randIn = (z, r) => { const A = z.rects.map(q => q.w * q.h), tot = A.reduce((a, b) => a + b, 0); let t = r() * tot, i = 0; while (i < A.length - 1 && t >= A[i]) { t -= A[i]; i++; } const q = z.rects[i]; return { x: q.x + r() * q.w, y: q.y + r() * q.h }; };
+const okSpot = (X, Y, m) => [[0, 0], [m, 0], [-m, 0], [0, m], [0, -m]].every(([a, b]) => C.walkable(null, X + a, Y + b)) && !C.onSpot(X, Y, m);
+const segD = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], l = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((p.x - a[0]) * dx + (p.y - a[1]) * dy) / l)); return Math.hypot(p.x - a[0] - t * dx, p.y - a[1] - t * dy); };
+const nearPath = (p, d) => C.PATHS.some(P => P.some((q, i) => i && segD(p, P[i - 1], q) < d));
+const pickW = (w, r) => { let t = Object.values(w).reduce((a, b) => a + b, 0) * r, k; for (k in w) { t -= w[k]; if (t < 0) return k; } return k; };
+export function genDecor() {
+  const r = rng(4321), out = [];
+  [["forest", 36, "tree"], ["desert", 30, "cactus"]].forEach(([id, n, k]) => {
+    const z = ZONES.find(q => q.id === id), pts = []; let tries = 0;
+    while (pts.length < n && tries++ < 4000) { const p = randIn(z, r); if (okSpot(p.x, p.y, 36) && !nearPath(p, 46) && pts.every(q => (q.x - p.x) ** 2 + (q.y - p.y) ** 2 > 120 * 120)) pts.push(p); }
+    pts.forEach(p => out.push({ k, x: p.x, y: p.y, v: Math.floor(r() * 3) }));
   });
   return out;
 }
-const inRect = (x, y, r, m = 0) => x > r.x - m && x < r.x + r.w + m && y > r.y - m && y < r.y + r.h + m;
 
 // ----- Hôte : ouvre la partie (chaque joueur gère sa propre progression) -----
 export async function startFruit(env) {
@@ -68,7 +62,7 @@ body[data-g=fruit] #pad,body[data-g=fruit] #gctl{display:none!important}
 export function createFruitClient(env) {
   const { R, get, set, onValue, $, h, toast, beep, getMe, getCode, getLobby } = env;
   const cv = $("cv"), x = cv.getContext("2d"), mod = $("smod");
-  const trees = [];
+  const items = []; let decor = [];
   let active = false, loaded = false, raf = 0, last = 0, s = C.fresh(), dirty = false, saveT = 0, sendT = 0, hudT = 0;
   let px = C.SPAWN.x, py = C.SPAWN.y, face = 1, mv = false, sel = null, fullMsgAt = 0, uiKey = "", camX = 1000, camY = 600, camOK = false, near = {}, tgt = null, holding = false;
   const keys = new Set(), floats = [], fx = [], others = {};
@@ -79,6 +73,16 @@ export function createFruitClient(env) {
   const path = () => R(`users/${me().uid}/fruit`);
   function save(now) { if (!loaded || !dirty && !now) return; dirty = false; saveT = performance.now(); set(path(), { ...s, inv: { ...s.inv }, ts: Date.now() }).catch(() => { }); }
   const touch = () => { dirty = true; };
+
+  // ---------- fruits posés au sol ----------
+  function spawnItem(it) {
+    for (let t = 0; t < 300; t++) {
+      const p = randIn(it.zone, Math.random); if (!okSpot(p.x, p.y, 34)) continue;
+      if (items.some(o => o !== it && !o.back && (o.x - p.x) ** 2 + (o.y - p.y) ** 2 < 90 * 90)) continue;
+      it.x = p.x; it.y = p.y; break;
+    }
+    it.id = pickW(it.zone.fruit.w, Math.random()); it.back = 0;
+  }
 
   // ---------- positions des autres joueurs ----------
   function parse(u, v) {
@@ -114,7 +118,7 @@ export function createFruitClient(env) {
     if (near.sell && id) { const g = C.stackGain(s, id), a = C.allGain(s); p.push(["E", `Vendre ${FRUITS[id].n} (x${g.n}) · ${fmt(g.coins)} pièces${g.tickets ? " & " + g.tickets + " tickets" : ""}`, "E"]); p.push(["F", `Tout vendre · ${fmt(a.coins)} pièces${a.tickets ? " & " + a.tickets + " tickets" : ""}`, "F"]); }
     else if (near.sell) p.push(["", "Rien à vendre : cueille des fruits !", "", 1]);
     else if (near.shop) p.push(["E", "Ouvrir Mike's Market", "E"]);
-    else if (near.tree) p.push(["E", `Cueillir ${FRUITS[near.tree.id].e} ${FRUITS[near.tree.id].n}`, "E"]);
+    else if (near.item) p.push(["E", `Ramasser ${FRUITS[near.item.id].e} ${FRUITS[near.item.id].n}`, "E"]);
     else if (tgt === "full") p.push(["", `Sac plein (${n}/${cap}) : va vendre !`, "", 1]);
     const key = [st.map(k => k + s.inv[k]).join(), id, cap, n, p.map(q => q[1]).join("|")].join("#");
     if (!force && key === uiKey) return; uiKey = key;
@@ -143,12 +147,11 @@ export function createFruitClient(env) {
     if (k === "E") {
       if (near.sell) { const id = selId(); if (id) afterSale(C.sellStack(s, id), PADS.sell.x, PADS.sell.y); }
       else if (near.shop) openShop();
-      else if (near.tree) {
-        const t = near.tree, i = t.f.findIndex(v => v === 0);
-        if (i < 0) return;
-        if (!C.pick(s, t.id)) { float(px, py - 70, "Sac plein !", "#ff4d6d"); beep(180, .15, "sawtooth", .04); return; }
-        t.f[i] = performance.now() + C.REGROW[FRUITS[t.id].r]; touch(); float(t.x, t.y - 70, `+1 ${FRUITS[t.id].e}`, "#fff"); beep(620, .06, "triangle", .04, 900);
-        sel = t.id; renderUI(true);
+      else if (near.item) {
+        const it = near.item;
+        if (!C.pick(s, it.id)) { float(px, py - 70, "Sac plein !", "#ff4d6d"); beep(180, .15, "sawtooth", .04); return; }
+        it.back = performance.now() + C.RESPAWN[FRUITS[it.id].r]; touch(); float(it.x, it.y - 40, `+1 ${FRUITS[it.id].e}`, "#fff"); beep(620, .06, "triangle", .04, 900);
+        sel = it.id; renderUI(true);
       }
     } else if (k === "F" && near.sell) { const g = C.sellAll(s); if (g) afterSale(g, PADS.sell.x, PADS.sell.y); }
   }
@@ -209,19 +212,18 @@ export function createFruitClient(env) {
     let ax = (keys.has("R") ? 1 : 0) - (keys.has("L") ? 1 : 0), ay = (keys.has("D") ? 1 : 0) - (keys.has("U") ? 1 : 0);
     if (stick && !ax && !ay) { ax = Math.abs(stick.dx) > .15 ? stick.dx : 0; ay = Math.abs(stick.dy) > .15 ? stick.dy : 0; }
     const m = Math.hypot(ax, ay); if (m > 1) { ax /= m; ay /= m; }
-    const sp = C.speed(s), nx = Math.max(30, Math.min(WORLD.w - 30, px + ax * sp * dt)), ny = Math.max(90, Math.min(WORLD.h - 70, py + ay * sp * dt));
-    const locked = (X, Y) => ZONES.some((z, i) => !C.zoneOpen(s, i) && inRect(X, Y, z.r, 14));
-    if (!locked(nx, py)) px = nx; if (!locked(px, ny)) py = ny;
+    const sp = C.speed(s), nx = px + ax * sp * dt, ny = py + ay * sp * dt;
+    if (C.walkable(s, nx, py)) px = nx; if (C.walkable(s, px, ny)) py = ny;
     if (ax) face = ax > 0 ? 1 : -1; mv = !!(ax || ay);
-    // repousse des fruits
-    for (const t of trees) for (let i = 0; i < C.MAXFRUIT; i++) if (t.f[i] && now >= t.f[i]) t.f[i] = 0;
+    // les fruits ramassés réapparaissent ailleurs dans leur zone
+    for (const it of items) if (it.back && now >= it.back) spawnItem(it);
     // ce qui est à portée
     near = {}; tgt = null;
     near.sell = (PADS.sell.x - px) ** 2 + (PADS.sell.y - py) ** 2 < NEAR * NEAR;
     near.shop = (PADS.shop.x - px) ** 2 + (PADS.shop.y - py) ** 2 < NEAR * NEAR;
     let bd = RANGE * RANGE;
-    for (const t of trees) { if (!t.f.includes(0)) continue; const d = (t.x - px) ** 2 + (t.y - py) ** 2; if (d < bd) { bd = d; near.tree = t; } }
-    if (near.tree && C.count(s) >= C.capacity(s)) { tgt = "full"; near.tree = null; }
+    for (const it of items) { if (it.back) continue; const d = (it.x - px) ** 2 + (it.y - py) ** 2; if (d < bd) { bd = d; near.item = it; } }
+    if (near.item && C.count(s) >= C.capacity(s)) { tgt = "full"; near.item = null; }
     if (!near.shop && mod.hidden === false) closeShop();
     floats.forEach(f => { f.y -= 38 * dt; f.l -= dt * .9; }); for (let i = floats.length - 1; i >= 0; i--) if (floats[i].l <= 0) floats.splice(i, 1);
     for (let i = fx.length - 1; i >= 0; i--) { const p = fx[i]; p.l -= dt * 1.4; p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; if (p.l <= 0) fx.splice(i, 1); }
@@ -243,27 +245,42 @@ export function createFruitClient(env) {
   const mk = (w, hh) => { const c = document.createElement("canvas"); c.width = w; c.height = hh; return c; };
   let worldC = null;
   function buildWorld() {
-    const c = mk(WORLD.w, WORLD.h), g = c.getContext("2d"), W = WORLD.w, H = WORLD.h;
-    g.fillStyle = "#2d6a35"; g.fillRect(0, 0, W, H);
-    const zone = (r, base, stud) => { g.fillStyle = base; g.fillRect(r.x, r.y, r.w, r.h); g.fillStyle = stud; for (let yy = r.y; yy < r.y + r.h; yy += 40) for (let xx = r.x; xx < r.x + r.w; xx += 40) { g.fillRect(xx + 11, yy + 11, 18, 18); } };
-    zone(ZONES[1].r, "#4cc556", "#46b950"); zone(ZONES[0].r, "#5fdc66", "#58d15f"); zone(ZONES[2].r, "#f1d87b", "#e8cd6c");
-    const r = rng(7);
-    // dalles de pierre : chemin du Spawn vers la Forêt et le Désert, et jusqu'au coffre et à la boutique
-    const slab = (X, Y) => { g.fillStyle = "#5d5d68"; g.fillRect(X - 22, Y - 14, 44, 30); g.fillStyle = "#7c7c88"; g.fillRect(X - 22, Y - 14, 44, 24); g.fillStyle = "#8b8b97"; g.fillRect(X - 22, Y - 14, 44, 5); };
-    for (let X = 300; X <= 1700; X += 58) slab(X, 640 + (r() - .5) * 16);
-    for (let Y = 545; Y <= 735; Y += 46) slab(1000 + (r() - .5) * 10, Y);
-    // clôture du Spawn (avec un passage de chaque côté)
-    const fence = X => { for (let Y = 90; Y < 1110; Y += 36) { if (Y > 540 && Y < 730) continue; g.fillStyle = "#8a4b1f"; g.fillRect(X - 5, Y - 22, 10, 30); g.fillStyle = "#a8622c"; g.fillRect(X - 5, Y - 22, 10, 6); g.fillStyle = "#6e3a15"; g.fillRect(X - 3, Y - 14, 6, 4); g.fillRect(X - 3, Y, 6, 4); } };
-    fence(ZONES[0].r.x); fence(ZONES[0].r.x + ZONES[0].r.w);
+    const c = mk(WORLD.w, WORLD.h), g = c.getContext("2d"), r = rng(7);
+    g.fillStyle = "#3b3e46"; g.fillRect(0, 0, WORLD.w, WORLD.h);
+    // falaises tout autour des zones et des parties cachées
+    g.fillStyle = "#6e7992"; ZONES.forEach(z => z.rects.forEach(q => g.fillRect(q.x - 24, q.y - 24, q.w + 48, q.h + 48)));
+    g.fillStyle = "#55607a"; HIDDEN.forEach(q => g.fillRect(q.x, q.y, q.w, q.h)); g.fillStyle = "#7e89a3"; HIDDEN.forEach(q => g.fillRect(q.x, q.y, q.w, 14));
+    const COL = { spawn: ["#4fbf5c", "#47b454"], forest: ["#5ccc66", "#54c25e"], desert: ["#efd57a", "#e6c869"], autumn: ["#e5906a", "#dc8660"], tundra: ["#d6e8f7", "#c9def0"] };
+    ZONES.forEach(z => z.rects.forEach(q => { g.fillStyle = COL[z.id][0]; g.fillRect(q.x, q.y, q.w, q.h); g.fillStyle = COL[z.id][1]; for (let yy = Math.ceil(q.y / 40) * 40; yy < q.y + q.h; yy += 40) for (let xx = Math.ceil(q.x / 40) * 40; xx < q.x + q.w; xx += 40) g.fillRect(xx + 11, yy + 11, 18, 18); }));
+    // parcelles des joueurs (damier)
+    PLOTS.forEach(q => { const n = 29; for (let yy = 0; yy < q.h; yy += n) for (let xx = 0; xx < q.w; xx += n) { g.fillStyle = ((xx / n | 0) + (yy / n | 0)) % 2 ? "#e0a07e" : "#c47a55"; g.fillRect(q.x + xx, q.y + yy, Math.min(n, q.w - xx), Math.min(n, q.h - yy)); } g.strokeStyle = "#8a4f33"; g.lineWidth = 4; g.strokeRect(q.x, q.y, q.w, q.h); });
+    // Forêt : bac de sable, petite cabane, cube blanc ; Désert : oasis ; Toundra : glace, ladder, station ; Forêt d'automne : arbres orange
+    const P = SPOTS; g.fillStyle = "#b57a43"; g.fillRect(P.pit.x, P.pit.y, P.pit.w, P.pit.h); g.fillStyle = "#e3b87d"; g.fillRect(P.pit.x + 16, P.pit.y + 16, P.pit.w - 32, P.pit.h - 32);
+    g.fillStyle = "#0003"; g.fillRect(P.hut.x + 6, P.hut.y + 8, P.hut.w, P.hut.h); g.fillStyle = "#8a5a35"; g.fillRect(P.hut.x, P.hut.y, P.hut.w, P.hut.h); g.fillStyle = "#a8703f"; g.fillRect(P.hut.x, P.hut.y, P.hut.w, 14);
+    g.fillStyle = "#0003"; g.fillRect(P.white.x + 6, P.white.y + 8, P.white.w, P.white.h); g.fillStyle = "#f4f4f6"; g.fillRect(P.white.x, P.white.y, P.white.w, P.white.h); g.fillStyle = "#d8d8de"; g.fillRect(P.white.x, P.white.y + P.white.h - 10, P.white.w, 10);
+    g.fillStyle = "#d9b66a"; g.fillRect(P.oasis.x - 10, P.oasis.y - 10, P.oasis.w + 20, P.oasis.h + 20); g.fillStyle = "#4a90e2"; g.fillRect(P.oasis.x, P.oasis.y, P.oasis.w, P.oasis.h);
+    g.fillStyle = "#7aa7e8"; g.fillRect(P.ice.x, P.ice.y, P.ice.w, P.ice.h); g.fillStyle = "#fff"; g.fillRect(P.station.x, P.station.y, P.station.w, P.station.h); g.fillStyle = "#5a63c8"; g.fillRect(P.station.x + 16, P.station.y + 16, P.station.w - 32, P.station.h - 32);
+    g.fillStyle = "#7a4a21"; g.fillRect(P.ladder.x, P.ladder.y, P.ladder.w, P.ladder.h); g.fillStyle = "#b9803f"; for (let yy = P.ladder.y + 8; yy < P.ladder.y + P.ladder.h; yy += 22) g.fillRect(P.ladder.x - 6, yy, P.ladder.w + 12, 8);
+    const au = ZONES[3].rects[0], tu = ZONES[4].rects[0];
+    for (let i = 0; i < 26; i++) { g.fillStyle = "#f0b13a"; g.beginPath(); g.arc(au.x + 40 + r() * (au.w - 80), au.y + 40 + r() * (au.h - 80), 22, 0, 7); g.fill(); }
+    for (let i = 0; i < 24; i++) { g.fillStyle = "#3ab549"; g.fillRect(tu.x + 30 + r() * (tu.w - 80), tu.y + 30 + r() * (tu.h - 80), 34, 34); }
+    // rivière + pont
+    g.fillStyle = "#4a90e2"; BLOCKS.slice(3).forEach(b => g.fillRect(b.x, b.y, b.w, b.h)); g.fillStyle = "#6aa8ee"; BLOCKS.slice(3).forEach(b => { for (let xx = b.x + 16; xx < b.x + b.w - 20; xx += 46) g.fillRect(xx, b.y + 14, 22, 5); });
+    g.fillStyle = "#7a4a21"; g.fillRect(BRIDGE.x, BRIDGE.y, BRIDGE.w, BRIDGE.h); g.fillStyle = "#a8692f"; for (let yy = BRIDGE.y + 4; yy < BRIDGE.y + BRIDGE.h; yy += 12) g.fillRect(BRIDGE.x + 2, yy, BRIDGE.w - 4, 9);
+    // murs de falaise avec leurs passages
+    g.fillStyle = "#6e7992"; BLOCKS.slice(0, 3).forEach(b => g.fillRect(b.x, b.y, b.w, b.h)); g.fillStyle = "#8a96b0"; BLOCKS.slice(0, 3).forEach(b => g.fillRect(b.x, b.y, 4, b.h));
+    // dalles de pierre
+    const slab = (X, Y) => { g.fillStyle = "#5d5d68"; g.fillRect(X - 18, Y - 12, 36, 26); g.fillStyle = "#7c7c88"; g.fillRect(X - 18, Y - 12, 36, 20); g.fillStyle = "#8b8b97"; g.fillRect(X - 18, Y - 12, 36, 4); };
+    C.PATHS.forEach(Pp => Pp.forEach((q, i) => { if (!i) return; const a = Pp[i - 1], d = Math.hypot(q[0] - a[0], q[1] - a[1]), n = Math.max(1, Math.round(d / 52)); for (let k = 0; k < n; k++) slab(a[0] + (q[0] - a[0]) * k / n + (r() - .5) * 8, a[1] + (q[1] - a[1]) * k / n + (r() - .5) * 8); }));
     // tuile d'apparition (étoile)
     g.fillStyle = "#f4f4f4"; g.fillRect(C.SPAWN.x - 34, C.SPAWN.y - 28, 68, 56); g.fillStyle = "#111"; g.beginPath();
     for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rad = i % 2 ? 7 : 19; g[i ? "lineTo" : "moveTo"](C.SPAWN.x + Math.cos(a) * rad, C.SPAWN.y + Math.sin(a) * rad); } g.closePath(); g.fill();
     // coffre « SELL HERE »
-    const P = PADS.sell; g.fillStyle = "#0003"; g.beginPath(); g.ellipse(P.x, P.y + 40, 70, 14, 0, 0, 7); g.fill();
-    g.fillStyle = "#8f4a1e"; g.fillRect(P.x - 58, P.y - 22, 116, 62); g.fillStyle = "#b9632a"; g.fillRect(P.x - 58, P.y - 40, 116, 24);
-    g.fillStyle = "#7a3d16"; for (let i = 0; i < 6; i++) g.fillRect(P.x - 58 + i * 19.5, P.y - 22, 3, 62); g.fillStyle = "#d28a4a"; g.fillRect(P.x - 58, P.y - 40, 116, 5);
-    g.fillStyle = "#3a2410"; g.fillRect(P.x - 9, P.y - 28, 18, 16);
-    g.font = "800 24px system-ui,sans-serif"; g.textAlign = "center"; g.lineJoin = "round"; g.lineWidth = 6; g.strokeStyle = "#fff"; g.strokeText("SELL HERE", P.x, P.y - 54); g.fillStyle = "#111"; g.fillText("SELL HERE", P.x, P.y - 54);
+    const S = PADS.sell; g.fillStyle = "#0003"; g.beginPath(); g.ellipse(S.x, S.y + 40, 70, 14, 0, 0, 7); g.fill();
+    g.fillStyle = "#8f4a1e"; g.fillRect(S.x - 58, S.y - 22, 116, 62); g.fillStyle = "#b9632a"; g.fillRect(S.x - 58, S.y - 40, 116, 24);
+    g.fillStyle = "#7a3d16"; for (let i = 0; i < 6; i++) g.fillRect(S.x - 58 + i * 19.5, S.y - 22, 3, 62); g.fillStyle = "#d28a4a"; g.fillRect(S.x - 58, S.y - 40, 116, 5);
+    g.fillStyle = "#3a2410"; g.fillRect(S.x - 9, S.y - 28, 18, 16);
+    g.font = "800 24px system-ui,sans-serif"; g.textAlign = "center"; g.lineJoin = "round"; g.lineWidth = 6; g.strokeStyle = "#fff"; g.strokeText("SELL HERE", S.x, S.y - 54); g.fillStyle = "#111"; g.fillText("SELL HERE", S.x, S.y - 54);
     // Mike's Market
     const M = PADS.shop; g.fillStyle = "#0003"; g.beginPath(); g.ellipse(M.x, M.y + 46, 88, 14, 0, 0, 7); g.fill();
     g.fillStyle = "#7a4a21"; g.fillRect(M.x - 74, M.y - 6, 8, 52); g.fillRect(M.x + 66, M.y - 6, 8, 52);
@@ -274,17 +291,22 @@ export function createFruitClient(env) {
     return c;
   }
   function label(t, X, Y, col = "#fff", size = 13) { x.font = `800 ${size}px system-ui,sans-serif`; x.textAlign = "center"; x.lineJoin = "round"; x.lineWidth = 4; x.strokeStyle = "#000b"; x.strokeText(t, X, Y); x.fillStyle = col; x.fillText(t, X, Y); }
-  function drawTree(t, isT, now) {
-    const X = t.x, Y = t.y, des = t.z === 2, f = FRUITS[t.id];
-    x.fillStyle = "#0003"; x.beginPath(); x.ellipse(X, Y + 2, 34, 9, 0, 0, 7); x.fill();
-    x.fillStyle = des ? "#c79a5b" : "#7a4a21"; x.fillRect(X - 8, Y - 30, 16, 30); x.fillStyle = des ? "#a87d44" : "#5e3818"; x.fillRect(X + 2, Y - 30, 6, 30);
-    if (des) { x.fillStyle = "#4f9d3a"; x.fillRect(X - 40, Y - 58, 80, 12); x.fillRect(X - 12, Y - 74, 24, 38); x.fillStyle = "#6fbf4a"; x.fillRect(X - 32, Y - 66, 64, 9); x.fillRect(X - 10, Y - 72, 20, 14); }
-    else { x.fillStyle = "#2a8238"; x.fillRect(X - 36, Y - 54, 72, 32); x.fillStyle = "#379b45"; x.fillRect(X - 28, Y - 68, 56, 28); x.fillStyle = "#4fb85a"; x.fillRect(X - 16, Y - 82, 32, 22); x.fillStyle = "#ffffff18"; x.fillRect(X - 36, Y - 54, 72, 5); }
-    const P = des ? [[-26, -50], [22, -48], [0, -68]] : [[-24, -38], [20, -34], [-2, -62]];
-    x.font = "17px sans-serif"; x.textAlign = "center"; x.textBaseline = "middle";
-    for (let i = 0; i < C.MAXFRUIT; i++) { if (t.f[i] === 0) { x.fillStyle = f.col; x.beginPath(); x.arc(X + P[i][0], Y + P[i][1], 9, 0, 7); x.fill(); x.fillText(f.e, X + P[i][0], Y + P[i][1] + 1); } }
-    x.textBaseline = "alphabetic";
-    if (isT) { const b = Math.sin(now / 160) * 3; x.fillStyle = "#fff"; x.beginPath(); x.moveTo(X, Y - 92 + b); x.lineTo(X - 8, Y - 106 + b); x.lineTo(X + 8, Y - 106 + b); x.closePath(); x.fill(); }
+  function drawDecor(d) {
+    const X = d.x, Y = d.y; x.fillStyle = "#0003"; x.beginPath(); x.ellipse(X, Y + 2, 30, 8, 0, 0, 7); x.fill();
+    if (d.k === "tree") {
+      x.fillStyle = "#7a4a21"; x.fillRect(X - 8, Y - 30, 16, 30); x.fillStyle = "#5e3818"; x.fillRect(X + 2, Y - 30, 6, 30);
+      x.fillStyle = "#1f6b2c"; x.fillRect(X - 34, Y - 54, 68, 30); x.fillStyle = "#2a8238"; x.fillRect(X - 26, Y - 68, 52, 28); x.fillStyle = "#379b45"; x.fillRect(X - 15, Y - 82, 30, 22);
+    } else {
+      x.fillStyle = "#3f9a3a"; x.fillRect(X - 7, Y - 50 - d.v * 6, 14, 50 + d.v * 6); x.fillRect(X - 22, Y - 34, 15, 9); x.fillRect(X - 22, Y - 48, 9, 22); x.fillRect(X + 7, Y - 26, 15, 9); x.fillRect(X + 13, Y - 40, 9, 22);
+      x.fillStyle = "#56b84c"; x.fillRect(X - 7, Y - 50 - d.v * 6, 5, 50 + d.v * 6);
+    }
+  }
+  function drawItem(it, isT, now) {
+    const f = FRUITS[it.id], X = it.x, Y = it.y, b = Math.sin(now / 320 + it.x) * 2.5;
+    x.fillStyle = "#0004"; x.beginPath(); x.ellipse(X, Y + 6, 11, 4, 0, 0, 7); x.fill();
+    x.fillStyle = f.col; x.beginPath(); x.arc(X, Y - 8 + b, 13, 0, 7); x.fill(); x.lineWidth = 3; x.strokeStyle = RAR[f.r].c; x.stroke();
+    x.font = "17px sans-serif"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillStyle = "#fff"; x.fillText(f.e, X, Y - 7 + b); x.textBaseline = "alphabetic";
+    if (isT) { x.strokeStyle = "#fff"; x.lineWidth = 3; x.globalAlpha = .6 + .3 * Math.sin(now / 150); x.beginPath(); x.arc(X, Y - 8 + b, 20, 0, 7); x.stroke(); x.globalAlpha = 1; }
   }
   function avatar(X, Y, col, name, n, cap, boots, bag, moving, now, isMe, fc) {
     x.fillStyle = "#0004"; x.beginPath(); x.ellipse(X, Y + 2, 16, 5, 0, 0, 7); x.fill();
@@ -301,10 +323,12 @@ export function createFruitClient(env) {
     x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = "#1b3a22"; x.fillRect(0, 0, 800, 560);
     x.setTransform(1, 0, 0, 1, Math.round(400 - camX), Math.round(280 - camY));
     if (!worldC) worldC = buildWorld(); x.drawImage(worldC, 0, 0);
-    ZONES.forEach((z, i) => { if (C.zoneOpen(s, i)) return; x.fillStyle = "#0a0a14aa"; x.fillRect(z.r.x, z.r.y, z.r.w, z.r.h); label(`🔒 Niveau ${z.lvl} requis`, z.r.x + 120, 640, "#fff", 18); });
+    ZONES.forEach(z => { if (C.zoneOpen(s, z)) return; z.rects.forEach(q => { x.fillStyle = "#0a0a14b3"; x.fillRect(q.x, q.y, q.w, q.h); }); const q = z.rects.slice().sort((m, n) => n.w * n.h - m.w * m.h)[0]; label(z.closed ? `🔒 ${z.n} · bientôt` : `🔒 Niveau ${z.lvl} requis`, q.x + q.w / 2, q.y + q.h / 2, "#fff", 20); });
     // cercle sous le coffre / la boutique quand on est à portée
     [["sell", "#ffd23f"], ["shop", "#8dff8d"]].forEach(([k, col]) => { if (!near[k]) return; const P = PADS[k]; x.strokeStyle = col; x.lineWidth = 3; x.globalAlpha = .6 + .3 * Math.sin(now / 200); x.beginPath(); x.ellipse(P.x, P.y + 40, 96, 22, 0, 0, 7); x.stroke(); x.globalAlpha = 1; });
-    const list = trees.map(t => ({ y: t.y, f: () => drawTree(t, t === near.tree, now) }));
+    const vx0 = camX - 460, vx1 = camX + 460, vy0 = camY - 380, vy1 = camY + 360, inV = (X, Y) => X > vx0 && X < vx1 && Y > vy0 && Y < vy1;
+    const list = []; decor.forEach(d => { if (inV(d.x, d.y)) list.push({ y: d.y, f: () => drawDecor(d) }); });
+    items.forEach(it => { if (!it.back && inV(it.x, it.y)) list.push({ y: it.y - 20, f: () => drawItem(it, it === near.item, now) }); });
     const pl = (getLobby() && getLobby().players) || {};
     Object.entries(others).forEach(([u, o]) => { if (pl[u]) list.push({ y: o.dy, f: () => avatar(o.dx, o.dy, pl[u].color, pl[u].name, o.n | 0, o.cap | 0, o.boots | 0, o.bag | 0, o.mv, now, false, o.fc || 1) }); });
     list.push({ y: py, f: () => avatar(px, py, (pl[me().uid] && pl[me().uid].color) || "#ffd23f", me().name || "Moi", C.count(s), C.capacity(s), s.boots, s.bag, mv, now, true, face) });
@@ -325,14 +349,15 @@ export function createFruitClient(env) {
     enter(c) {
       buildUI();
       active = true; loaded = false; camOK = false; fx.length = 0; floats.length = 0; s = C.fresh(); dirty = false; sel = null; uiKey = ""; near = {}; tgt = null;
-      px = C.SPAWN.x + (Math.random() - .5) * 120; py = C.SPAWN.y + 60; face = 1; Object.keys(others).forEach(k => delete others[k]);
-      trees.length = 0; trees.push(...genTrees());
+      px = C.SPAWN.x + (Math.random() - .5) * 80; py = C.SPAWN.y - 8; face = 1; Object.keys(others).forEach(k => delete others[k]);
+      decor = genDecor(); items.length = 0;
+      ZONES.filter(z => z.fruit).forEach(z => { for (let i = 0; i < z.fruit.n; i++) { const it = { zone: z, x: 0, y: 0, id: "apple", back: 0 }; items.push(it); spawnItem(it); } });
       keys.clear(); stick = null; mod.hidden = true; send.last = null; last = 0;
       $("ov").style.fontSize = "min(22px,4.5vw)"; $("ov").textContent = "Chargement de ta sauvegarde…";
-      $("ghelp").textContent = "ZQSD / WASD / flèches pour bouger · E : cueillir / vendre · F : tout vendre · 1-9 : choisir un fruit";
+      $("ghelp").textContent = "ZQSD / WASD / flèches pour bouger · E : ramasser / vendre · F : tout vendre · 1-9 : choisir un fruit";
       const myUid = me().uid;
       const ready = msg => { if (!active) return; loaded = true; $("ov").textContent = ""; renderUI(true); if (msg) toast(msg); if (!raf) raf = requestAnimationFrame(frame); };
-      get(path()).then(r => { if (!active) return; s = C.sanitize(r.val()); ready(s.total > 0 ? `Bon retour ! 🪙 ${fmt(s.coins)}` : "Bienvenue ! Va dans la Forêt, cueille des fruits (E) et vends-les au coffre 🍎"); })
+      get(path()).then(r => { if (!active) return; s = C.sanitize(r.val()); ready(s.total > 0 ? `Bon retour ! 🪙 ${fmt(s.coins)}` : "Bienvenue ! Ramasse les fruits au sol (E) et vends-les au coffre 🍎"); })
         .catch(() => ready("⚠️ Sauvegarde illisible : tu démarres à zéro (vérifie les règles Firebase pour users/<uid>/fruit)"));
       const un = onValue(R(`games/${c}/inputs`), snap => { inputs = snap.val() || {}; Object.entries(inputs).forEach(([u, v]) => { if (u !== myUid) parse(u, v); }); Object.keys(others).forEach(u => { if (!inputs[u]) delete others[u]; }); });
       return () => { if (active && loaded) save(true); active = false; un(); raf = 0; mod.hidden = true; $("ov").textContent = ""; $("score").replaceChildren(); scoreboard.k = ""; x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.textBaseline = "alphabetic"; };

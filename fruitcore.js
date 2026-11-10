@@ -27,24 +27,46 @@ export const FRUITS = {
 };
 export const FRUIT_IDS = Object.keys(FRUITS);
 
-// Zones : 0 = Spawn (centre), 1 = Forêt, 2 = Désert. Le Désert demande le niveau 5 (À CONFIRMER : le wiki donne « Forêt 0-4, Désert 5-9 »)
-export const WORLD = { w: 2000, h: 1200 };
+// ----- Carte : reprise de la vue de dessus du vrai jeu (coordonnées image × 4) -----
+export const K = 4;
+export const WORLD = { w: 2500, h: 2050 };
+const R = (x1, y1, x2, y2) => ({ x: x1 * K, y: y1 * K, w: (x2 - x1) * K, h: (y2 - y1) * K });
+// Zones : Spawn (à gauche, avec les 5 parcelles), Forêt (milieu), Désert (en haut à droite). Le Désert demande le niveau 5
+// (À CONFIRMER : le wiki donne « Forêt 0-4, Désert 5-9 »). Forêt d'automne et Toundra sont sur la carte mais fermées dans cette version.
 export const ZONES = [
-  { n: "Spawn",  lvl: 0, r: { x: 780,  y: 380, w: 440, h: 440 } },
-  { n: "Forêt",  lvl: 0, r: { x: 40,   y: 80,  w: 740, h: 1040 } },
-  { n: "Désert", lvl: 5, r: { x: 1220, y: 80,  w: 740, h: 1040 } }
+  { id: "spawn",  n: "Spawn",           lvl: 0,  rects: [R(68, 128, 200, 348)] },
+  { id: "forest", n: "Forêt",           lvl: 0,  rects: [R(200, 128, 297, 405)],                    fruit: { n: 22, w: { apple: 40, pear: 25, green_apple: 18, crimson_pear: 10, sugar_apple: 7 } } },
+  { id: "desert", n: "Désert",          lvl: 5,  rects: [R(203, 62, 360, 118), R(297, 118, 372, 272)], fruit: { n: 20, w: { banana: 38, lemon: 30, embum_banana: 20, java_banana: 12 } } },
+  { id: "autumn", n: "Forêt d'automne", lvl: 15, closed: true, rects: [R(372, 105, 490, 262)] },
+  { id: "tundra", n: "Toundra",         lvl: 10, closed: true, rects: [R(297, 272, 430, 432), R(365, 410, 430, 475)] }
 ];
-// Arbres par zone (type de fruit : nombre d'arbres)
-export const TREES = [
-  null,
-  { apple: 6, pear: 4, green_apple: 3, crimson_pear: 2, sugar_apple: 1 },
-  { banana: 5, lemon: 4, embum_banana: 3, java_banana: 2 }
+// Parcelles des joueurs (5 = le nombre de joueurs d'un serveur) : dessinées, mais sans fonction dans cette version
+export const PLOTS = [R(68, 138, 127, 192), R(137, 130, 192, 185), R(55, 205, 112, 262), R(63, 270, 122, 320), R(132, 286, 190, 345)];
+// Obstacles : murs de falaise (avec un passage Spawn→Forêt et un passage Forêt→Désert), rivière (traversable seulement sur le pont)
+export const BLOCKS = [
+  { x: 796,  y: 512,  w: 10,  h: 360 }, { x: 796,  y: 1024, w: 10, h: 368 },   // mur Spawn | Forêt
+  { x: 1180, y: 700,  w: 16,  h: 388 },                                          // mur Forêt | Désert
+  { x: 800,  y: 792,  w: 200, h: 48 },  { x: 1052, y: 792,  w: 136, h: 48 }     // rivière de chaque côté du pont
 ];
-export const PADS = {
-  sell: { x: 1000, y: 500, n: "Vente" },
-  shop: { x: 1000, y: 770, n: "Mike's Market" }
+export const BRIDGE = { x: 1000, y: 776, w: 52, h: 80 };
+// Décors non traversés par les fruits (pas des obstacles)
+export const SPOTS = {
+  white: R(238, 136, 252, 150), hut: R(270, 153, 295, 172), pit: R(215, 335, 280, 395), oasis: R(207, 68, 229, 95),
+  ice: R(330, 350, 355, 378), station: R(365, 410, 430, 475), ladder: { x: 1596, y: 1000, w: 44, h: 440 }
 };
-export const SPAWN = { x: 1000, y: 640 };
+export const HIDDEN = [R(368, 47, 470, 105), R(433, 228, 587, 393)]; // zones non montrées sur la carte (falaise pleine)
+export const PADS = { sell: { x: 700, y: 1085, n: "Vente" }, shop: { x: 540, y: 930, n: "Mike's Market" } };
+export const SPAWN = { x: 672, y: 928 };
+export const PATHS = [ // dalles de pierre
+  [[672, 928], [800, 948], [900, 940], [1000, 900], [1026, 800], [1030, 720], [1080, 640], [1188, 600], [1260, 590], [1330, 520], [1330, 420], [1250, 360], [1100, 340], [950, 350]],
+  [[672, 928], [560, 800], [440, 700]], [[672, 928], [660, 740], [660, 640]], [[672, 928], [500, 930], [330, 928]], [[672, 928], [560, 1060], [420, 1170]], [[672, 928], [650, 1100], [650, 1240]],
+  [[1026, 880], [1010, 1050], [1000, 1250], [990, 1340]], [[1000, 900], [920, 1000]]
+];
+const inR = (X, Y, r) => X >= r.x && X < r.x + r.w && Y >= r.y && Y < r.y + r.h;
+export const zoneOpen = (s, z) => !z.closed && s.lvl >= z.lvl;
+// Peut-on marcher ici ? (open = false : on ignore le niveau, pour placer décors et fruits)
+export const walkable = (s, X, Y) => ZONES.some(z => (!s || zoneOpen(s, z)) && z.rects.some(r => inR(X, Y, r))) && !BLOCKS.some(b => inR(X, Y, b));
+export const onSpot = (X, Y, m = 0) => Object.values(SPOTS).concat(PLOTS).some(r => inR(X, Y, { x: r.x - m, y: r.y - m, w: r.w + 2 * m, h: r.h + 2 * m })) || BLOCKS.some(b => inR(X, Y, { x: b.x - m, y: b.y - m, w: b.w + 2 * m, h: b.h + 2 * m })) || inR(X, Y, { x: BRIDGE.x - m, y: BRIDGE.y - m, w: BRIDGE.w + 2 * m, h: BRIDGE.h + 2 * m });
 
 // Sacs (emplacements = nombre de fruits portés) et bottes (bonus de vitesse en « unités Roblox » ; le saut n'existe pas dans cette version 2D)
 export const BAGS = [
@@ -59,9 +81,8 @@ export const BOOTS = [
 export const PX_PER_STUD = 14.7;   // 16 unités/s de marche Roblox = 235 px/s ici
 export const BASE_SPEED = 235;
 
-// Repousse d'un fruit sur son arbre (en ms) : À CONFIRMER (le vrai délai n'est pas connu)
-export const REGROW = { common: 20000, uncommon: 30000, rare: 45000, epic: 60000, legendary: 90000, mythic: 120000 };
-export const MAXFRUIT = 3; // fruits visibles par arbre (À CONFIRMER)
+// Les fruits sont posés au sol ; un fruit ramassé réapparaît ailleurs dans sa zone après ce délai (en ms) : À CONFIRMER (nombre de fruits par zone et délais inconnus)
+export const RESPAWN = { common: 12000, uncommon: 20000, rare: 35000, epic: 50000, legendary: 80000, mythic: 120000 };
 
 // Niveaux : l'XP vient de la vente (1 pièce = 1 XP) ; paliers À CONFIRMER
 export const xpNeed = l => 30 + 20 * l;
@@ -70,7 +91,6 @@ export const capacity = s => BAGS[s.bag].cap;
 export const speed = s => BASE_SPEED + (s.boots > 0 ? BOOTS[s.boots - 1].spd * PX_PER_STUD : 0);
 export const count = s => FRUIT_IDS.reduce((t, k) => t + (s.inv[k] || 0), 0);
 export const stacks = s => FRUIT_IDS.filter(k => s.inv[k] > 0);
-export const zoneOpen = (s, z) => s.lvl >= ZONES[z].lvl;
 
 export const fresh = () => ({ coins: 0, tickets: 0, xp: 0, lvl: 0, bag: 0, boots: 0, inv: {}, total: 0 });
 export const sanitize = o => { // données venant de Firebase : on ne fait confiance à rien

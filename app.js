@@ -2,12 +2,13 @@ import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase
 import {getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signInWithPopup,signInWithRedirect,getRedirectResult,GoogleAuthProvider,signOut,sendPasswordResetEmail} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import {getDatabase,ref,get,set,update,remove,onValue,onDisconnect,serverTimestamp,increment} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
 import {startSim,createSimClient} from "./sim.js";
+import {startFruit,createFruitClient} from "./fruit.js";
 import {startSumo,createSumoClient} from "./sumo.js";
 
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="38";
+const VER="39";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -242,7 +243,7 @@ const mkLobby=game=>async()=>{
   await set(R(`lobbies/${c}`),{host:me.uid,game,status:"lobby",opts:{sp:1,wr:0,bo:1},players:{[me.uid]:{name:me.name,color:COLORS[0],ready:true,...ownTag()}}});
   onDisconnect(R(`lobbies/${c}`)).remove();enter(c);
 };
-$("tsnake").onclick=mkLobby("snake");$("tsurv").onclick=mkLobby("surv");$("tbr").onclick=mkLobby("br");$("ttk").onclick=mkLobby("tk");$("tlab").onclick=mkLobby("lab");$("tsim").onclick=mkLobby("sim");$("tsumo").onclick=mkLobby("sumo");
+$("tsnake").onclick=mkLobby("snake");$("tsurv").onclick=mkLobby("surv");$("tbr").onclick=mkLobby("br");$("ttk").onclick=mkLobby("tk");$("tlab").onclick=mkLobby("lab");$("tsim").onclick=mkLobby("sim");$("tsumo").onclick=mkLobby("sumo");$("tfruit").onclick=mkLobby("fruit");
 $("join").onclick=()=>joinLobby($("joincode").value.trim().toUpperCase());
 $("joincode").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();$("join").click()}});
 async function joinLobby(c){
@@ -250,8 +251,8 @@ async function joinLobby(c){
   const l=(await get(R(`lobbies/${c}`))).val();
   if(!l)return toast("Lobby introuvable");
   if(l.kick&&l.kick[me.uid])return toast("Tu as été retiré de ce lobby par un admin");
-  if(l.status!=="lobby"&&l.game!=="sim")return toast("Partie déjà en cours");
-  const pl=l.players||{};if(Object.keys(pl).length>=8&&!pl[me.uid])return toast("Lobby plein (8 max)");
+  if(l.status!=="lobby"&&l.game!=="sim"&&l.game!=="fruit")return toast("Partie déjà en cours");
+  const pl=l.players||{};const mxP=l.game==="fruit"?5:8;if(Object.keys(pl).length>=mxP&&!pl[me.uid])return toast(`Lobby plein (${mxP} max)`);
   await set(R(`lobbies/${c}/players/${me.uid}`),{name:me.name,color:firstColor(pl),ready:false,...ownTag()});
   onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();enter(c);
 }
@@ -261,7 +262,7 @@ function enter(c){
     const l=s.val();if(!l){if(code){local();toast("Le lobby a été fermé")}return}
     if(l.kick&&l.kick[me.uid]){if(code){local();toast("Un admin t'a retiré du lobby")}return}
     lobby=l;
-    if((l.status==="lobby"||l.game==="sim")&&l.host!==me.uid&&!(l.players&&l.players[me.uid])){ // coupure puis retour : on se réinscrit
+    if((l.status==="lobby"||l.game==="sim"||l.game==="fruit")&&l.host!==me.uid&&!(l.players&&l.players[me.uid])){ // coupure puis retour : on se réinscrit
       set(R(`lobbies/${c}/players/${me.uid}`),{name:me.name,color:firstColor(l.players),ready:false,...ownTag()});onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();return}
     renderLobby();
     if(l.status==="playing"&&cur!=="game")enterGame(c);
@@ -273,7 +274,7 @@ function renderLobby(){
   Object.entries(pl).forEach(([u,p])=>{const r=h("div",null);r.className="pl";const sw=h("span");sw.className="sw";sw.style.background=p.color;
     r.append(sw,h("span",(p.ow?"🛡️ ":"")+p.name+(u===lobby.host?" (hôte)":"")+(p.wins?` 🏆${p.wins}`:"")),h("span",p.ready?"✔ prêt":"…"));b.append(r)});
   $("ready").hidden=host;$("ready").textContent=pl[me.uid]?.ready?"Pas prêt":"Prêt";
-  $("ltitle").textContent={snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",tk:"💥 Tanks",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena"}[lobby.game]||"Lobby";
+  $("ltitle").textContent={snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",tk:"💥 Tanks",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",fruit:"🍎 Fruit Forager"}[lobby.game]||"Lobby";
   $("opts").style.display=lobby.game==="snake"?"":"none";
   const op=lobby.opts||{};$("oSp").textContent="⚡ Vitesse : "+["lente","normale","rapide"][op.sp??1];
   $("oWr").textContent=op.wr?"🌀 Murs : traversables":"🧱 Murs : mortels";$("oBo").textContent=op.bo===0?"🎁 Bonus : non":"🎁 Bonus : oui";
@@ -297,6 +298,9 @@ async function leaveLobby(){
 let sc=null;
 const simEnv=()=>({R,get,set,update,remove,onValue,increment,$,h,toast,beep,show,leave:leaveLobby,getMe:()=>me,getCode:()=>code,getLobby:()=>lobby,bots:withBots,played});
 function enterSimGame(c){sc=sc||createSimClient(simEnv());return sc.enter(c)}
+// ---------- Fruit Forager (fruit.js + fruitcore.js) : monde partagé (5 joueurs max), progression sauvegardée dans users/<uid>/fruit ----------
+let fc=null;
+function enterFruitGame(c){fc=fc||createFruitClient(simEnv());return fc.enter(c)}
 // ---------- Sumo Arena (sumo.js) : l'hôte simule, tout le monde dessine dans le canvas commun ----------
 let su=null;
 function enterSumoGame(c){su=su||createSumoClient(simEnv());return su.enter(c)}
@@ -359,6 +363,7 @@ let hinted=0;
 function orientHint(){if(!TOUCH||hinted||gk==="snake")return;if(matchMedia("(orientation:portrait)").matches){hinted=1;setTimeout(()=>{if(cur==="game")toast("📱 Astuce : tourne ton téléphone en paysage pour une vue plus grande")},1600)}}
 function enterGame(c){
   if(lobby&&lobby.game==="sumo"){show("game");st=pv=null;gk="sumo";held.clear();lastMv="";scoreKey="";document.body.dataset.g="sumo";wake();orientHint();unState=enterSumoGame(c);return}
+  if(lobby&&lobby.game==="fruit"){show("game");st=pv=null;gk="fruit";held.clear();lastMv="";scoreKey="";document.body.dataset.g="fruit";wake();orientHint();unState=enterFruitGame(c);return}
   if(lobby&&lobby.game==="sim"){show("game");st=pv=null;gk="sim";held.clear();lastMv="";scoreKey="";document.body.dataset.g="sim";wake();orientHint();unState=enterSimGame(c);return}
   show("game");lastDir=null;st=pv=null;parts=[];gk=lobby&&["surv","br","lab","tk"].includes(lobby.game)?lobby.game:"snake";held.clear();lastMv="";$("ov").style.fontSize=gk==="snake"?"min(56px,11vw)":"min(34px,6.5vw)";mine=-1;vk="";vbox.style.display="none";
   pred=null;scoreKey="";document.body.dataset.g=gk;ctlUI();calcVs();wake();orientHint();gameSetup();
@@ -617,7 +622,7 @@ function frame(now){
 }
 const KEYS={ArrowUp:"U",w:"U",z:"U",ArrowDown:"D",s:"D",ArrowLeft:"L",a:"L",q:"L",ArrowRight:"R",d:"R"};
 const held=new Set();let seqN=0;
-const mv=()=>{if(cur!=="game"||!code||!me||gk==="lab"||gk==="sim"||gk==="sumo")return;if(isAim())return brSend();const m=`${(held.has("R")?1:0)-(held.has("L")?1:0)},${(held.has("D")?1:0)-(held.has("U")?1:0)}`;if(m!==lastMv){lastMv=m;set(R(`games/${code}/inputs/${me.uid}`),m+","+(++seqN)).catch(()=>{})}};
+const mv=()=>{if(cur!=="game"||!code||!me||gk==="lab"||gk==="sim"||gk==="sumo"||gk==="fruit")return;if(isAim())return brSend();const m=`${(held.has("R")?1:0)-(held.has("L")?1:0)},${(held.has("D")?1:0)-(held.has("U")?1:0)}`;if(m!==lastMv){lastMv=m;set(R(`games/${code}/inputs/${me.uid}`),m+","+(++seqN)).catch(()=>{})}};
 const send=d=>{if(cur!=="game"||gk!=="snake"||d===lastDir)return;lastDir=d;set(R(`games/${code}/inputs/${me.uid}`),d+(++seqN)).catch(()=>{})};
 addEventListener("keydown",e=>{if(cur!=="game"||/^(INPUT|TEXTAREA)$/.test(e.target.tagName))return;const d=KEYS[e.key.length>1?e.key:e.key.toLowerCase()];if(d){e.preventDefault();if(gk!=="snake"){held.add(d);mv()}else send(d)}});
 addEventListener("keyup",e=>{const d=KEYS[e.key.length>1?e.key:e.key.toLowerCase()];if(d&&(gk!=="snake")&&cur==="game"){held.delete(d);mv()}});
@@ -651,7 +656,7 @@ function endStick(k){const s=tp[k];if(!s)return;tp[k]=null;s.el.classList.remove
   if(k==="mv")setHeld(0,0,0,0);else{ptrDown=0;aimLock=0;if(cur==="game"&&isAim())setFire()}}
 function resetTouch(){["mv","aim"].forEach(endStick);tp.sw=null;held.clear();ptrDown=0;aimLock=0;if(cur==="game"){if(isAim())setFire();else if(gk==="surv"||gk==="lab")mv()}}
 gameEl.addEventListener("pointerdown",e=>{
-  if(!touchy(e)||cur!=="game"||gk==="sim"||gk==="sumo"||e.target.closest("button"))return;
+  if(!touchy(e)||cur!=="game"||gk==="sim"||gk==="sumo"||gk==="fruit"||e.target.closest("button"))return;
   e.preventDefault();const x=e.clientX,y=e.clientY;
   if(gk==="snake"){if(tp.sw)return;tp.sw={id:e.pointerId,ox:x,oy:y}}
   else if(isAim()&&(ctlMode==="pad"||x>=innerWidth*.5)){if(tp.aim)return;tp.aim=mkStick(sR,x,y,e.pointerId);ptrDown=1;setFire()}
@@ -946,6 +951,7 @@ $("start").onclick=async()=>{
   gStart=Date.now();
   if(lobby.game==="sim")return startSim(simEnv());
   if(lobby.game==="sumo")return startSumo(simEnv());
+  if(lobby.game==="fruit")return startFruit(simEnv());
   if(lobby.game==="surv")return startSurv();
   if(lobby.game==="lab")return startLab();
   if(lobby.game==="br")return startBr();
@@ -1583,7 +1589,7 @@ function startStats(){
 function renderStats(D){
   const pr=D.presence||{},us=D.users||{},lobs=Object.entries(D.lobbies||{}),fr=D.friends||{},now=Date.now();
   const online=Object.keys(pr).filter(u=>pr[u]),made=Object.values(us).map(u=>u.createdAt||0),nUsers=Object.keys(us).length;
-  const GN={tk:["💥","Tanks"],snake:["🐍","Snake"],surv:["🧟","Survie coop"],br:["🔫","Battle Royale"],lab:["🧩","Évasion coop"],sim:["⛏️","Mine Simulator"],sumo:["🤼","Sumo Arena"]};
+  const GN={tk:["💥","Tanks"],snake:["🐍","Snake"],surv:["🧟","Survie coop"],br:["🔫","Battle Royale"],lab:["🧩","Évasion coop"],sim:["⛏️","Mine Simulator"],sumo:["🤼","Sumo Arena"],fruit:["🍎","Fruit Forager"]};
   const ago=t=>{if(!t)return"date inconnue";const m=Math.floor((now-t)/6e4);return m<1?"à l'instant":m<60?`il y a ${m} min`:m<1440?`il y a ${Math.floor(m/60)} h`:`il y a ${Math.floor(m/1440)} j`};
   const card=([ic,v,l])=>{const d=h("div");d.className="stat";const i=h("span",ic);i.className="ic";d.append(i,h("b",String(v)),h("span",l));return d};
   const playing=lobs.filter(([,l])=>l&&l.status==="playing"),open=lobs.filter(([,l])=>l&&l.status==="lobby");
@@ -1884,7 +1890,7 @@ $("adReset").onclick=async()=>{if(!confirm("Remettre le compteur « parties jou�
   try{await set(R("stats/gamesPlayed"),0);await remove(R("stats/byGame"));await remove(R("stats/hours"));toast("Statistiques remises à zéro")}catch{admErr()}};
 function renderAdmin(D){
   if(!me||!me.owner)return;
-  const GN={tk:"💥 Tanks",snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena"};
+  const GN={tk:"💥 Tanks",snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",fruit:"🍎 Fruit Forager"};
   const lobs=Object.entries(D.lobbies||{}).filter(([,l])=>l).sort((x,y)=>(y[1].status==="playing")-(x[1].status==="playing"));
   $("adLobH").textContent=`Lobbys (${lobs.length})`;$("adAll").hidden=!lobs.length;
   $("adLob").replaceChildren(...(lobs.length?lobs.map(([c,l])=>{

@@ -27,41 +27,160 @@ export const FRUITS = {
 };
 export const FRUIT_IDS = Object.keys(FRUITS);
 
-// ----- Carte : reprise de la vue de dessus du vrai jeu (coordonnées image × 4) -----
+// ----- Carte : décalquée sur la vue de dessus du vrai jeu (coordonnées image × 4) -----
+// La forme exacte des zones vient d'une grille : 1 case = 5 px de l'image = 20 px ici.
+// S = Spawn, F = Forêt, D = Désert, A = Forêt d'automne, T = Toundra, c = falaise, H = partie cachée, . = vide
 export const K = 4;
 export const WORLD = { w: 2500, h: 2050 };
-const R = (x1, y1, x2, y2) => ({ x: x1 * K, y: y1 * K, w: (x2 - x1) * K, h: (y2 - y1) * K });
-// Zones : Spawn (à gauche, avec les 5 parcelles), Forêt (milieu), Désert (en haut à droite). Le Désert demande le niveau 5
-// (À CONFIRMER : le wiki donne « Forêt 0-4, Désert 5-9 »). Forêt d'automne et Toundra sont sur la carte mais fermées dans cette version.
-export const ZONES = [
-  { id: "spawn",  n: "Spawn",           lvl: 0,  rects: [R(68, 128, 200, 348)] },
-  { id: "forest", n: "Forêt",           lvl: 0,  rects: [R(200, 128, 297, 405)],                    fruit: { n: 22, w: { apple: 40, pear: 25, green_apple: 18, crimson_pear: 10, sugar_apple: 7 } } },
-  { id: "desert", n: "Désert",          lvl: 5,  rects: [R(203, 62, 360, 118), R(297, 118, 372, 272)], fruit: { n: 20, w: { banana: 38, lemon: 30, embum_banana: 20, java_banana: 12 } } },
-  { id: "autumn", n: "Forêt d'automne", lvl: 15, closed: true, rects: [R(372, 105, 490, 262)] },
-  { id: "tundra", n: "Toundra",         lvl: 10, closed: true, rects: [R(297, 272, 430, 432), R(365, 410, 430, 475)] }
+export const CELL = 5 * K, MAP_OX = 5, MAP_OY = 5;
+export const MAP = [
+  "......................................................................ccccccccccccccccccccccc......................",
+  ".................................................................cccccccccccccccccccccccccccc......................",
+  "...................................ccccccccccc..............ccccccccccccccccccccccccccccccccc......................",
+  "..................................cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.....................",
+  "..................................cccccccccccccccccccccccccccccccccccHHHHHHHHHHHHHHHHHHHHccccc.....................",
+  "..................................cccccccccccccccccccccccccccccccccccHHHHHHHHHHHHHHHHHHHHccccc.....................",
+  "..................................cccccccccccccccccccccccccccccccccccHHHHHHHHHHHHHHHHHHHHccccc.....................",
+  "...........................cc...cccccccccccccccccccccccccccccccccccccHHHHHHHHHHHHHHHHHHHHccccc.....................",
+  "...........................cccccccccDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDcHHHHHHHHHHHHHHHHHHHHccccc.....................",
+  "...........................c......ccDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDcHHHHHHHHHHHHHHHHHHHHccccc.....................",
+  "............................c.....ccDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDcHHHHHHHHHHHHHHHHHHHHccccc.....................",
+  "...........................cccccccccDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDcHHHHHHHHHHHHHHHHHHHHccccc.....................",
+  "...........................cccccccccDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDcHHHHHHHHHHHHHHHHHHHHccccc.....................",
+  "...........................cc.....ccDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDcHHHHHHHHHHHHHHHHHHHHccccc.....................",
+  "...........................ccccccccDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDcHHHHHHHHHHHHHHHHHHHHccccc.....................",
+  "...................ccccccccccccccccDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDcHHHHHHHHHHHHHHHHHHHHccccc.....................",
+  "...................ccccccccccccccccDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAcccc.....................",
+  "....cccccccccccccccccccccccccccccccDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAAccc.....................",
+  "....cccccccccccccccccccccccccccccccDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAAcccc....................",
+  "....cccccccccccccccccccccccccccccccFFDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAAcccc....................",
+  "....ccccccccccccccccccSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAAAccc....................",
+  "....cccccccccccccccccSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAAAccc....................",
+  "....ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAAcccc....................",
+  "....ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAAcccc....................",
+  "....ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAAcccc....................",
+  "....ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAAcccc....................",
+  "....ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAcccc....................",
+  "....ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAcccc....................",
+  "....ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAcccc....................",
+  "....ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAcccc....................",
+  "...cccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAAccc....................",
+  ".cccccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAAAccc....................",
+  ".cccccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAAAccc....................",
+  ".cccccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAAAccc....................",
+  ".cccccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAAAcccc...................",
+  ".cccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAAAcccc...................",
+  ".cccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAAAcccc............cccc...",
+  ".ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAAAcccccccccccccccccccc...",
+  ".ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAAAcccccccccccccccccccc...",
+  ".ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcccccc...",
+  ".ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcccccc...",
+  "cccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDAAAAAAAAAAAAAAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH...",
+  "cccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDAAAAAAAAAAAAAAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH...",
+  "cccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDAAAAAAAAAAAAAAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH...",
+  "cccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDAAAAAAAAAAAAAAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH...",
+  "cccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDAAAAAAAAAAAAAAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH...",
+  "cccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDDDDDDDDDDAAAAAAAAAAAcccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHc..",
+  "..ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDDDDTTTTTTTDDAAAAAAAAAAAcccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHc..",
+  "..cccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFDDTTTTTTTTTTTTTTATTAAAAAAcccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHc..",
+  "..cccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTAAccccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHc..",
+  "..cccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTAccccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHc..",
+  "..cccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTccccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHc..",
+  "..cccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTccccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHc..",
+  "..cccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTccccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHcc.",
+  "..cccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTccccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHcc.",
+  "..cccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTccccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHcc.",
+  "..cccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTccccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHcc.",
+  "..ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTccccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHcc.",
+  "..ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTcccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHcc.",
+  "..ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTcccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHcc.",
+  "..ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTcccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHcc.",
+  "..ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTcccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHcc.",
+  ".................cccSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTcccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHcc.",
+  ".................cccSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTcccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHcc.",
+  ".................cccSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTcccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHcc.",
+  ".................ccccccccccccccccccFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTTccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHccc",
+  "..................................cFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTTccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHccc",
+  "..................................cFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTTccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHccc",
+  "..................................cFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTTccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHccc",
+  ".................................ccFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTTccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHccc",
+  ".................................ccFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTTccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHccc",
+  ".................................ccFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTTccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHccc",
+  ".................................ccFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTTccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHccc",
+  ".................................ccFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTTccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHccc",
+  ".................................ccFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTTcccccccc...........................",
+  ".................................ccFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTTcccccccc...........................",
+  ".................................ccccccccccccccccccccccTTTTTTTTTTTTTTTTTTTTTTTTTTccccccc...........................",
+  ".................................cccccccccccccccccccccccccccccccccTTTTTTTTTTTTTTTccccccc...........................",
+  ".......................................cccccccccccccccccccccccccccccccTTTTTTTTTTcccccccc...........................",
+  ".........................................cccccccc................cccccTTTTTTTTTTcccccccc...........................",
+  ".........................................cccccccc................cccccTTTTTTTTTTcccccccc...........................",
+  ".........................................cccccccc................cccccTTTTTTTTTTcccccccc...........................",
+  ".........................................cccccccc................cccccTTTTTTTTTTcccccccc...........................",
+  ".........................................cccccccc................cccccTTTTTTTTTTcccccccc...........................",
+  ".........................................cccccccc................cccccTTTTTTTTTTccccccc............................",
+  ".........................................cccccccc................cccccTTTTTTTTTTccccccc............................",
+  ".........................................cccccccc.................ccccTTTTTTTTTTccccccc............................",
+  ".........................................cccccccc.................ccccTTTTTTTTTTccccccc............................",
+  "..................................................................ccTTTTTTTTTTTTccccccc............................",
+  "..................................................................ccTTTTTTTTTTTTTcccccc............................",
+  "..................................................................ccccccccccccccccccccc............................",
+  "...................................................................cccccccccccccccccccc............................",
+  "....................................................................ccccccccccccccccccc............................",
+  "..............................................................................ccccccccc............................"
 ];
+// Fusionne les cases d'un même type en rectangles (une ligne de cases → un rectangle, étendu vers le bas s'il se répète)
+const cellRects = ch => {
+  const out = []; let prev = {};
+  MAP.forEach((row, j) => {
+    const cur = {};
+    for (let i = 0; i < row.length;) {
+      if (row[i] !== ch) { i++; continue; }
+      let e = i; while (e < row.length && row[e] === ch) e++;
+      const k = i + "," + e; let q = prev[k];
+      if (q) q.h += CELL; else { q = { x: (MAP_OX + i) * CELL, y: (MAP_OY + j) * CELL, w: (e - i) * CELL, h: CELL }; out.push(q); }
+      cur[k] = q; i = e;
+    }
+    prev = cur;
+  });
+  return out;
+};
+const R = (x1, y1, x2, y2) => ({ x: x1 * K, y: y1 * K, w: (x2 - x1) * K, h: (y2 - y1) * K });
+// Zones : Spawn (à gauche, avec les 5 parcelles), Forêt (milieu), Désert (en haut à droite), Toundra (en bas, avec le Marché de Mike).
+// Le Désert demande le niveau 5 (À CONFIRMER : le wiki donne « Forêt 0-4, Désert 5-9 »).
+// Toundra : ouverte en même temps que le Désert pour que la boutique soit atteignable (la vidéo montre une porte « Niveau 10 » avant le Marché : À CONFIRMER, mettre lvl: 10 pour être strict).
+// La Forêt d'automne est sur la carte mais fermée dans cette version.
+export const ZONES = [
+  { id: "spawn",  n: "Spawn",           lvl: 0,  rects: cellRects("S") },
+  { id: "forest", n: "Forêt",           lvl: 0,  rects: cellRects("F"), fruit: { n: 22, w: { apple: 40, pear: 25, green_apple: 18, crimson_pear: 10, sugar_apple: 7 } } },
+  { id: "desert", n: "Désert",          lvl: 5,  rects: cellRects("D"), fruit: { n: 20, w: { banana: 38, lemon: 30, embum_banana: 20, java_banana: 12 } } },
+  { id: "autumn", n: "Forêt d'automne", lvl: 15, closed: true, rects: cellRects("A") },
+  { id: "tundra", n: "Toundra",         lvl: 5,  rects: cellRects("T") }
+];
+export const CLIFFS = cellRects("c");
 // Parcelles des joueurs (5 = le nombre de joueurs d'un serveur) : dessinées, mais sans fonction dans cette version
-export const PLOTS = [R(68, 138, 127, 192), R(137, 130, 192, 185), R(55, 205, 112, 262), R(63, 270, 122, 320), R(132, 286, 190, 345)];
+export const PLOTS = [R(69, 139, 125, 192), R(137, 131, 192, 185), R(55, 205, 111, 260), R(62, 271, 120, 328), R(131, 286, 190, 344)];
 // Obstacles : murs de falaise (avec un passage Spawn→Forêt et un passage Forêt→Désert), rivière (traversable seulement sur le pont)
 export const BLOCKS = [
   { x: 796,  y: 512,  w: 10,  h: 360 }, { x: 796,  y: 1024, w: 10, h: 368 },   // mur Spawn | Forêt
-  { x: 1180, y: 700,  w: 16,  h: 388 },                                          // mur Forêt | Désert
-  { x: 800,  y: 792,  w: 200, h: 48 },  { x: 1052, y: 792,  w: 136, h: 48 }     // rivière de chaque côté du pont
+  { x: 1180, y: 700,  w: 16,  h: 932 },                                          // mur Forêt | Désert + Toundra
+  { x: 800,  y: 792,  w: 204, h: 56 },  { x: 1048, y: 792,  w: 132, h: 56 }     // rivière de chaque côté du pont
 ];
-export const BRIDGE = { x: 1000, y: 776, w: 52, h: 80 };
-// Décors non traversés par les fruits (pas des obstacles)
+export const BRIDGE = { x: 1004, y: 772, w: 44, h: 112 };
+// Décors non traversés par les fruits (pas des obstacles) : la cabane de vente (enclos), le sable, l'oasis, la boutique...
 export const SPOTS = {
-  white: R(238, 136, 252, 150), hut: R(270, 153, 295, 172), pit: R(215, 335, 280, 395), oasis: R(207, 68, 229, 95),
-  ice: R(330, 350, 355, 378), station: R(365, 410, 430, 475), ladder: { x: 1596, y: 1000, w: 44, h: 440 }
+  white: R(238, 133, 253, 151), hut: R(268, 152, 296, 175), pit: R(214, 331, 282, 397), oasis: R(207, 71, 230, 98),
+  ice: R(329, 352, 353, 379), station: R(366, 410, 430, 475), ladder: R(395, 260, 417, 357)
 };
-export const HIDDEN = [R(368, 47, 470, 105), R(433, 228, 587, 393)]; // zones non montrées sur la carte (falaise pleine)
-export const PADS = { sell: { x: 700, y: 1085, n: "Vente" }, shop: { x: 540, y: 930, n: "Mike's Market" } };
+export const HIDDEN = [R(368, 47, 471, 105), R(434, 228, 587, 393)]; // zones non montrées sur la carte (falaise pleine)
+// Vente : l'enclos « SELL HERE » (cabane en haut à droite de la Forêt) ; boutique : la plateforme bleue en bas à droite (Toundra)
+export const PADS = { sell: { x: 1128, y: 656, n: "Vente" }, shop: { x: 1592, y: 1700, n: "Mike's Market" } };
 export const SPAWN = { x: 672, y: 928 };
-export const PATHS = [ // dalles de pierre
-  [[672, 928], [800, 948], [900, 940], [1000, 900], [1026, 800], [1030, 720], [1080, 640], [1188, 600], [1260, 590], [1330, 520], [1330, 420], [1250, 360], [1100, 340], [950, 350]],
-  [[672, 928], [560, 800], [440, 700]], [[672, 928], [660, 740], [660, 640]], [[672, 928], [500, 930], [330, 928]], [[672, 928], [560, 1060], [420, 1170]], [[672, 928], [650, 1100], [650, 1240]],
-  [[1026, 880], [1010, 1050], [1000, 1250], [990, 1340]], [[1000, 900], [920, 1000]]
-];
+// Éléments relevés un par un sur la vue de dessus (en pixels de l'image, à multiplier par K)
+export const SLABS = [[363,66],[246,88],[299,88],[264,88],[280,88],[236,90],[254,90],[314,90],[272,92],[290,92],[325,92],[307,94],[329,100],[324,108],[462,108],[328,116],[459,118],[478,122],[244,124],[326,126],[457,127],[195,126],[448,129],[131,132],[438,133],[328,134],[66,138],[406,139],[435,142],[416,142],[326,144],[399,143],[444,145],[425,146],[453,148],[296,149],[368,152],[322,152],[375,152],[244,154],[422,155],[314,155],[413,158],[458,158],[242,164],[310,164],[264,164],[409,167],[256,168],[462,168],[244,172],[314,172],[252,174],[322,175],[465,177],[254,182],[324,183],[463,186],[444,189],[166,190],[326,192],[128,199],[170,200],[324,200],[136,203],[463,207],[326,208],[166,208],[408,211],[138,212],[148,216],[324,216],[468,216],[168,218],[405,220],[152,224],[328,224],[464,225],[254,226],[492,226],[189,229],[409,229],[118,232],[138,232],[180,232],[154,233],[197,233],[324,233],[128,234],[144,234],[166,232],[134,233],[206,234],[250,234],[215,237],[406,238],[327,242],[140,243],[246,243],[166,244],[219,246],[236,246],[228,249],[137,252],[170,254],[128,257],[405,257],[232,258],[125,265],[166,266],[236,266],[244,269],[418,268],[341,271],[168,275],[248,278],[330,279],[244,286],[332,288],[240,294],[250,296],[330,297],[260,299],[270,302],[244,304],[326,306],[317,311],[242,314],[314,321],[246,324],[311,331],[222,334],[313,342],[310,354],[404,357],[314,364],[401,366],[218,368],[312,374],[376,378],[367,382],[338,382],[386,382],[316,384],[358,385],[333,391],[390,392],[353,396],[314,397],[343,398],[332,401],[323,402]];   // dalles de pierre
+export const TREES = [[235,133],[229,155],[238,171],[219,173],[283,178],[285,221],[214,244],[256,247],[272,255],[224,259],[285,266],[270,273],[236,272],[217,279],[231,293],[267,300],[216,310],[256,328]];   // arbres de la Forêt
+export const CACTI = [[207,68],[216,68],[247,69],[291,68],[354,70],[267,101],[356,102],[229,103],[310,102],[304,130],[355,151],[341,170],[312,184],[341,199],[302,207],[353,219],[311,237],[308,256],[355,258]];    // cactus du Désert
+export const BUSHES = [[376,276],[315,282],[345,284],[305,302],[381,310],[352,311],[341,321],[327,334],[352,336],[375,338],[378,357],[415,367],[357,371],[372,398],[417,399]];   // buissons de la Toundra
 const inR = (X, Y, r) => X >= r.x && X < r.x + r.w && Y >= r.y && Y < r.y + r.h;
 export const zoneOpen = (s, z) => !z.closed && s.lvl >= z.lvl;
 // Peut-on marcher ici ? (open = false : on ignore le niveau, pour placer décors et fruits)

@@ -3,7 +3,7 @@
    - Mises à jour rapides : à chaque ouverture, index.html et app.js sont re-téléchargés en contournant
      tous les caches ; s'ils ont changé, la page est prévenue et se recharge (sans jamais couper une partie).
    - Les appels Firebase ne sont jamais mis en cache (aucune donnée de jeu n'est stockée ici). */
-const VERSION = 'moda-v40';
+const VERSION = 'moda-v41';
 const SHELL = 'shell-' + VERSION;
 const LIBS = 'libs-' + VERSION;
 const FILES = ['./', 'index.html', 'app.js', 'sim.js', 'simcore.js', 'sumo.js', 'fruit.js', 'fruitcore.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png'];

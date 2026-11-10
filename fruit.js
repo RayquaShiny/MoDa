@@ -14,16 +14,12 @@ const rng = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Mat
 const randIn = (z, r) => { const A = z.rects.map(q => q.w * q.h), tot = A.reduce((a, b) => a + b, 0); let t = r() * tot, i = 0; while (i < A.length - 1 && t >= A[i]) { t -= A[i]; i++; } const q = z.rects[i]; return { x: q.x + r() * q.w, y: q.y + r() * q.h }; };
 const okSpot = (X, Y, m) => [[0, 0], [m, 0], [-m, 0], [0, m], [0, -m]].every(([a, b]) => C.walkable(null, X + a, Y + b)) && !C.onSpot(X, Y, m);
 const segD = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], l = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((p.x - a[0]) * dx + (p.y - a[1]) * dy) / l)); return Math.hypot(p.x - a[0] - t * dx, p.y - a[1] - t * dy); };
-const nearPath = (p, d) => C.PATHS.some(P => P.some((q, i) => i && segD(p, P[i - 1], q) < d));
+const nearPath = (p, d) => C.SLABS.some(([a, b]) => Math.hypot(p.x - a * C.K, p.y - b * C.K) < d);
 const pickW = (w, r) => { let t = Object.values(w).reduce((a, b) => a + b, 0) * r, k; for (k in w) { t -= w[k]; if (t < 0) return k; } return k; };
-export function genDecor() {
-  const r = rng(4321), out = [];
-  [["forest", 36, "tree"], ["desert", 30, "cactus"]].forEach(([id, n, k]) => {
-    const z = ZONES.find(q => q.id === id), pts = []; let tries = 0;
-    while (pts.length < n && tries++ < 4000) { const p = randIn(z, r); if (okSpot(p.x, p.y, 36) && !nearPath(p, 46) && pts.every(q => (q.x - p.x) ** 2 + (q.y - p.y) ** 2 > 120 * 120)) pts.push(p); }
-    pts.forEach(p => out.push({ k, x: p.x, y: p.y, v: Math.floor(r() * 3) }));
-  });
-  return out;
+export function genDecor() { // arbres et cactus : positions relevées sur la vue de dessus du vrai jeu
+  const r = rng(4321), K = C.K;
+  return C.TREES.map(([a, b]) => ({ k: "tree", x: a * K, y: b * K + 34, v: Math.floor(r() * 3) }))
+    .concat(C.CACTI.map(([a, b]) => ({ k: "cactus", x: a * K, y: b * K + 30, v: Math.floor(r() * 3) })));
 }
 
 // ----- Hôte : ouvre la partie (chaque joueur gère sa propre progression) -----
@@ -139,7 +135,7 @@ export function createFruitClient(env) {
   const float = (X, Y, t, col) => { if (floats.length < 30) floats.push({ x: X, y: Y, t, col, l: 1 }); };
   function afterSale(g, X, Y) {
     float(X, Y - 70, `+${fmt(g.coins)} 🪙` + (g.tickets ? `  +${g.tickets} 🎟️` : ""), "#ffd23f"); coinBurst(X, Y - 30); beep(780, .12, "sine", .06, 1560); touch(); save(true);
-    if (g.up) { const lv = s.lvl; toast(`⭐ Niveau ${lv} !` + (lv === ZONES[2].lvl ? " Le Désert est débloqué 🏜️" : "")); beep(520, .2, "triangle", .05, 1040); }
+    if (g.up) { const lv = s.lvl; toast(`⭐ Niveau ${lv} !` + (lv === ZONES[2].lvl ? " Le Désert et la Toundra sont débloqués 🏜️❄️" : "")); beep(520, .2, "triangle", .05, 1040); }
     sel = null; renderUI(true);
   }
   function act(k) {
@@ -248,7 +244,7 @@ export function createFruitClient(env) {
     const c = mk(WORLD.w, WORLD.h), g = c.getContext("2d"), r = rng(7);
     g.fillStyle = "#3b3e46"; g.fillRect(0, 0, WORLD.w, WORLD.h);
     // falaises tout autour des zones et des parties cachées
-    g.fillStyle = "#6e7992"; ZONES.forEach(z => z.rects.forEach(q => g.fillRect(q.x - 24, q.y - 24, q.w + 48, q.h + 48)));
+    g.fillStyle = "#6e7992"; ZONES.forEach(z => z.rects.forEach(q => g.fillRect(q.x - 12, q.y - 12, q.w + 24, q.h + 24))); C.CLIFFS.forEach(q => g.fillRect(q.x, q.y, q.w, q.h));
     g.fillStyle = "#55607a"; HIDDEN.forEach(q => g.fillRect(q.x, q.y, q.w, q.h)); g.fillStyle = "#7e89a3"; HIDDEN.forEach(q => g.fillRect(q.x, q.y, q.w, 14));
     const COL = { spawn: ["#4fbf5c", "#47b454"], forest: ["#5ccc66", "#54c25e"], desert: ["#efd57a", "#e6c869"], autumn: ["#e5906a", "#dc8660"], tundra: ["#d6e8f7", "#c9def0"] };
     ZONES.forEach(z => z.rects.forEach(q => { g.fillStyle = COL[z.id][0]; g.fillRect(q.x, q.y, q.w, q.h); g.fillStyle = COL[z.id][1]; for (let yy = Math.ceil(q.y / 40) * 40; yy < q.y + q.h; yy += 40) for (let xx = Math.ceil(q.x / 40) * 40; xx < q.x + q.w; xx += 40) g.fillRect(xx + 11, yy + 11, 18, 18); }));
@@ -256,14 +252,14 @@ export function createFruitClient(env) {
     PLOTS.forEach(q => { const n = 29; for (let yy = 0; yy < q.h; yy += n) for (let xx = 0; xx < q.w; xx += n) { g.fillStyle = ((xx / n | 0) + (yy / n | 0)) % 2 ? "#e0a07e" : "#c47a55"; g.fillRect(q.x + xx, q.y + yy, Math.min(n, q.w - xx), Math.min(n, q.h - yy)); } g.strokeStyle = "#8a4f33"; g.lineWidth = 4; g.strokeRect(q.x, q.y, q.w, q.h); });
     // Forêt : bac de sable, petite cabane, cube blanc ; Désert : oasis ; Toundra : glace, ladder, station ; Forêt d'automne : arbres orange
     const P = SPOTS; g.fillStyle = "#b57a43"; g.fillRect(P.pit.x, P.pit.y, P.pit.w, P.pit.h); g.fillStyle = "#e3b87d"; g.fillRect(P.pit.x + 16, P.pit.y + 16, P.pit.w - 32, P.pit.h - 32);
-    g.fillStyle = "#0003"; g.fillRect(P.hut.x + 6, P.hut.y + 8, P.hut.w, P.hut.h); g.fillStyle = "#8a5a35"; g.fillRect(P.hut.x, P.hut.y, P.hut.w, P.hut.h); g.fillStyle = "#a8703f"; g.fillRect(P.hut.x, P.hut.y, P.hut.w, 14);
+    g.fillStyle = "#3ddc5a"; g.fillRect(P.hut.x, P.hut.y, P.hut.w, P.hut.h); g.strokeStyle = "#a8692f"; g.lineWidth = 10; g.strokeRect(P.hut.x + 5, P.hut.y + 5, P.hut.w - 10, P.hut.h - 10); g.strokeStyle = "#7a4a21"; g.lineWidth = 3; g.strokeRect(P.hut.x + 5, P.hut.y + 5, P.hut.w - 10, P.hut.h - 10); // enclos « SELL HERE »
     g.fillStyle = "#0003"; g.fillRect(P.white.x + 6, P.white.y + 8, P.white.w, P.white.h); g.fillStyle = "#f4f4f6"; g.fillRect(P.white.x, P.white.y, P.white.w, P.white.h); g.fillStyle = "#d8d8de"; g.fillRect(P.white.x, P.white.y + P.white.h - 10, P.white.w, 10);
     g.fillStyle = "#d9b66a"; g.fillRect(P.oasis.x - 10, P.oasis.y - 10, P.oasis.w + 20, P.oasis.h + 20); g.fillStyle = "#4a90e2"; g.fillRect(P.oasis.x, P.oasis.y, P.oasis.w, P.oasis.h);
-    g.fillStyle = "#7aa7e8"; g.fillRect(P.ice.x, P.ice.y, P.ice.w, P.ice.h); g.fillStyle = "#fff"; g.fillRect(P.station.x, P.station.y, P.station.w, P.station.h); g.fillStyle = "#5a63c8"; g.fillRect(P.station.x + 16, P.station.y + 16, P.station.w - 32, P.station.h - 32);
+    g.fillStyle = "#7aa7e8"; g.fillRect(P.ice.x, P.ice.y, P.ice.w, P.ice.h); g.fillStyle = "#fff"; g.fillRect(P.station.x, P.station.y, P.station.w, P.station.h); g.fillStyle = "#5a63c8"; g.fillRect(P.station.x + 32, P.station.y + 32, P.station.w - 64, P.station.h - 64);
     g.fillStyle = "#7a4a21"; g.fillRect(P.ladder.x, P.ladder.y, P.ladder.w, P.ladder.h); g.fillStyle = "#b9803f"; for (let yy = P.ladder.y + 8; yy < P.ladder.y + P.ladder.h; yy += 22) g.fillRect(P.ladder.x - 6, yy, P.ladder.w + 12, 8);
-    const au = ZONES[3].rects[0], tu = ZONES[4].rects[0];
-    for (let i = 0; i < 26; i++) { g.fillStyle = "#f0b13a"; g.beginPath(); g.arc(au.x + 40 + r() * (au.w - 80), au.y + 40 + r() * (au.h - 80), 22, 0, 7); g.fill(); }
-    for (let i = 0; i < 24; i++) { g.fillStyle = "#3ab549"; g.fillRect(tu.x + 30 + r() * (tu.w - 80), tu.y + 30 + r() * (tu.h - 80), 34, 34); }
+    const au = ZONES[3].rects, pickR = a => a[Math.floor(r() * a.length)];
+    for (let i = 0; i < 26; i++) { const q = pickR(au); g.fillStyle = "#f0b13a"; g.beginPath(); g.arc(q.x + 20 + r() * Math.max(1, q.w - 40), q.y + 20 + r() * Math.max(1, q.h - 40), 22, 0, 7); g.fill(); }
+    C.BUSHES.forEach(([a, b]) => { g.fillStyle = "#3ab549"; g.fillRect(a * C.K - 17, b * C.K - 17, 34, 34); });
     // rivière + pont
     g.fillStyle = "#4a90e2"; BLOCKS.slice(3).forEach(b => g.fillRect(b.x, b.y, b.w, b.h)); g.fillStyle = "#6aa8ee"; BLOCKS.slice(3).forEach(b => { for (let xx = b.x + 16; xx < b.x + b.w - 20; xx += 46) g.fillRect(xx, b.y + 14, 22, 5); });
     g.fillStyle = "#7a4a21"; g.fillRect(BRIDGE.x, BRIDGE.y, BRIDGE.w, BRIDGE.h); g.fillStyle = "#a8692f"; for (let yy = BRIDGE.y + 4; yy < BRIDGE.y + BRIDGE.h; yy += 12) g.fillRect(BRIDGE.x + 2, yy, BRIDGE.w - 4, 9);
@@ -271,7 +267,7 @@ export function createFruitClient(env) {
     g.fillStyle = "#6e7992"; BLOCKS.slice(0, 3).forEach(b => g.fillRect(b.x, b.y, b.w, b.h)); g.fillStyle = "#8a96b0"; BLOCKS.slice(0, 3).forEach(b => g.fillRect(b.x, b.y, 4, b.h));
     // dalles de pierre
     const slab = (X, Y) => { g.fillStyle = "#5d5d68"; g.fillRect(X - 18, Y - 12, 36, 26); g.fillStyle = "#7c7c88"; g.fillRect(X - 18, Y - 12, 36, 20); g.fillStyle = "#8b8b97"; g.fillRect(X - 18, Y - 12, 36, 4); };
-    C.PATHS.forEach(Pp => Pp.forEach((q, i) => { if (!i) return; const a = Pp[i - 1], d = Math.hypot(q[0] - a[0], q[1] - a[1]), n = Math.max(1, Math.round(d / 52)); for (let k = 0; k < n; k++) slab(a[0] + (q[0] - a[0]) * k / n + (r() - .5) * 8, a[1] + (q[1] - a[1]) * k / n + (r() - .5) * 8); }));
+    C.SLABS.forEach(([a, b]) => slab(a * C.K, b * C.K));
     // tuile d'apparition (étoile)
     g.fillStyle = "#f4f4f4"; g.fillRect(C.SPAWN.x - 34, C.SPAWN.y - 28, 68, 56); g.fillStyle = "#111"; g.beginPath();
     for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rad = i % 2 ? 7 : 19; g[i ? "lineTo" : "moveTo"](C.SPAWN.x + Math.cos(a) * rad, C.SPAWN.y + Math.sin(a) * rad); } g.closePath(); g.fill();

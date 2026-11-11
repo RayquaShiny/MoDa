@@ -19,7 +19,7 @@ const pickW = (w, r) => { let t = Object.values(w).reduce((a, b) => a + b, 0) * 
 export function genDecor() { // arbres et cactus : positions relevées sur la vue de dessus du vrai jeu
   const r = rng(4321), K = C.K;
   return C.TREES.map(([a, b]) => ({ k: "tree", x: a * K, y: b * K + 34, v: Math.floor(r() * 3) }))
-    .concat(C.CACTI.map(([a, b]) => ({ k: b < 118 ? "tree" : "cactus", x: a * K, y: b * K + (b < 118 ? 34 : 30), v: Math.floor(r() * 3) })));
+    .concat(C.CACTI.map(([a, b]) => ({ k: b < 118 ? "cactus" : "tree", x: a * K, y: b * K + (b < 118 ? 30 : 34), v: Math.floor(r() * 3) })));
 }
 
 // ----- Hôte : ouvre la partie (chaque joueur gère sa propre progression) -----
@@ -252,9 +252,12 @@ export function createFruitClient(env) {
     PLOTS.forEach(q => { const n = 29; for (let yy = 0; yy < q.h; yy += n) for (let xx = 0; xx < q.w; xx += n) { g.fillStyle = ((xx / n | 0) + (yy / n | 0)) % 2 ? "#e0a07e" : "#c47a55"; g.fillRect(q.x + xx, q.y + yy, Math.min(n, q.w - xx), Math.min(n, q.h - yy)); } g.strokeStyle = "#8a4f33"; g.lineWidth = 4; g.strokeRect(q.x, q.y, q.w, q.h); });
     // Forêt : bac de sable, petite cabane, cube blanc ; Désert : oasis ; Toundra : glace, ladder, station ; Forêt d'automne : arbres orange
     const P = SPOTS; g.fillStyle = "#b57a43"; g.fillRect(P.pit.x, P.pit.y, P.pit.w, P.pit.h); g.fillStyle = "#e3b87d"; g.fillRect(P.pit.x + 16, P.pit.y + 16, P.pit.w - 32, P.pit.h - 32);
-    g.fillStyle = "#7a4a21"; g.fillRect(P.ramp.x, P.ramp.y, P.ramp.w, P.ramp.h); g.fillStyle = "#b9803f"; for (let yy = P.ramp.y + 6; yy < P.ramp.y + P.ramp.h; yy += 14) g.fillRect(P.ramp.x + 4, yy, P.ramp.w - 8, 8); // rampe Forêt → bananes
+    g.fillStyle = "#7a4a21"; g.fillRect(P.ramp.x, P.ramp.y, P.ramp.w, P.ramp.h); g.fillStyle = "#b9803f"; for (let xx = P.ramp.x + 6; xx < P.ramp.x + P.ramp.w - 24; xx += 14) g.fillRect(xx, P.ramp.y + 4, 8, P.ramp.h - 8); // rampe Forêt → bananes (vers l'est)
+    g.fillStyle = "#4b5567"; g.fillRect(P.ramp.x + P.ramp.w - 22, P.ramp.y - 6, 26, P.ramp.h + 12); g.fillStyle = "#7be3a0aa"; g.fillRect(P.ramp.x + P.ramp.w - 16, P.ramp.y + 2, 14, P.ramp.h - 4); // porte « NIVEAU 5 »
     g.fillStyle = "#7a4a21"; g.fillRect(P.climb.x, P.climb.y, P.climb.w, P.climb.h); g.fillStyle = "#b9803f"; for (let xx = P.climb.x + 4; xx < P.climb.x + P.climb.w; xx += 12) g.fillRect(xx, P.climb.y - 4, 7, P.climb.h + 8); // échelle bananes → cactus
-    g.font = "800 20px system-ui,sans-serif"; g.textAlign = "center"; g.lineJoin = "round"; g.lineWidth = 5; g.strokeStyle = "#000b"; g.strokeText("NIVEAU 5", P.ramp.x + P.ramp.w / 2, P.ramp.y - 8); g.fillStyle = "#fff"; g.fillText("NIVEAU 5", P.ramp.x + P.ramp.w / 2, P.ramp.y - 8);
+    g.fillStyle = "#2b2f3a"; g.fillRect(P.door.x, P.door.y, P.door.w, P.door.h); g.strokeStyle = "#c9822f"; g.lineWidth = 8; g.strokeRect(P.door.x + 4, P.door.y + 4, P.door.w - 8, P.door.h - 8); // porte « Open During Weekend »
+    { const SG = C.SIGN; g.fillStyle = "#7a4a21"; g.fillRect(SG.x - 4, SG.y, 8, 44); g.save(); g.translate(SG.x, SG.y); g.rotate(-.12); g.fillStyle = "#a8692f"; g.fillRect(-48, -32, 96, 42); g.fillStyle = "#fff"; g.font = "800 14px system-ui,sans-serif"; g.textAlign = "center"; g.fillText("SHOP →", 0, -16); g.fillText("← DESERT", 0, 2); g.restore(); } // panneau
+    g.font = "800 20px system-ui,sans-serif"; g.textAlign = "center"; g.lineJoin = "round"; g.lineWidth = 5; g.strokeStyle = "#000b"; g.strokeText("NIVEAU 5", P.ramp.x + P.ramp.w / 2, P.ramp.y - 10); g.fillStyle = "#fff"; g.fillText("NIVEAU 5", P.ramp.x + P.ramp.w / 2, P.ramp.y - 10);
     g.fillStyle = "#0003"; g.fillRect(P.white.x + 6, P.white.y + 8, P.white.w, P.white.h); g.fillStyle = "#f4f4f6"; g.fillRect(P.white.x, P.white.y, P.white.w, P.white.h); g.fillStyle = "#d8d8de"; g.fillRect(P.white.x, P.white.y + P.white.h - 10, P.white.w, 10);
     g.fillStyle = "#d9b66a"; g.fillRect(P.oasis.x - 10, P.oasis.y - 10, P.oasis.w + 20, P.oasis.h + 20); g.fillStyle = "#4a90e2"; g.fillRect(P.oasis.x, P.oasis.y, P.oasis.w, P.oasis.h);
     g.fillStyle = "#7aa7e8"; g.fillRect(P.ice.x, P.ice.y, P.ice.w, P.ice.h); g.fillStyle = "#fff"; g.fillRect(P.station.x, P.station.y, P.station.w, P.station.h); g.fillStyle = "#5a63c8"; g.fillRect(P.station.x + 32, P.station.y + 32, P.station.w - 64, P.station.h - 64);

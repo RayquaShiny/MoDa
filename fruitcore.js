@@ -31,7 +31,7 @@ export const FRUIT_IDS = Object.keys(FRUITS);
 
 // ----- Carte : décalquée sur la vue de dessus du vrai jeu (coordonnées image × 4) -----
 // La forme exacte des zones vient d'une grille : 1 case = 5 px de l'image = 20 px ici.
-// S = Spawn, F = Forêt, D = Désert (bananes), C = Désert (cactus), M = Marché de Mike, A = Forêt d'automne, T = Toundra, c = falaise, H = partie cachée, . = vide
+// S = Spawn, F = Forêt, D = Désert du haut (cactus, citrons), C = Désert en colonne (bananes), M = Marché de Mike, A = Forêt d'automne, T = Toundra, c = falaise, H = partie cachée, . = vide
 export const K = 4;
 export const WORLD = { w: 2500, h: 2050 };
 export const CELL = 5 * K, MAP_OX = 5, MAP_OY = 5;
@@ -55,16 +55,16 @@ export const MAP = [
   "...................ccccccccccccccccDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAcccc.....................",
   "....cccccccccccccccccccccccccccccccDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAAccc.....................",
   "....cccccccccccccccccccccccccccccccDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDAAAAAAAAAAAAAAAAAAAAAAAcccc....................",
-  "....cccccccccccccccccccccccccccccccFFDDDDDDDDDDDDDDDDDCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAAAcccc....................",
-  "....ccccccccccccccccccSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFDCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAAAAccc....................",
+  "....cccccccccccccccccccccccccccccccFFCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAAAcccc....................",
+  "....ccccccccccccccccccSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAAAAccc....................",
   "....cccccccccccccccccSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAAAAccc....................",
   "....ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAAAcccc....................",
   "....ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAAAcccc....................",
   "....ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAAAcccc....................",
   "....ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAAAcccc....................",
-  "....ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFDCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAAcccc....................",
-  "....ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFDCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAcccc....................",
-  "....ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFDCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAcccc....................",
+  "....ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAAcccc....................",
+  "....ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFCCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAcccc....................",
+  "....ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFCCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAcccc....................",
   "....ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAcccc....................",
   "...cccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAAAccc....................",
   ".cccccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAAAAccc....................",
@@ -72,7 +72,7 @@ export const MAP = [
   ".cccccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAAAAccc....................",
   ".cccccccSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAAAAcccc...................",
   ".cccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAAAAcccc...................",
-  ".cccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFDCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAAAAcccc............cccc...",
+  ".cccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAAAAcccc............cccc...",
   ".ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAAAAcccccccccccccccccccc...",
   ".ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAAAAcccccccccccccccccccc...",
   ".ccccSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFFFFFFFFFFFFFFFFFFCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcccccc...",
@@ -149,16 +149,17 @@ const cellRects = ch => {
 };
 const R = (x1, y1, x2, y2) => ({ x: x1 * K, y: y1 * K, w: (x2 - x1) * K, h: (y2 - y1) * K });
 // Zones : Spawn (à gauche, avec les 5 parcelles), Forêt (milieu, côté pommes/poires), Marché de Mike (la salle sous la Forêt), Désert.
-// Le Désert demande le niveau 5 (À CONFIRMER : le wiki donne « Forêt 0-4, Désert 5-9 ») et s'y entre par la rampe « NIVEAU 5 » : on arrive dans la zone des bananes,
-// puis on MONTE par l'échelle pour atteindre la zone des cactus et citrons (pas de passage direct depuis la Forêt).
+// Le Désert demande le niveau 5 (À CONFIRMER : le wiki donne « Forêt 0-4, Désert 5-9 »). On y entre par la rampe « NIVEAU 5 » (à droite du pont) :
+// on arrive dans la colonne des bananes. Pour atteindre le plateau des cactus et citrons (en haut), il faut ensuite MONTER par l'échelle depuis les bananes :
+// il n'y a aucun passage direct depuis la Forêt (poires).
 // La Toundra et la Forêt d'automne sont sur la carte mais fermées pour l'instant.
 export const ZONES = [
   { id: "spawn",  n: "Spawn",           lvl: 0,  rects: cellRects("S") },
   { id: "forest", n: "Forêt",           lvl: 0,  rects: cellRects("F"), fruit: { n: 22, w: { apple: 40, pear: 25, green_apple: 18, crimson_pear: 10, sugar_apple: 7 } } },
-  { id: "desert", n: "Désert (bananes)", lvl: 5, rects: cellRects("D"), fruit: { n: 14, w: { banana: 55, embum_banana: 30, java_banana: 15 } } },
+  { id: "desert", n: "Désert (bananes)", lvl: 5, rects: cellRects("C"), fruit: { n: 14, w: { banana: 55, embum_banana: 30, java_banana: 15 } } },
   { id: "autumn", n: "Forêt d'automne", lvl: 15, closed: true, rects: cellRects("A") },
   { id: "tundra", n: "Toundra",         lvl: 10, closed: true, rects: cellRects("T") },
-  { id: "cactus", n: "Désert (cactus)", lvl: 5,  rects: cellRects("C"), fruit: { n: 16, w: { lemon: 45, lime: 30, cactus_fruit: 25 } } },
+  { id: "cactus", n: "Désert (cactus)", lvl: 5,  rects: cellRects("D"), fruit: { n: 16, w: { lemon: 45, lime: 30, cactus_fruit: 25 } } },
   { id: "market", n: "Marché de Mike",  lvl: 0,  rects: cellRects("M") }
 ];
 export const CLIFFS = cellRects("c");
@@ -167,8 +168,8 @@ export const PLOTS = [R(69, 139, 125, 192), R(137, 131, 192, 185), R(55, 205, 11
 // Obstacles : clôture Spawn | Forêt (avec un passage), murs de falaise, rivière (traversable seulement sur le pont)
 export const FENCES = [ { x: 794, y: 512, w: 12, h: 360 }, { x: 794, y: 1024, w: 12, h: 368 } ];
 export const WALLS = [
-  { x: 1180, y: 472, w: 16, h: 1160 },                                              // mur Forêt | Désert + Toundra
-  { x: 812,  y: 472, w: 132, h: 16 }, { x: 1024, y: 472, w: 164, h: 16 },           // falaise Forêt | bananes (la rampe passe entre les deux)
+  { x: 1180, y: 472, w: 16, h: 136 }, { x: 1180, y: 700, w: 16, h: 932 },          // mur Forêt | Désert + Toundra (la rampe « NIVEAU 5 » passe entre les deux)
+  { x: 780,  y: 472, w: 408, h: 24 },                                               // falaise Forêt | plateau des cactus (aucun passage)
   { x: 1188, y: 472, w: 196, h: 16 }, { x: 1448, y: 472, w: 16, h: 16 }             // falaise bananes | cactus (l'échelle passe entre les deux)
 ];
 export const RIVERS = [ { x: 800, y: 792, w: 204, h: 56 }, { x: 1048, y: 792, w: 132, h: 56 } ];
@@ -176,12 +177,13 @@ export const BLOCKS = FENCES.concat(WALLS, RIVERS);
 export const BRIDGE = { x: 1004, y: 772, w: 44, h: 112 };
 // Décors non traversés par les fruits (pas des obstacles) : le coffre de vente, la rampe et l'échelle du Désert, le sable, l'oasis...
 export const SPOTS = {
-  white: R(238, 133, 253, 151), chest: R(186, 238, 198, 250), ramp: R(236, 112, 256, 134), climb: R(346, 110, 362, 128), pit: R(214, 331, 282, 397), oasis: R(207, 71, 230, 98),
+  white: R(238, 133, 253, 151), chest: R(186, 238, 198, 250), ramp: R(268, 152, 296, 175), climb: R(346, 110, 362, 128), door: R(320, 244, 346, 260), pit: R(214, 331, 282, 397), oasis: R(207, 71, 230, 98),
   ice: R(329, 352, 353, 379), station: R(366, 410, 430, 475), ladder: R(395, 260, 417, 357)
 };
 export const HIDDEN = [R(368, 47, 471, 105), R(434, 228, 587, 393)]; // zones non montrées sur la carte (falaise pleine)
 // Vente : le coffre « SELL HERE », à côté de la clôture, près du passage Spawn → Forêt. Boutique : la salle du Marché de Mike, sous la Forêt (côté pommes)
 export const PADS = { sell: { x: 764, y: 976, n: "Vente" }, shop: { x: 1000, y: 1740, n: "Mike's Market" } };
+export const SIGN = { x: 888, y: 1008 };   // panneau « SHOP → / ← DESERT » (la boutique est au sud, le Désert au nord)
 export const SPAWN = { x: 672, y: 928 };
 // Éléments relevés un par un sur la vue de dessus (en pixels de l'image, à multiplier par K)
 export const SLABS = [[363,66],[246,88],[299,88],[264,88],[280,88],[236,90],[254,90],[314,90],[272,92],[290,92],[325,92],[307,94],[329,100],[324,108],[462,108],[328,116],[459,118],[478,122],[244,124],[326,126],[457,127],[195,126],[448,129],[131,132],[438,133],[328,134],[66,138],[406,139],[435,142],[416,142],[326,144],[399,143],[444,145],[425,146],[453,148],[296,149],[368,152],[322,152],[375,152],[244,154],[422,155],[314,155],[413,158],[458,158],[242,164],[310,164],[264,164],[409,167],[256,168],[462,168],[244,172],[314,172],[252,174],[322,175],[465,177],[254,182],[324,183],[463,186],[444,189],[166,190],[326,192],[128,199],[170,200],[324,200],[136,203],[463,207],[326,208],[166,208],[408,211],[138,212],[148,216],[324,216],[468,216],[168,218],[405,220],[152,224],[328,224],[464,225],[254,226],[492,226],[189,229],[409,229],[118,232],[138,232],[180,232],[154,233],[197,233],[324,233],[128,234],[144,234],[166,232],[134,233],[206,234],[250,234],[215,237],[406,238],[327,242],[140,243],[246,243],[166,244],[219,246],[236,246],[228,249],[137,252],[170,254],[128,257],[405,257],[232,258],[125,265],[166,266],[236,266],[244,269],[418,268],[341,271],[168,275],[248,278],[330,279],[244,286],[332,288],[240,294],[250,296],[330,297],[260,299],[270,302],[244,304],[326,306],[317,311],[242,314],[314,321],[246,324],[311,331],[222,334],[313,342],[310,354],[404,357],[314,364],[401,366],[218,368],[312,374],[376,378],[367,382],[338,382],[386,382],[316,384],[358,385],[333,391],[390,392],[353,396],[314,397],[343,398],[332,401],[323,402]];   // dalles de pierre

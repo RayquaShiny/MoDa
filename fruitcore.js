@@ -175,7 +175,7 @@ export const RIVERS = [ { x: 800, y: 792, w: 204, h: 56 }, { x: 1048, y: 792, w:
 export const BRIDGE = { x: 1004, y: 772, w: 44, h: 112 };
 // Décors non traversés par les fruits (pas des obstacles) : le coffre de vente, la rampe et l'échelle du Désert, le sable, l'oasis...
 export const SPOTS = {
-  white: R(238, 133, 253, 151), chest: R(186, 238, 198, 250), ramp: R(268, 152, 296, 175), climb: R(346, 110, 362, 128), door: R(320, 244, 346, 260), pit: R(214, 331, 282, 397), oasis: R(207, 71, 230, 98),
+  chest: R(186, 238, 198, 250), ramp: R(268, 152, 296, 175), climb: R(346, 110, 362, 128), door: R(320, 244, 346, 260), pit: R(214, 331, 282, 397), oasis: R(207, 71, 230, 98),
   ice: R(329, 352, 353, 379), station: R(366, 410, 430, 475), ladder: R(395, 260, 417, 357)
 };
 export const HIDDEN = [R(368, 47, 471, 105), R(434, 228, 587, 393)]; // zones non montrées sur la carte (falaise pleine)
@@ -190,11 +190,10 @@ export const BLOCKS = FENCES.concat(WALLS, RIVERS, MARKET_WALLS);
 // Zone du Marché + son parvis (ni arbres ni dalles dedans, pour que la porte et l'enseigne restent dégagées)
 export const inMarket = (X, Y) => { const p = SPOTS.pit; return X > p.x - 30 && X < p.x + p.w + 30 && Y > p.y - 120 && Y < p.y + p.h + 30; };
 // Même chose autour de la rampe « NIVEAU 5 », de l'échelle et de la porte du Désert
-export const keepClear = (X, Y) => inMarket(X, Y) || [SPOTS.ramp, SPOTS.climb, SPOTS.door].some(r => X > r.x - 34 && X < r.x + r.w + 34 && Y > r.y - 34 && Y < r.y + r.h + 34);
+export const keepClear = (X, Y) => inMarket(X, Y) || [SPOTS.ramp, SPOTS.climb, SPOTS.door].some(r => X > r.x - 34 && X < r.x + r.w + 34 && Y > r.y - 34 && Y < r.y + r.h + 34) || Math.hypot(X - SIGN.x, Y - SIGN.y) < 80 || Math.hypot(X - PADS.sell.x, Y - PADS.sell.y) < 90;
 export const SIGN = { x: 888, y: 1008 };   // panneau « SHOP → / ← DESERT » (la boutique est au sud, le Désert au nord)
 export const SPAWN = { x: 672, y: 928 };
 // Éléments relevés un par un sur la vue de dessus (en pixels de l'image, à multiplier par K)
-export const SLABS = [[363,66],[246,88],[299,88],[264,88],[280,88],[236,90],[254,90],[314,90],[272,92],[290,92],[325,92],[307,94],[329,100],[324,108],[462,108],[328,116],[459,118],[478,122],[244,124],[326,126],[457,127],[195,126],[448,129],[131,132],[438,133],[328,134],[66,138],[406,139],[435,142],[416,142],[326,144],[399,143],[444,145],[425,146],[453,148],[296,149],[368,152],[322,152],[375,152],[244,154],[422,155],[314,155],[413,158],[458,158],[242,164],[310,164],[264,164],[409,167],[256,168],[462,168],[244,172],[314,172],[252,174],[322,175],[465,177],[254,182],[324,183],[463,186],[444,189],[166,190],[326,192],[128,199],[170,200],[324,200],[136,203],[463,207],[326,208],[166,208],[408,211],[138,212],[148,216],[324,216],[468,216],[168,218],[405,220],[152,224],[328,224],[464,225],[254,226],[492,226],[189,229],[409,229],[118,232],[138,232],[180,232],[154,233],[197,233],[324,233],[128,234],[144,234],[166,232],[134,233],[206,234],[250,234],[215,237],[406,238],[327,242],[140,243],[246,243],[166,244],[219,246],[236,246],[228,249],[137,252],[170,254],[128,257],[405,257],[232,258],[125,265],[166,266],[236,266],[244,269],[418,268],[341,271],[168,275],[248,278],[330,279],[244,286],[332,288],[240,294],[250,296],[330,297],[260,299],[270,302],[244,304],[326,306],[317,311],[242,314],[314,321],[246,324],[311,331],[222,334],[313,342],[310,354],[404,357],[314,364],[401,366],[218,368],[312,374],[376,378],[367,382],[338,382],[386,382],[316,384],[358,385],[333,391],[390,392],[353,396],[314,397],[343,398],[332,401],[323,402]];   // dalles de pierre
 export const TREES = [[235,133],[229,155],[238,171],[219,173],[283,178],[285,221],[214,244],[256,247],[272,255],[224,259],[285,266],[270,273],[236,272],[217,279],[231,293],[267,300],[216,310],[256,328]];   // arbres de la Forêt
 export const CACTI = [[207,68],[216,68],[247,69],[291,68],[354,70],[267,101],[356,102],[229,103],[310,102],[304,130],[355,151],[341,170],[312,184],[341,199],[302,207],[353,219],[311,237],[308,256],[355,258]];    // cactus du Désert
 export const BUSHES = [[376,276],[315,282],[345,284],[305,302],[381,310],[352,311],[341,321],[327,334],[352,336],[375,338],[378,357],[415,367],[357,371],[372,398],[417,399]];   // buissons de la Toundra
@@ -203,6 +202,31 @@ export const zoneOpen = (s, z) => !z.closed && s.lvl >= z.lvl;
 // Peut-on marcher ici ? (open = false : on ignore le niveau, pour placer décors et fruits)
 export const walkable = (s, X, Y) => ZONES.some(z => (!s || zoneOpen(s, z)) && z.rects.some(r => inR(X, Y, r))) && !BLOCKS.some(b => inR(X, Y, b));
 export const onSpot = (X, Y, m = 0) => Object.values(SPOTS).concat(PLOTS).some(r => inR(X, Y, { x: r.x - m, y: r.y - m, w: r.w + 2 * m, h: r.h + 2 * m })) || BLOCKS.some(b => inR(X, Y, { x: b.x - m, y: b.y - m, w: b.w + 2 * m, h: b.h + 2 * m })) || inR(X, Y, { x: BRIDGE.x - m, y: BRIDGE.y - m, w: BRIDGE.w + 2 * m, h: BRIDGE.h + 2 * m });
+// Chemins de dalles : un réseau logique. Spawn → parcelles ; Spawn → passage de la clôture → carrefour de la Forêt ;
+// carrefour → porte du Marché ; carrefour → pont → rampe « NIVEAU 5 » ; colonne des bananes → porte et échelle ; plateau des cactus.
+export const PATHS = [
+  [[672, 928], [740, 918], [800, 920], [870, 940], [930, 962]],
+  [[930, 962], [960, 1060], [985, 1160], [992, 1250], [992, 1288]],
+  [[930, 962], [990, 900], [1026, 860], [1026, 780], [1030, 700], [1060, 656]],
+  [[1196, 654], [1240, 680], [1262, 760], [1284, 860], [1318, 960]],
+  [[1262, 760], [1330, 640], [1392, 540], [1416, 520]],
+  [[1416, 432], [1330, 400], [1220, 380], [1100, 360], [980, 340], [880, 300]],
+  [[672, 928], [600, 860], [520, 800], [490, 770]],
+  [[672, 928], [690, 860], [700, 790], [690, 752]],
+  [[672, 928], [600, 930], [520, 930], [462, 930]],
+  [[672, 928], [600, 1000], [540, 1070], [500, 1100]],
+  [[672, 928], [660, 1020], [650, 1100], [645, 1140]]
+];
+// Les dalles sont posées à intervalle régulier le long des chemins (jamais sur le pont, la rampe, l'échelle, la porte, la tuile d'apparition ou dans le Marché)
+export const SLABS = (() => {
+  const out = [], pit = SPOTS.pit, skip = [BRIDGE, SPOTS.ramp, SPOTS.climb, SPOTS.door, { x: 626, y: 884, w: 92, h: 88 }, { x: pit.x - 8, y: pit.y - 30, w: pit.w + 16, h: pit.h + 42 }];
+  PATHS.forEach(P => { for (let i = 1; i < P.length; i++) {
+    const [ax, ay] = P[i - 1], [bx, by] = P[i], n = Math.max(1, Math.round(Math.hypot(bx - ax, by - ay) / 46));
+    for (let q = i === 1 ? 0 : 1; q <= n; q++) { const X = ax + (bx - ax) * q / n, Y = ay + (by - ay) * q / n;
+      if (!walkable(null, X, Y) || skip.some(r => inR(X, Y, r)) || out.some(o => Math.hypot(o[0] * K - X, o[1] * K - Y) < 30)) continue; out.push([X / K, Y / K]); } } });
+  return out;
+})();
+export const nearSlab = (X, Y, d) => SLABS.some(([a, b]) => Math.hypot(a * K - X, b * K - Y) < d);
 
 // Sacs (emplacements = nombre de fruits portés) et bottes (bonus de vitesse en « unités Roblox » ; le saut n'existe pas dans cette version 2D)
 export const BAGS = [

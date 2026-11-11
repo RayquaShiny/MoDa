@@ -31,7 +31,7 @@ export const FRUIT_IDS = Object.keys(FRUITS);
 
 // ----- Carte : décalquée sur la vue de dessus du vrai jeu (coordonnées image × 4) -----
 // La forme exacte des zones vient d'une grille : 1 case = 5 px de l'image = 20 px ici.
-// S = Spawn, F = Forêt, D = Désert du haut (cactus, citrons), C = Désert en colonne (bananes), M = Marché de Mike, A = Forêt d'automne, T = Toundra, c = falaise, H = partie cachée, . = vide
+// S = Spawn, F = Forêt, D = Désert du haut (cactus, citrons), C = Désert en colonne (bananes), A = Forêt d'automne, T = Toundra, c = falaise, H = partie cachée, . = vide
 export const K = 4;
 export const WORLD = { w: 2500, h: 2050 };
 export const CELL = 5 * K, MAP_OX = 5, MAP_OY = 5;
@@ -112,18 +112,18 @@ export const MAP = [
   ".................................ccFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTTccHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHccc",
   ".................................ccFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTTcccccccc...........................",
   ".................................ccFFFFFFFFFFFFFFFFFFFTTTTTTTTTTTTTTTTTTTTTTTTTTcccccccc...........................",
-  ".................................ccccccccMMMMMMMMccccccTTTTTTTTTTTTTTTTTTTTTTTTTTccccccc...........................",
-  ".................................ccccccccMMMMMMMMcccccccccccccccccTTTTTTTTTTTTTTTccccccc...........................",
-  ".......................................ccMMMMMMMMcccccccccccccccccccccTTTTTTTTTTcccccccc...........................",
-  ".........................................MMMMMMMM................cccccTTTTTTTTTTcccccccc...........................",
-  ".........................................MMMMMMMM................cccccTTTTTTTTTTcccccccc...........................",
-  ".........................................MMMMMMMM................cccccTTTTTTTTTTcccccccc...........................",
-  ".........................................MMMMMMMM................cccccTTTTTTTTTTcccccccc...........................",
-  ".........................................MMMMMMMM................cccccTTTTTTTTTTcccccccc...........................",
-  ".........................................MMMMMMMM................cccccTTTTTTTTTTccccccc............................",
-  ".........................................MMMMMMMM................cccccTTTTTTTTTTccccccc............................",
-  ".........................................MMMMMMMM.................ccccTTTTTTTTTTccccccc............................",
-  ".........................................MMMMMMMM.................ccccTTTTTTTTTTccccccc............................",
+  ".................................ccccccccccccccccccccccTTTTTTTTTTTTTTTTTTTTTTTTTTccccccc...........................",
+  ".................................cccccccccccccccccccccccccccccccccTTTTTTTTTTTTTTTccccccc...........................",
+  ".......................................cccccccccccccccccccccccccccccccTTTTTTTTTTcccccccc...........................",
+  ".........................................cccccccc................cccccTTTTTTTTTTcccccccc...........................",
+  ".........................................cccccccc................cccccTTTTTTTTTTcccccccc...........................",
+  ".........................................cccccccc................cccccTTTTTTTTTTcccccccc...........................",
+  ".........................................cccccccc................cccccTTTTTTTTTTcccccccc...........................",
+  ".........................................cccccccc................cccccTTTTTTTTTTcccccccc...........................",
+  ".........................................cccccccc................cccccTTTTTTTTTTccccccc............................",
+  ".........................................cccccccc................cccccTTTTTTTTTTccccccc............................",
+  ".........................................cccccccc.................ccccTTTTTTTTTTccccccc............................",
+  ".........................................cccccccc.................ccccTTTTTTTTTTccccccc............................",
   "..................................................................ccTTTTTTTTTTTTccccccc............................",
   "..................................................................ccTTTTTTTTTTTTTcccccc............................",
   "..................................................................ccccccccccccccccccccc............................",
@@ -148,7 +148,7 @@ const cellRects = ch => {
   return out;
 };
 const R = (x1, y1, x2, y2) => ({ x: x1 * K, y: y1 * K, w: (x2 - x1) * K, h: (y2 - y1) * K });
-// Zones : Spawn (à gauche, avec les 5 parcelles), Forêt (milieu, côté pommes/poires), Marché de Mike (la salle sous la Forêt), Désert.
+// Zones : Spawn (à gauche, avec les 5 parcelles), Forêt (milieu, côté pommes/poires, avec le Marché de Mike au sud), Désert.
 // Le Désert demande le niveau 5 (À CONFIRMER : le wiki donne « Forêt 0-4, Désert 5-9 »). On y entre par la rampe « NIVEAU 5 » (à droite du pont) :
 // on arrive dans la colonne des bananes. Pour atteindre le plateau des cactus et citrons (en haut), il faut ensuite MONTER par l'échelle depuis les bananes :
 // il n'y a aucun passage direct depuis la Forêt (poires).
@@ -159,8 +159,7 @@ export const ZONES = [
   { id: "desert", n: "Désert (bananes)", lvl: 5, rects: cellRects("C"), fruit: { n: 14, w: { banana: 55, embum_banana: 30, java_banana: 15 } } },
   { id: "autumn", n: "Forêt d'automne", lvl: 15, closed: true, rects: cellRects("A") },
   { id: "tundra", n: "Toundra",         lvl: 10, closed: true, rects: cellRects("T") },
-  { id: "cactus", n: "Désert (cactus)", lvl: 5,  rects: cellRects("D"), fruit: { n: 16, w: { lemon: 45, lime: 30, cactus_fruit: 25 } } },
-  { id: "market", n: "Marché de Mike",  lvl: 0,  rects: cellRects("M") }
+  { id: "cactus", n: "Désert (cactus)", lvl: 5,  rects: cellRects("D"), fruit: { n: 16, w: { lemon: 45, lime: 30, cactus_fruit: 25 } } }
 ];
 export const CLIFFS = cellRects("c");
 // Parcelles des joueurs (5 = le nombre de joueurs d'un serveur) : dessinées, mais sans fonction dans cette version
@@ -173,7 +172,6 @@ export const WALLS = [
   { x: 1188, y: 472, w: 196, h: 16 }, { x: 1448, y: 472, w: 16, h: 16 }             // falaise bananes | cactus (l'échelle passe entre les deux)
 ];
 export const RIVERS = [ { x: 800, y: 792, w: 204, h: 56 }, { x: 1048, y: 792, w: 132, h: 56 } ];
-export const BLOCKS = FENCES.concat(WALLS, RIVERS);
 export const BRIDGE = { x: 1004, y: 772, w: 44, h: 112 };
 // Décors non traversés par les fruits (pas des obstacles) : le coffre de vente, la rampe et l'échelle du Désert, le sable, l'oasis...
 export const SPOTS = {
@@ -181,8 +179,18 @@ export const SPOTS = {
   ice: R(329, 352, 353, 379), station: R(366, 410, 430, 475), ladder: R(395, 260, 417, 357)
 };
 export const HIDDEN = [R(368, 47, 471, 105), R(434, 228, 587, 393)]; // zones non montrées sur la carte (falaise pleine)
-// Vente : le coffre « SELL HERE », à côté de la clôture, près du passage Spawn → Forêt. Boutique : la salle du Marché de Mike, sous la Forêt (côté pommes)
-export const PADS = { sell: { x: 764, y: 976, n: "Vente" }, shop: { x: 1000, y: 1740, n: "Mike's Market" } };
+// Vente : le coffre « SELL HERE », à côté de la clôture, près du passage Spawn → Forêt. Boutique : le Marché de Mike, dans le carré marron au sud de la Forêt (côté pommes)
+export const PADS = { sell: { x: 764, y: 976, n: "Vente" }, shop: { x: 992, y: 1470, n: "Mike's Market" } };
+// Mike's Market : c'est le carré marron (le « bac à sable » de la vue de dessus) : une vraie salle fermée, avec une porte au nord
+export const MARKET_WALLS = (() => { const p = SPOTS.pit, t = 16, cx = p.x + p.w / 2, d = 32; return [
+  { x: p.x, y: p.y, w: cx - d - p.x, h: t }, { x: cx + d, y: p.y, w: p.x + p.w - cx - d, h: t },   // mur du nord, avec la porte au milieu
+  { x: p.x, y: p.y, w: t, h: p.h }, { x: p.x + p.w - t, y: p.y, w: t, h: p.h }, { x: p.x, y: p.y + p.h - t, w: p.w, h: t }
+]; })();
+export const BLOCKS = FENCES.concat(WALLS, RIVERS, MARKET_WALLS);
+// Zone du Marché + son parvis (ni arbres ni dalles dedans, pour que la porte et l'enseigne restent dégagées)
+export const inMarket = (X, Y) => { const p = SPOTS.pit; return X > p.x - 30 && X < p.x + p.w + 30 && Y > p.y - 120 && Y < p.y + p.h + 30; };
+// Même chose autour de la rampe « NIVEAU 5 », de l'échelle et de la porte du Désert
+export const keepClear = (X, Y) => inMarket(X, Y) || [SPOTS.ramp, SPOTS.climb, SPOTS.door].some(r => X > r.x - 34 && X < r.x + r.w + 34 && Y > r.y - 34 && Y < r.y + r.h + 34);
 export const SIGN = { x: 888, y: 1008 };   // panneau « SHOP → / ← DESERT » (la boutique est au sud, le Désert au nord)
 export const SPAWN = { x: 672, y: 928 };
 // Éléments relevés un par un sur la vue de dessus (en pixels de l'image, à multiplier par K)

@@ -18,8 +18,8 @@ const nearPath = (p, d) => C.SLABS.some(([a, b]) => Math.hypot(p.x - a * C.K, p.
 const pickW = (w, r) => { let t = Object.values(w).reduce((a, b) => a + b, 0) * r, k; for (k in w) { t -= w[k]; if (t < 0) return k; } return k; };
 export function genDecor() { // arbres et cactus : positions relevées sur la vue de dessus du vrai jeu
   const r = rng(4321), K = C.K;
-  return C.TREES.map(([a, b]) => ({ k: "tree", x: a * K, y: b * K + 34, v: Math.floor(r() * 3) }))
-    .concat(C.CACTI.map(([a, b]) => ({ k: b < 118 ? "cactus" : "tree", x: a * K, y: b * K + (b < 118 ? 30 : 34), v: Math.floor(r() * 3) })));
+  return C.TREES.filter(([a, b]) => !C.keepClear(a * K, b * K)).map(([a, b]) => ({ k: "tree", x: a * K, y: b * K + 34, v: Math.floor(r() * 3) }))
+    .concat(C.CACTI.map(([a, b]) => ({ k: b < 118 ? "cactus" : "palm", x: a * K, y: b * K + (b < 118 ? 30 : 34), v: Math.floor(r() * 3) })));
 }
 
 // ----- Hôte : ouvre la partie (chaque joueur gère sa propre progression) -----
@@ -193,7 +193,7 @@ export function createFruitClient(env) {
   });
   addEventListener("keyup", e => { const k = KEYS[e.key.length > 1 ? e.key : e.key.toLowerCase()]; if (k) keys.delete(k); });
   addEventListener("blur", () => keys.clear());
-  const rel = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * cv.width / r.width, y: (e.clientY - r.top) * cv.height / r.height }; };
+  const rel = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * 800 / r.width, y: (e.clientY - r.top) * 560 / r.height }; };
   cv.addEventListener("pointerdown", e => { if (!active) return; e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch { } const p = rel(e); stick = { id: e.pointerId, ox: p.x, oy: p.y, dx: 0, dy: 0 }; });
   cv.addEventListener("pointermove", e => {
     if (!stick || e.pointerId !== stick.id) return; const p = rel(e); let dx = p.x - stick.ox, dy = p.y - stick.oy; const d = Math.hypot(dx, dy), m = 55;
@@ -239,19 +239,38 @@ export function createFruitClient(env) {
 
   // ---------- dessin ----------
   const mk = (w, hh) => { const c = document.createElement("canvas"); c.width = w; c.height = hh; return c; };
-  let worldC = null;
+  let worldC = null, DPR = 1; const WS = 1.5; // le canvas suit la résolution de l'écran (net sur téléphone) ; le décor fixe est dessiné à 1,5x
+  const fit = () => { DPR = Math.min(3, Math.max(1, window.devicePixelRatio || 1)); const w = Math.round(800 * DPR); if (cv.width !== w) { cv.width = w; cv.height = Math.round(560 * DPR); } x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high"; };
   function buildWorld() {
-    const c = mk(WORLD.w, WORLD.h), g = c.getContext("2d"), r = rng(7);
-    g.fillStyle = "#3b3e46"; g.fillRect(0, 0, WORLD.w, WORLD.h);
-    // falaises tout autour des zones et des parties cachées
-    g.fillStyle = "#6e7992"; ZONES.forEach(z => z.rects.forEach(q => g.fillRect(q.x - 12, q.y - 12, q.w + 24, q.h + 24))); C.CLIFFS.forEach(q => g.fillRect(q.x, q.y, q.w, q.h));
-    g.fillStyle = "#55607a"; HIDDEN.forEach(q => g.fillRect(q.x, q.y, q.w, q.h)); g.fillStyle = "#7e89a3"; HIDDEN.forEach(q => g.fillRect(q.x, q.y, q.w, 14));
-    const COL = { spawn: ["#4fbf5c", "#47b454"], forest: ["#5ccc66", "#54c25e"], desert: ["#efd57a", "#e6c869"], autumn: ["#e5906a", "#dc8660"], tundra: ["#d6e8f7", "#c9def0"], cactus: ["#efd57a", "#e6c869"], market: ["#b98a4e", "#ad7f45"] };
-    ZONES.forEach(z => z.rects.forEach(q => { g.fillStyle = COL[z.id][0]; g.fillRect(q.x, q.y, q.w, q.h); g.fillStyle = COL[z.id][1]; for (let yy = Math.ceil(q.y / 40) * 40; yy < q.y + q.h; yy += 40) for (let xx = Math.ceil(q.x / 40) * 40; xx < q.x + q.w; xx += 40) g.fillRect(xx + 11, yy + 11, 18, 18); }));
-    // parcelles des joueurs (damier)
-    PLOTS.forEach(q => { const n = 29; for (let yy = 0; yy < q.h; yy += n) for (let xx = 0; xx < q.w; xx += n) { g.fillStyle = ((xx / n | 0) + (yy / n | 0)) % 2 ? "#e0a07e" : "#c47a55"; g.fillRect(q.x + xx, q.y + yy, Math.min(n, q.w - xx), Math.min(n, q.h - yy)); } g.strokeStyle = "#8a4f33"; g.lineWidth = 4; g.strokeRect(q.x, q.y, q.w, q.h); });
+    const c = mk(Math.round(WORLD.w * WS), Math.round(WORLD.h * WS)), g = c.getContext("2d"), r = rng(7); g.scale(WS, WS);
+    const rr = (X, Y, w, hh, rad) => { g.beginPath(); g.moveTo(X + rad, Y); g.arcTo(X + w, Y, X + w, Y + hh, rad); g.arcTo(X + w, Y + hh, X, Y + hh, rad); g.arcTo(X, Y + hh, X, Y, rad); g.arcTo(X, Y, X + w, Y, rad); g.closePath(); };
+    const blk = (X, Y, w, hh, c0, hi, lo) => { g.fillStyle = c0; g.fillRect(X, Y, w, hh); g.fillStyle = hi; g.fillRect(X, Y, w, 3); g.fillRect(X, Y, 3, hh); g.fillStyle = lo; g.fillRect(X, Y + hh - 3, w, 3); g.fillRect(X + w - 3, Y, 3, hh); };
+    g.fillStyle = "#23262d"; g.fillRect(0, 0, WORLD.w, WORLD.h);
+    // falaises : une face verticale sombre sous un dessus clair à briques (effet de relief)
+    const cl = []; ZONES.forEach(z => z.rects.forEach(q => cl.push({ x: q.x - 12, y: q.y - 12, w: q.w + 24, h: q.h + 24 }))); C.CLIFFS.forEach(q => cl.push(q));
+    g.fillStyle = "#353d51"; cl.forEach(q => g.fillRect(q.x, q.y + 20, q.w, q.h));
+    g.fillStyle = "#6f7b97"; cl.forEach(q => g.fillRect(q.x, q.y, q.w, q.h));
+    g.fillStyle = "#7f8ba8"; cl.forEach(q => { for (let yy = Math.ceil(q.y / 28) * 28; yy < q.y + q.h; yy += 28) for (let xx = Math.ceil(q.x / 28) * 28; xx < q.x + q.w; xx += 28) g.fillRect(xx + 5, yy + 5, 16, 16); });
+    g.fillStyle = "#3a4258"; HIDDEN.forEach(q => g.fillRect(q.x, q.y + 20, q.w, q.h)); g.fillStyle = "#59647f"; HIDDEN.forEach(q => g.fillRect(q.x, q.y, q.w, q.h)); g.fillStyle = "#7e89a3"; HIDDEN.forEach(q => g.fillRect(q.x, q.y, q.w, 14));
+    // sols : couleur de base + tenons (« studs ») en relief comme dans Roblox
+    const COL = { spawn: ["#4fbf5c", "#66d572", "#3a9a47"], forest: ["#5ccc66", "#76e381", "#46a852"], desert: ["#efd57a", "#f9e69b", "#cfb35a"], cactus: ["#efd57a", "#f9e69b", "#cfb35a"], autumn: ["#e5906a", "#f4a883", "#c4714b"], tundra: ["#d6e8f7", "#f0f8ff", "#adc8e0"] };
+    ZONES.forEach(z => z.rects.forEach(q => { g.fillStyle = COL[z.id][0]; g.fillRect(q.x, q.y, q.w, q.h); }));
+    ZONES.forEach(z => { const [, lt, dk] = COL[z.id]; z.rects.forEach(q => { for (let yy = Math.ceil(q.y / 32) * 32; yy < q.y + q.h; yy += 32) for (let xx = Math.ceil(q.x / 32) * 32; xx < q.x + q.w; xx += 32) { const X = xx + 16, Y = yy + 16; if (X < q.x + 9 || X > q.x + q.w - 9 || Y < q.y + 9 || Y > q.y + q.h - 9) continue; g.fillStyle = dk; g.beginPath(); g.arc(X + 1.5, Y + 2.5, 7, 0, 7); g.fill(); g.fillStyle = lt; g.beginPath(); g.arc(X, Y, 7, 0, 7); g.fill(); g.fillStyle = "#ffffff30"; g.beginPath(); g.arc(X - 2, Y - 2.5, 3, 0, 7); g.fill(); } }); });
+    // parcelles des joueurs (damier en bois) + panneau
+    PLOTS.forEach(q => { g.fillStyle = "#0003"; g.fillRect(q.x + 5, q.y + 9, q.w, q.h); const n = 29; for (let yy = 0; yy < q.h; yy += n) for (let xx = 0; xx < q.w; xx += n) { g.fillStyle = ((xx / n | 0) + (yy / n | 0)) % 2 ? "#e8ab88" : "#c97f58"; g.fillRect(q.x + xx, q.y + yy, Math.min(n, q.w - xx), Math.min(n, q.h - yy)); } g.strokeStyle = "#7a4429"; g.lineWidth = 6; g.strokeRect(q.x, q.y, q.w, q.h); g.strokeStyle = "#f3bd9c"; g.lineWidth = 2; g.strokeRect(q.x + 5, q.y + 5, q.w - 10, q.h - 10);
+      g.fillStyle = "#7a4a21"; g.fillRect(q.x + q.w / 2 - 3, q.y + q.h + 6, 6, 18); blk(q.x + q.w / 2 - 38, q.y + q.h + 4, 76, 22, "#b57a43", "#d29a5c", "#8a5a2b"); g.fillStyle = "#fff"; g.font = "800 12px system-ui,sans-serif"; g.textAlign = "center"; g.fillText("Parcelle", q.x + q.w / 2, q.y + q.h + 20); });
     // Forêt : bac de sable, petite cabane, cube blanc ; Désert : oasis ; Toundra : glace, ladder, station ; Forêt d'automne : arbres orange
-    const P = SPOTS; g.fillStyle = "#b57a43"; g.fillRect(P.pit.x, P.pit.y, P.pit.w, P.pit.h); g.fillStyle = "#e3b87d"; g.fillRect(P.pit.x + 16, P.pit.y + 16, P.pit.w - 32, P.pit.h - 32);
+    const P = SPOTS; { const pit = P.pit, dx = pit.x + pit.w / 2; // ===== Mike's Market =====
+      g.fillStyle = "#0004"; g.fillRect(pit.x + 8, pit.y + 12, pit.w, pit.h);
+      g.fillStyle = "#e3b87d"; g.fillRect(pit.x + 16, pit.y + 16, pit.w - 32, pit.h - 32); g.strokeStyle = "#cd9d60"; g.lineWidth = 2; for (let yy = pit.y + 44; yy < pit.y + pit.h - 16; yy += 28) { g.beginPath(); g.moveTo(pit.x + 16, yy); g.lineTo(pit.x + pit.w - 16, yy); g.stroke(); }
+      C.MARKET_WALLS.forEach(b => { g.fillStyle = "#6b4119"; g.fillRect(b.x, b.y + 7, b.w, b.h); blk(b.x, b.y, b.w, b.h, "#b57a43", "#d49a5a", "#8f5c2c"); });
+      const sy = pit.y + pit.h - 16 - 50; blk(pit.x + 28, sy, pit.w - 56, 50, "#6b4119", "#8b5a2b", "#4a2c0f"); const items = ["#8b5a2b", "#3fb950", "#e53935", "#4fa3ff", "#ffd23f", "#b36bff", "#9aa3ad", "#e53935", "#3fb950", "#ffd23f"]; items.forEach((c0, k) => blk(pit.x + 40 + k * ((pit.w - 90) / 10), sy + 12, 16, 28, c0, "#ffffff55", "#00000040"));
+      blk(pit.x + 22, pit.y + 60, 14, 120, "#6b4119", "#8b5a2b", "#4a2c0f"); blk(pit.x + pit.w - 36, pit.y + 60, 14, 120, "#6b4119", "#8b5a2b", "#4a2c0f");
+      for (let k = 0; k < 4; k++) { blk(pit.x + 24, pit.y + 66 + k * 28, 10, 18, items[k], "#ffffff55", "#00000040"); blk(pit.x + pit.w - 34, pit.y + 66 + k * 28, 10, 18, items[k + 4], "#ffffff55", "#00000040"); }
+      for (let k = 0; k < 8; k++) { g.fillStyle = k % 2 ? "#fff" : "#e53935"; g.fillRect(dx - 56 + k * 14, pit.y - 24, 14, 26); } g.fillStyle = "#b5271f"; g.fillRect(dx - 56, pit.y - 2, 112, 5);
+      g.fillStyle = "#7a4a21"; g.fillRect(dx - 60, pit.y - 24, 5, 40); g.fillRect(dx + 55, pit.y - 24, 5, 40);
+      blk(dx - 84, pit.y - 62, 168, 30, "#b57a43", "#d49a5a", "#8f5c2c"); g.font = "800 20px system-ui,sans-serif"; g.textAlign = "center"; g.lineJoin = "round"; g.lineWidth = 5; g.strokeStyle = "#3a2410"; g.strokeText("Mike's Market", dx, pit.y - 40); g.fillStyle = "#fff"; g.fillText("Mike's Market", dx, pit.y - 40); }
+    blk(P.white.x, P.white.y, P.white.w, P.white.h, "#f2f4f8", "#ffffff", "#b8c0cc");
     g.fillStyle = "#7a4a21"; g.fillRect(P.ramp.x, P.ramp.y, P.ramp.w, P.ramp.h); g.fillStyle = "#b9803f"; for (let xx = P.ramp.x + 6; xx < P.ramp.x + P.ramp.w - 24; xx += 14) g.fillRect(xx, P.ramp.y + 4, 8, P.ramp.h - 8); // rampe Forêt → bananes (vers l'est)
     g.fillStyle = "#4b5567"; g.fillRect(P.ramp.x + P.ramp.w - 22, P.ramp.y - 6, 26, P.ramp.h + 12); g.fillStyle = "#7be3a0aa"; g.fillRect(P.ramp.x + P.ramp.w - 16, P.ramp.y + 2, 14, P.ramp.h - 4); // porte « NIVEAU 5 »
     g.fillStyle = "#7a4a21"; g.fillRect(P.climb.x, P.climb.y, P.climb.w, P.climb.h); g.fillStyle = "#b9803f"; for (let xx = P.climb.x + 4; xx < P.climb.x + P.climb.w; xx += 12) g.fillRect(xx, P.climb.y - 4, 7, P.climb.h + 8); // échelle bananes → cactus
@@ -266,49 +285,51 @@ export function createFruitClient(env) {
     for (let i = 0; i < 26; i++) { const q = pickR(au); g.fillStyle = "#f0b13a"; g.beginPath(); g.arc(q.x + 20 + r() * Math.max(1, q.w - 40), q.y + 20 + r() * Math.max(1, q.h - 40), 22, 0, 7); g.fill(); }
     C.BUSHES.forEach(([a, b]) => { g.fillStyle = "#3ab549"; g.fillRect(a * C.K - 17, b * C.K - 17, 34, 34); });
     // rivière + pont
-    g.fillStyle = "#4a90e2"; C.RIVERS.forEach(b => g.fillRect(b.x, b.y, b.w, b.h)); g.fillStyle = "#6aa8ee"; C.RIVERS.forEach(b => { for (let xx = b.x + 16; xx < b.x + b.w - 20; xx += 46) g.fillRect(xx, b.y + 14, 22, 5); });
-    g.fillStyle = "#7a4a21"; g.fillRect(BRIDGE.x, BRIDGE.y, BRIDGE.w, BRIDGE.h); g.fillStyle = "#a8692f"; for (let yy = BRIDGE.y + 4; yy < BRIDGE.y + BRIDGE.h; yy += 12) g.fillRect(BRIDGE.x + 2, yy, BRIDGE.w - 4, 9);
+    C.RIVERS.forEach(b => { g.fillStyle = "#2a6fb8"; g.fillRect(b.x, b.y - 4, b.w, b.h + 8); g.fillStyle = "#3f94e8"; g.fillRect(b.x, b.y, b.w, b.h); g.fillStyle = "#7dc0ff"; for (let yy = b.y + 12; yy < b.y + b.h - 8; yy += 20) for (let xx = b.x + 10 + (yy % 40); xx < b.x + b.w - 24; xx += 52) g.fillRect(xx, yy, 24, 4); });
+    g.fillStyle = "#0003"; g.fillRect(BRIDGE.x + 4, BRIDGE.y + 8, BRIDGE.w, BRIDGE.h); g.fillStyle = "#6b4119"; g.fillRect(BRIDGE.x - 4, BRIDGE.y, BRIDGE.w + 8, BRIDGE.h); for (let yy = BRIDGE.y + 2; yy < BRIDGE.y + BRIDGE.h; yy += 12) { g.fillStyle = "#b57a43"; g.fillRect(BRIDGE.x + 2, yy, BRIDGE.w - 4, 9); g.fillStyle = "#d49a5a"; g.fillRect(BRIDGE.x + 2, yy, BRIDGE.w - 4, 2); } g.fillStyle = "#8f5c2c"; for (let yy = BRIDGE.y; yy < BRIDGE.y + BRIDGE.h; yy += 28) { g.fillRect(BRIDGE.x - 6, yy, 8, 10); g.fillRect(BRIDGE.x + BRIDGE.w - 2, yy, 8, 10); }
     // murs de falaise avec leurs passages
-    g.fillStyle = "#6e7992"; C.WALLS.forEach(b => g.fillRect(b.x, b.y, b.w, b.h)); g.fillStyle = "#8a96b0"; C.WALLS.forEach(b => g.fillRect(b.x, b.y, b.w, 4));
-    C.FENCES.forEach(b => { g.fillStyle = "#a8692f"; g.fillRect(b.x, b.y, b.w, b.h); g.fillStyle = "#7a4a21"; for (let yy = b.y; yy < b.y + b.h; yy += 34) g.fillRect(b.x - 6, yy, b.w + 12, 10); }); // clôture Spawn | Forêt
+    g.fillStyle = "#353d51"; C.WALLS.forEach(b => g.fillRect(b.x, b.y + 14, b.w, b.h)); g.fillStyle = "#6f7b97"; C.WALLS.forEach(b => g.fillRect(b.x, b.y, b.w, b.h)); g.fillStyle = "#97a3be"; C.WALLS.forEach(b => g.fillRect(b.x, b.y, b.w, 4));
+    C.FENCES.forEach(b => { g.fillStyle = "#0003"; g.fillRect(b.x + 6, b.y + 6, b.w, b.h); g.fillStyle = "#a8692f"; g.fillRect(b.x, b.y, b.w, b.h); g.fillStyle = "#d49a5a"; g.fillRect(b.x, b.y, 3, b.h); for (let yy = b.y; yy < b.y + b.h; yy += 34) { g.fillStyle = "#7a4a21"; g.fillRect(b.x - 7, yy, b.w + 14, 11); g.fillStyle = "#b9803f"; g.fillRect(b.x - 7, yy, b.w + 14, 3); } }); // clôture Spawn | Forêt
     // dalles de pierre
-    const slab = (X, Y) => { g.fillStyle = "#5d5d68"; g.fillRect(X - 18, Y - 12, 36, 26); g.fillStyle = "#7c7c88"; g.fillRect(X - 18, Y - 12, 36, 20); g.fillStyle = "#8b8b97"; g.fillRect(X - 18, Y - 12, 36, 4); };
-    C.SLABS.forEach(([a, b]) => slab(a * C.K, b * C.K));
+    const slab = (X, Y) => { g.fillStyle = "#0004"; rr(X - 15, Y - 7, 36, 26, 4); g.fill(); g.fillStyle = "#555a6e"; rr(X - 18, Y - 12, 36, 26, 4); g.fill(); g.fillStyle = "#757a90"; rr(X - 18, Y - 12, 36, 20, 4); g.fill(); g.fillStyle = "#a0a5bb"; [[-9, -5], [6, -5], [-9, 3], [6, 3]].forEach(([a, b]) => { g.beginPath(); g.arc(X + a, Y + b, 3.2, 0, 7); g.fill(); }); g.fillStyle = "#ffffff28"; g.fillRect(X - 16, Y - 11, 32, 2); };
+    C.SLABS.filter(([a, b]) => !C.keepClear(a * C.K, b * C.K)).forEach(([a, b]) => slab(a * C.K, b * C.K));
     // tuile d'apparition (étoile)
-    g.fillStyle = "#f4f4f4"; g.fillRect(C.SPAWN.x - 34, C.SPAWN.y - 28, 68, 56); g.fillStyle = "#111"; g.beginPath();
+    g.fillStyle = "#0004"; g.fillRect(C.SPAWN.x - 30, C.SPAWN.y - 22, 74, 62); blk(C.SPAWN.x - 38, C.SPAWN.y - 32, 76, 64, "#f4f4f4", "#ffffff", "#b4bac6"); g.fillStyle = "#111"; g.beginPath();
     for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rad = i % 2 ? 7 : 19; g[i ? "lineTo" : "moveTo"](C.SPAWN.x + Math.cos(a) * rad, C.SPAWN.y + Math.sin(a) * rad); } g.closePath(); g.fill();
-    { const mk = ZONES.find(z => z.id === "market").rects, bx = Math.min(...mk.map(q => q.x)), bw = Math.max(...mk.map(q => q.x + q.w)) - bx, by = Math.max(...mk.map(q => q.y + q.h)) - 70; // étagères du Marché de Mike
-      g.fillStyle = "#7a4a21"; g.fillRect(bx + 8, by, bw - 16, 46); ["#8b5a2b", "#3fb950", "#e53935", "#4fa3ff", "#ffd23f", "#b36bff"].forEach((c, k) => { g.fillStyle = c; g.fillRect(bx + 18 + k * ((bw - 40) / 6), by + 8, 18, 30); }); }
     // coffre « SELL HERE »
     const S = PADS.sell; g.save(); g.translate(S.x, S.y); g.scale(.75, .75); g.translate(-S.x, -S.y); g.fillStyle = "#0003"; g.beginPath(); g.ellipse(S.x, S.y + 40, 70, 14, 0, 0, 7); g.fill();
     g.fillStyle = "#8f4a1e"; g.fillRect(S.x - 58, S.y - 22, 116, 62); g.fillStyle = "#b9632a"; g.fillRect(S.x - 58, S.y - 40, 116, 24);
     g.fillStyle = "#7a3d16"; for (let i = 0; i < 6; i++) g.fillRect(S.x - 58 + i * 19.5, S.y - 22, 3, 62); g.fillStyle = "#d28a4a"; g.fillRect(S.x - 58, S.y - 40, 116, 5);
-    g.fillStyle = "#3a2410"; g.fillRect(S.x - 9, S.y - 28, 18, 16);
+    g.fillStyle = "#3ddc5a"; g.fillRect(S.x - 46, S.y - 36, 92, 16); g.fillStyle = "#7dffa0"; g.fillRect(S.x - 46, S.y - 36, 92, 4); g.fillStyle = "#3a2410"; g.fillRect(S.x - 9, S.y - 18, 18, 14); g.strokeStyle = "#4a2410"; g.lineWidth = 3; g.strokeRect(S.x - 58, S.y - 40, 116, 80);
     g.font = "800 24px system-ui,sans-serif"; g.textAlign = "center"; g.lineJoin = "round"; g.lineWidth = 6; g.strokeStyle = "#fff"; g.strokeText("SELL HERE", S.x, S.y - 54); g.fillStyle = "#111"; g.fillText("SELL HERE", S.x, S.y - 54); g.restore();
-    // Mike's Market
-    const M = PADS.shop; g.fillStyle = "#0003"; g.beginPath(); g.ellipse(M.x, M.y + 46, 88, 14, 0, 0, 7); g.fill();
-    g.fillStyle = "#7a4a21"; g.fillRect(M.x - 74, M.y - 6, 8, 52); g.fillRect(M.x + 66, M.y - 6, 8, 52);
-    g.fillStyle = "#a8692f"; g.fillRect(M.x - 70, M.y + 14, 140, 34); g.fillStyle = "#c98542"; g.fillRect(M.x - 70, M.y + 14, 140, 8);
-    for (let i = 0; i < 7; i++) { g.fillStyle = i % 2 ? "#fff" : "#e53935"; g.fillRect(M.x - 84 + i * 24, M.y - 36, 24, 34); }
-    g.fillStyle = "#b5271f"; g.fillRect(M.x - 84, M.y - 4, 168, 6);
-    g.font = "800 20px system-ui,sans-serif"; g.lineWidth = 5; g.strokeStyle = "#000b"; g.strokeText("Mike's Market", M.x, M.y - 48); g.fillStyle = "#fff"; g.fillText("Mike's Market", M.x, M.y - 48);
+    // comptoir de Mike dans la salle
+    const M = PADS.shop; g.fillStyle = "#0003"; g.beginPath(); g.ellipse(M.x, M.y + 44, 80, 12, 0, 0, 7); g.fill();
+    g.fillStyle = "#7a4a21"; g.fillRect(M.x - 66, M.y - 8, 7, 50); g.fillRect(M.x + 59, M.y - 8, 7, 50);
+    blk(M.x - 62, M.y + 14, 124, 32, "#a8692f", "#d49a5a", "#7a4a21");
+    for (let i = 0; i < 7; i++) { g.fillStyle = i % 2 ? "#fff" : "#e53935"; g.fillRect(M.x - 77 + i * 22, M.y - 34, 22, 30); } g.fillStyle = "#b5271f"; g.fillRect(M.x - 77, M.y - 6, 154, 5);
     return c;
   }
   function label(t, X, Y, col = "#fff", size = 13) { x.font = `800 ${size}px system-ui,sans-serif`; x.textAlign = "center"; x.lineJoin = "round"; x.lineWidth = 4; x.strokeStyle = "#000b"; x.strokeText(t, X, Y); x.fillStyle = col; x.fillText(t, X, Y); }
+  const bx = (X, Y, w, hh, c0, hi, lo) => { x.fillStyle = c0; x.fillRect(X, Y, w, hh); x.fillStyle = hi; x.fillRect(X, Y, w, 4); x.fillRect(X, Y, 4, hh); x.fillStyle = lo; x.fillRect(X, Y + hh - 4, w, 4); x.fillRect(X + w - 4, Y, 4, hh); };
   function drawDecor(d) {
-    const X = d.x, Y = d.y; x.fillStyle = "#0003"; x.beginPath(); x.ellipse(X, Y + 2, 30, 8, 0, 0, 7); x.fill();
+    const X = d.x, Y = d.y; x.fillStyle = "#00000040"; x.beginPath(); x.ellipse(X + 8, Y + 3, d.k === "tree" ? 38 : 26, 10, 0, 0, 7); x.fill();
     if (d.k === "tree") {
-      x.fillStyle = "#7a4a21"; x.fillRect(X - 8, Y - 30, 16, 30); x.fillStyle = "#5e3818"; x.fillRect(X + 2, Y - 30, 6, 30);
-      x.fillStyle = "#1f6b2c"; x.fillRect(X - 34, Y - 54, 68, 30); x.fillStyle = "#2a8238"; x.fillRect(X - 26, Y - 68, 52, 28); x.fillStyle = "#379b45"; x.fillRect(X - 15, Y - 82, 30, 22);
+      bx(X - 8, Y - 34, 16, 34, "#7a4a21", "#a06a3a", "#573316");
+      bx(X - 36, Y - 58, 72, 30, "#2a8238", "#47ad56", "#1c6228"); bx(X - 27, Y - 74, 54, 28, "#2f8c3d", "#4fb85e", "#206a2c"); bx(X - 16, Y - 88, 32, 20, "#37984a", "#5bc66b", "#277a35");
+      x.fillStyle = "#ffffff30"; [[-24, -48], [8, -50], [-14, -66], [12, -64], [-4, -80]].forEach(([a, b]) => { x.beginPath(); x.arc(X + a, Y + b, 4, 0, 7); x.fill(); });
+    } else if (d.k === "palm") {
+      bx(X - 5, Y - 36, 10, 36, "#8a5a2b", "#b07a43", "#5e3a17"); bx(X - 2, Y - 62, 10, 28, "#8a5a2b", "#b07a43", "#5e3a17");
+      bx(X - 40, Y - 76, 80, 13, "#3fae48", "#6cd674", "#2b8a35"); bx(X - 13, Y - 90, 26, 42, "#43b44d", "#6cd674", "#2b8a35"); bx(X - 28, Y - 70, 12, 12, "#2f9a3a", "#52c25b", "#237a2c"); bx(X + 16, Y - 70, 12, 12, "#2f9a3a", "#52c25b", "#237a2c");
     } else {
-      x.fillStyle = "#3f9a3a"; x.fillRect(X - 7, Y - 50 - d.v * 6, 14, 50 + d.v * 6); x.fillRect(X - 22, Y - 34, 15, 9); x.fillRect(X - 22, Y - 48, 9, 22); x.fillRect(X + 7, Y - 26, 15, 9); x.fillRect(X + 13, Y - 40, 9, 22);
-      x.fillStyle = "#56b84c"; x.fillRect(X - 7, Y - 50 - d.v * 6, 5, 50 + d.v * 6);
+      const hh = 52 + d.v * 6; bx(X - 8, Y - hh, 16, hh, "#3f9a3a", "#62c85a", "#2a7a2a");
+      bx(X - 24, Y - 38, 18, 10, "#3f9a3a", "#62c85a", "#2a7a2a"); bx(X - 24, Y - 54, 10, 26, "#3f9a3a", "#62c85a", "#2a7a2a"); bx(X + 6, Y - 30, 18, 10, "#3f9a3a", "#62c85a", "#2a7a2a"); bx(X + 14, Y - 46, 10, 26, "#3f9a3a", "#62c85a", "#2a7a2a");
+      x.fillStyle = "#ff4fa3"; x.fillRect(X - 5, Y - hh - 7, 10, 9); x.fillStyle = "#ffa6d2"; x.fillRect(X - 5, Y - hh - 7, 10, 3);
     }
   }
   function drawItem(it, isT, now) {
     const f = FRUITS[it.id], X = it.x, Y = it.y, b = Math.sin(now / 320 + it.x) * 2.5;
     x.fillStyle = "#0004"; x.beginPath(); x.ellipse(X, Y + 6, 11, 4, 0, 0, 7); x.fill();
-    x.fillStyle = f.col; x.beginPath(); x.arc(X, Y - 8 + b, 13, 0, 7); x.fill(); x.lineWidth = 3; x.strokeStyle = RAR[f.r].c; x.stroke();
+    x.fillStyle = f.col; x.beginPath(); x.arc(X, Y - 8 + b, 13, 0, 7); x.fill(); x.fillStyle = "#ffffff55"; x.beginPath(); x.arc(X - 4, Y - 13 + b, 4.5, 0, 7); x.fill(); x.lineWidth = 3; x.strokeStyle = RAR[f.r].c; x.stroke();
     x.font = "17px sans-serif"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillStyle = "#fff"; x.fillText(f.e, X, Y - 7 + b); x.textBaseline = "alphabetic";
     if (isT) { x.strokeStyle = "#fff"; x.lineWidth = 3; x.globalAlpha = .6 + .3 * Math.sin(now / 150); x.beginPath(); x.arc(X, Y - 8 + b, 20, 0, 7); x.stroke(); x.globalAlpha = 1; }
   }
@@ -319,14 +340,14 @@ export function createFruitClient(env) {
     x.fillStyle = "#3b6fc4"; x.fillRect(X - 9, Y - 14 + sw, 8, 14 - sw); x.fillRect(X + 1, Y - 14 - sw, 8, 14 + sw);
     if (boots > 0) { x.fillStyle = boots > 1 ? "#9aa3ad" : "#8a5a2b"; x.fillRect(X - 10, Y - 4 + sw, 10, 6); x.fillRect(X, Y - 4 - sw, 10, 6); }
     x.fillStyle = col || "#ffd23f"; x.fillRect(X - 10, Y - 34, 20, 21); x.fillStyle = "#f5cd30"; x.fillRect(X - 16, Y - 33 + sw / 2, 6, 15); x.fillRect(X + 10, Y - 33 - sw / 2, 6, 15);
-    x.fillRect(X - 8, Y - 52, 16, 17); x.fillStyle = "#222"; x.fillRect(X - 5 + (fc > 0 ? 1 : -1), Y - 46, 3, 4); x.fillRect(X + 2 + (fc > 0 ? 1 : -1), Y - 46, 3, 4);
+    x.fillRect(X - 8, Y - 52, 16, 17); x.fillStyle = "#ffffff40"; x.fillRect(X - 8, Y - 52, 16, 4); x.strokeStyle = "#00000070"; x.lineWidth = 1.5; x.strokeRect(X - 8, Y - 52, 16, 17); x.strokeRect(X - 10, Y - 34, 20, 21); x.fillStyle = "#222"; x.fillRect(X - 5 + (fc > 0 ? 1 : -1), Y - 46, 3, 4); x.fillRect(X + 2 + (fc > 0 ? 1 : -1), Y - 46, 3, 4);
     label(name, X, Y - 62, isMe ? "#ffd23f" : "#fff", 12);
     label(`${n}/${cap}`, X, Y - 76, n >= cap ? "#ff7a7a" : "#8dff8d", 11);
   }
   function draw(now) {
-    x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = "#1b3a22"; x.fillRect(0, 0, 800, 560);
-    x.setTransform(1, 0, 0, 1, Math.round(400 - camX), Math.round(280 - camY));
-    if (!worldC) worldC = buildWorld(); x.drawImage(worldC, 0, 0);
+    fit(); x.setTransform(DPR, 0, 0, DPR, 0, 0); x.fillStyle = "#23262d"; x.fillRect(0, 0, 800, 560);
+    x.setTransform(DPR, 0, 0, DPR, Math.round((400 - camX) * DPR), Math.round((280 - camY) * DPR));
+    if (!worldC) worldC = buildWorld(); x.drawImage(worldC, 0, 0, WORLD.w, WORLD.h);
     ZONES.forEach(z => { if (C.zoneOpen(s, z)) return; z.rects.forEach(q => { x.fillStyle = "#0a0a14b3"; x.fillRect(q.x, q.y, q.w, q.h); }); const q = z.rects.slice().sort((m, n) => n.w * n.h - m.w * m.h)[0]; label(z.closed ? `🔒 ${z.n} · bientôt` : `🔒 Niveau ${z.lvl} requis`, q.x + q.w / 2, q.y + q.h / 2, "#fff", 20); });
     // cercle sous le coffre / la boutique quand on est à portée
     [["sell", "#ffd23f"], ["shop", "#8dff8d"]].forEach(([k, col]) => { if (!near[k]) return; const P = PADS[k]; x.strokeStyle = col; x.lineWidth = 3; x.globalAlpha = .6 + .3 * Math.sin(now / 200); x.beginPath(); x.ellipse(P.x, P.y + 40, 96, 22, 0, 0, 7); x.stroke(); x.globalAlpha = 1; });
@@ -339,7 +360,7 @@ export function createFruitClient(env) {
     list.sort((a, b) => a.y - b.y).forEach(o => o.f());
     fx.forEach(p => { x.globalAlpha = Math.max(0, p.l); x.fillStyle = "#b8860b"; x.beginPath(); x.arc(p.x, p.y, 6, 0, 7); x.fill(); x.fillStyle = "#ffd23f"; x.beginPath(); x.arc(p.x, p.y, 4.8, 0, 7); x.fill(); }); x.globalAlpha = 1;
     floats.forEach(f => { x.globalAlpha = Math.max(0, Math.min(1, f.l * 1.5)); label(f.t, f.x, f.y, f.col, 16); }); x.globalAlpha = 1;
-    x.setTransform(1, 0, 0, 1, 0, 0);
+    x.setTransform(DPR, 0, 0, DPR, 0, 0);
     if (stick) { x.globalAlpha = .35; x.fillStyle = "#fff"; x.beginPath(); x.arc(stick.ox, stick.oy, 40, 0, 7); x.fill(); x.beginPath(); x.arc(stick.ox + stick.dx * 40, stick.oy + stick.dy * 40, 20, 0, 7); x.fill(); x.globalAlpha = 1; }
   }
   function frame(now) {

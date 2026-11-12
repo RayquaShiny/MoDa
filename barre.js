@@ -169,6 +169,12 @@ const KEYS = { ArrowUp: "U", w: "U", z: "U", ArrowDown: "D", s: "D", ArrowLeft: 
 const AB = ABS.map(a => a[0]);
 const sh = (h, k) => { const m = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) || 0).map(v => Math.round(k > 0 ? v * (1 - k) : v + (255 - v) * -k)); return `rgb(${m})`; };
 
+/* Vue 2,5D : le plateau est incliné (écrasé verticalement par K), les objets ont du volume (barre = poutre, moyeu = cylindre,
+   joueurs = billes posées au sol avec une ombre). La caméra est FIXE : rien ne bouge à l'écran quand on saute, seul le joueur
+   monte (et son ombre reste au sol). Seule la projection change : la simulation de l'hôte reste en 2D, rien d'autre n'est touché. */
+const K = .72, BH = 13, HUBH = 22, FT = 16, JH = 34;      // inclinaison, hauteur de la barre, du moyeu, épaisseur du plateau, hauteur de saut
+const PY = wy => CY + (wy - CY) * K;                       // projection verticale d'un point du sol
+
 export function createBarreClient(env) {
   const { R, set, onValue, $, beep, getMe, getCode } = env;
   const cv = $("cv"), x = cv.getContext("2d"), btn = $("sdash"), ov = $("ov");
@@ -241,42 +247,61 @@ export function createBarreClient(env) {
     for (let i = 0; i < 50; i++) { g.fillStyle = `rgba(190,160,255,${.04 + (i % 5) * .02})`; g.beginPath(); g.arc((i * 211) % W, (i * 127) % H, 2 + (i * 7) % 5, 0, 7); g.fill(); }
     return bg;
   }
+
+  // ---- Plateau : disque épais vu en perspective (dessus elliptique + flanc)
   function floor(r, danger) {
-    x.fillStyle = "#171235"; x.beginPath(); x.arc(CX, CY + 14, r, 0, 7); x.fill();
-    const g = x.createRadialGradient(CX, CY - r * .3, r * .1, CX, CY, r); g.addColorStop(0, "#4a3f95"); g.addColorStop(1, "#2c2663");
-    x.fillStyle = g; x.beginPath(); x.arc(CX, CY, r, 0, 7); x.fill();
+    const ry = r * K, rim = danger ? "#ff3b5c" : "#9b8cff";
+    x.fillStyle = "rgba(0,0,0,.35)"; x.beginPath(); x.ellipse(CX + 8, CY + FT + 12, r + 6, ry + 6, 0, 0, 7); x.fill();       // ombre portée
+    const sg = x.createLinearGradient(CX - r, 0, CX + r, 0); sg.addColorStop(0, "#1f1850"); sg.addColorStop(.5, "#2c2468"); sg.addColorStop(1, "#110c2a");
+    x.fillStyle = sg; x.beginPath(); x.ellipse(CX, CY + FT, r, ry, 0, 0, 7); x.fill(); x.fillRect(CX - r, CY, r * 2, FT);          // flanc
+    x.save(); x.translate(CX, CY); x.scale(1, K);                                                                                   // dessus
+    const g = x.createRadialGradient(0, -r * .3, r * .1, 0, 0, r); g.addColorStop(0, "#4a3f95"); g.addColorStop(1, "#2c2663");
+    x.fillStyle = g; x.beginPath(); x.arc(0, 0, r, 0, 7); x.fill();
     x.strokeStyle = "rgba(255,255,255,.07)"; x.lineWidth = 2;
-    for (let k = 40; k < r; k += 40) { x.beginPath(); x.arc(CX, CY, k, 0, 7); x.stroke(); }
-    x.lineWidth = 5; x.strokeStyle = danger ? "#ff3b5c" : "#9b8cff"; x.beginPath(); x.arc(CX, CY, r - 1, 0, 7); x.stroke();
+    for (let k = 40; k < r; k += 40) { x.beginPath(); x.arc(0, 0, k, 0, 7); x.stroke(); }
+    x.restore();
+    x.lineWidth = 5; x.strokeStyle = rim; x.beginPath(); x.ellipse(CX, CY, r - 1, ry - 1, 0, 0, 7); x.stroke();
+    x.lineWidth = 3; x.strokeStyle = danger ? "#a01535" : "#5b4fc0"; x.beginPath(); x.ellipse(CX, CY + FT, r, ry, 0, 0, Math.PI); x.stroke();   // arête basse
   }
-  function bar(a, L, now, eye, al = 1, hub = true) {
-    x.save(); x.globalAlpha = al; x.translate(CX, CY); x.rotate(a);
-    x.fillStyle = "rgba(0,0,0,.35)"; x.fillRect(0, -HW + 9, L, HW * 2);
-    for (let k = 0, i = 0; k < L; k += 28, i++) { x.fillStyle = i % 2 ? "#ffd23f" : "#ff3b5c"; x.fillRect(k, -HW, Math.min(28, L - k), HW * 2); }
-    x.strokeStyle = "#2b0016"; x.lineWidth = 2; x.strokeRect(0, -HW, L, HW * 2);
-    x.fillStyle = "#ff3b5c"; x.beginPath(); x.arc(L, 0, HW + 3, 0, 7); x.fill(); x.stroke();
-    x.restore(); if (!hub) return;
-    x.fillStyle = "#2b0016"; x.beginPath(); x.arc(CX, CY, 24, 0, 7); x.fill();      // moyeu : un visage malicieux
-    x.strokeStyle = "#ff3b5c"; x.lineWidth = 3; x.stroke();
+
+  // ---- Volumes
+  const poly = (c, z, dx = 0, dy = 0) => { x.beginPath(); c.forEach((p, i) => { const X = p[0] + dx, Y = PY(p[1] + dy) - z; i ? x.lineTo(X, Y) : x.moveTo(X, Y); }); x.closePath(); };
+  const quad = (ax, ay, bx, by, hw) => { const dx = bx - ax, dy = by - ay, m = Math.hypot(dx, dy) || 1, nx = -dy / m * hw, ny = dx / m * hw; return [[ax + nx, ay + ny], [bx + nx, by + ny], [bx - nx, by - ny], [ax - nx, ay - ny]]; };
+  function box(c, top, side) {                               // poutre : couches empilées = flancs, puis le dessus
+    x.fillStyle = side; x.strokeStyle = "#2b0016"; x.lineWidth = 1.5;
+    poly(c, 0); x.fill(); x.stroke();
+    for (let z = 2; z < BH; z += 2) { poly(c, z); x.fill(); }
+    poly(c, BH); x.fillStyle = top; x.fill(); x.stroke();
+  }
+  function cyl(wx, wy, r, hg, top, side, rim, lw) {          // cylindre (moyeu, bout de la barre)
+    const sx = wx, sy = PY(wy);
+    x.fillStyle = side; for (let z = 0; z < hg; z += 2) { x.beginPath(); x.ellipse(sx, sy - z, r, r * K, 0, 0, 7); x.fill(); }
+    x.beginPath(); x.ellipse(sx, sy - hg, r, r * K, 0, 0, 7); x.fillStyle = top; x.fill(); x.lineWidth = lw; x.strokeStyle = rim; x.stroke();
+  }
+  function face(eye) {                                       // visage malicieux posé sur le dessus du moyeu
+    x.save(); x.translate(CX, PY(CY) - HUBH); x.scale(1, K);
     const dx = Math.cos(eye), dy = Math.sin(eye);
     [-1, 1].forEach(s => {
-      x.fillStyle = "#fff"; x.beginPath(); x.arc(CX + s * 9, CY - 3, 6, 0, 7); x.fill();
-      x.fillStyle = "#14102b"; x.beginPath(); x.arc(CX + s * 9 + dx * 2.5, CY - 3 + dy * 2.5, 3, 0, 7); x.fill();
-      x.strokeStyle = "#ff3b5c"; x.lineWidth = 2.5; x.beginPath(); x.moveTo(CX + s * 15, CY - 12 + 0); x.lineTo(CX + s * 3, CY - 8 - 0); x.stroke(); // sourcils en colère
+      x.fillStyle = "#fff"; x.beginPath(); x.arc(s * 9, -3, 6, 0, 7); x.fill();
+      x.fillStyle = "#14102b"; x.beginPath(); x.arc(s * 9 + dx * 2.5, -3 + dy * 2.5, 3, 0, 7); x.fill();
+      x.strokeStyle = "#ff3b5c"; x.lineWidth = 2.5; x.beginPath(); x.moveTo(s * 15, -12); x.lineTo(s * 3, -8); x.stroke();   // sourcils en colère
     });
-    x.strokeStyle = "#fff"; x.lineWidth = 2; x.beginPath(); x.arc(CX, CY + 5, 8, .15, Math.PI - .15); x.stroke();
+    x.strokeStyle = "#fff"; x.lineWidth = 2; x.beginPath(); x.arc(0, 5, 8, .15, Math.PI - .15); x.stroke();
+    x.restore();
   }
-  function ball(px, py, col, a, h) {
-    x.fillStyle = "rgba(0,0,0,.35)"; x.beginPath(); x.ellipse(px + 3, py + BR * .75, BR * (.95 - h * .004), BR * .5, 0, 0, 7); x.fill();
-    py -= h;
-    const g = x.createRadialGradient(px - BR * .35, py - BR * .4, 2, px, py, BR * 1.05);
+  // Joueur : bille opaque, bien éclairée, avec contour sombre + liseré clair (toujours lisible, jamais « fantôme »)
+  function ball(sx, sy, col, a, r = BR) {
+    x.globalAlpha = 1;
+    const g = x.createRadialGradient(sx - r * .35, sy - r * .4, 2, sx, sy, r * 1.05);
     g.addColorStop(0, sh(col, -.55)); g.addColorStop(.35, col); g.addColorStop(1, sh(col, .45));
-    x.fillStyle = g; x.beginPath(); x.arc(px, py, BR, 0, 7); x.fill(); x.lineWidth = 2; x.strokeStyle = sh(col, .6); x.stroke();
+    x.fillStyle = g; x.beginPath(); x.arc(sx, sy, r, 0, 7); x.fill();
+    x.lineWidth = 3.5; x.strokeStyle = "rgba(10,5,30,.85)"; x.stroke();
+    x.lineWidth = 1.5; x.strokeStyle = sh(col, .65); x.beginPath(); x.arc(sx, sy, r - 1.5, 0, 7); x.stroke();
     const dx = Math.cos(a), dy = Math.sin(a);
     [-1, 1].forEach(s => {
-      const ex = px + dx * BR * .42 - dy * BR * .34 * s, ey = py + dy * BR * .42 + dx * BR * .34 * s;
-      x.fillStyle = "#fff"; x.beginPath(); x.arc(ex, ey, BR * .27, 0, 7); x.fill();
-      x.fillStyle = "#14102b"; x.beginPath(); x.arc(ex + dx * BR * .09, ey + dy * BR * .09, BR * .13, 0, 7); x.fill();
+      const ex = sx + dx * r * .42 - dy * r * .34 * s, ey = sy + dy * r * .42 + dx * r * .34 * s;
+      x.fillStyle = "#fff"; x.beginPath(); x.arc(ex, ey, r * .27, 0, 7); x.fill();
+      x.fillStyle = "#14102b"; x.beginPath(); x.arc(ex + dx * r * .09, ey + dy * r * .09, r * .13, 0, 7); x.fill();
     });
   }
   function setOv(t) {
@@ -289,7 +314,8 @@ export function createBarreClient(env) {
     raf = requestAnimationFrame(frame);
     const dt = Math.min(.05, (now - (tPrev || now)) / 1000); tPrev = now;
     sendInput(now);
-    x.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);
+    x.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);   // caméra fixe : aucun décalage, aucun tremblement
+    x.globalAlpha = 1;
     x.drawImage(background(), 0, 0);
     const sm = sample(now - 110);
     if (!sm) return setOv("");
@@ -304,33 +330,62 @@ export function createBarreClient(env) {
     sa.p.forEach(p => { if (p[2]) { const d = Math.hypot(p[0] - CX, p[1] - CY); if (d < bd) { bd = d; eye = Math.atan2(p[1] - CY, p[0] - CX); } } });
 
     fl = fl.filter(o => (o.t += dt) < .8);
-    fl.forEach(o => { x.save(); x.globalAlpha = 1 - o.t / .8; x.translate(o.x, o.y); x.scale(1 - o.t / .8, 1 - o.t / .8); x.rotate(o.t * 8); ball(0, 0, o.col, 0, 0); x.restore(); });
+    fl.forEach(o => { const k = 1 - o.t / .8; x.save(); x.globalAlpha = k; x.translate(o.x, PY(o.y) - BR * .85); x.scale(k, k); x.rotate(o.t * 8); ball(0, 0, o.col, 0); x.restore(); });
+    x.globalAlpha = 1;
 
     if (pl) {
-      const draw = [];
+      const shad = [], list = [], top = [], labels = [];
+
+      // barre (ou bras / mirage) : une poutre découpée en tronçons, chacun trié en profondeur
+      const addBar = (ba, L, al) => {
+        const ux = Math.cos(ba), uy = Math.sin(ba);
+        shad.push(() => { x.globalAlpha = al; x.fillStyle = "rgba(0,0,0,.32)"; poly(quad(CX, CY, CX + ux * L, CY + uy * L, HW), 0, 9, 6); x.fill(); x.globalAlpha = 1; });
+        for (let k = 0, i = 0; k < L; k += 28, i++) {
+          const k2 = Math.min(L, k + 28), ax = CX + ux * k, ay = CY + uy * k, bx = CX + ux * k2, by = CY + uy * k2, c = quad(ax, ay, bx, by, HW);
+          list.push({ d: (ay + by) / 2, al, fn: () => i % 2 ? box(c, "#ffd23f", "#b8921a") : box(c, "#ff3b5c", "#a01535") });
+        }
+        list.push({ d: CY + uy * L + 1, al, fn: () => cyl(CX + ux * L, CY + uy * L, HW + 3, BH + 3, "#ff3b5c", "#a01535", "#2b0016", 2) });
+      };
+      if (A === 2) addBar(Math.PI - barA, barL, .78);          // mirage : fausse barre inoffensive (un peu transparente)
+      if (A === 3) addBar(barA + Math.PI, barL, 1);            // second bras
+      addBar(barA, barL, A === 1 ? .1 : 1);                    // barre fantôme : presque invisible, c'est voulu
+      shad.push(() => { x.fillStyle = "rgba(0,0,0,.32)"; x.beginPath(); x.ellipse(CX + 9, PY(CY) + 6, 26, 26 * K, 0, 0, 7); x.fill(); });
+      list.push({ d: CY + 24, al: 1, fn: () => { cyl(CX, CY, 24, HUBH, "#3a0b24", "#2b0016", "#ff3b5c", 3); face(eye); } });
+
+      // joueurs
       sa.p.forEach((qa, i) => {
         const qb = sb.p[i]; if (!qa[2] || !pl[i]) return;
         const px = qb && qb[2] ? qa[0] + (qb[0] - qa[0]) * f : qa[0], py = qb && qb[2] ? qa[1] + (qb[1] - qa[1]) * f : qa[1];
         if (qb && Math.hypot(qb[0] - qa[0], qb[1] - qa[1]) > .6) ang[i] = Math.atan2(qb[1] - qa[1], qb[0] - qa[0]);
         if (qa[4] && !jt[i]) jt[i] = now; if (!qa[4]) jt[i] = 0;
-        draw.push([i, px, py, jt[i] ? 24 * Math.sin(Math.PI * Math.min(1, (now - jt[i]) / 500)) : 0]);
+        const h = jt[i] ? JH * Math.sin(Math.PI * Math.min(1, (now - jt[i]) / 500)) : 0;
+        const col = pl[i][2], me = i === myIdx, gy = PY(py), sk = Math.max(.45, 1 - h / 90);
+        shad.push(() => {
+          x.fillStyle = `rgba(0,0,0,${(.42 * sk).toFixed(2)})`; x.beginPath(); x.ellipse(px, gy, BR * sk * 1.05, BR * sk * 1.05 * K, 0, 0, 7); x.fill();   // l'ombre reste au sol
+          if (me) {                                            // anneau de recharge du saut, posé au sol
+            const cdv = last.p[i] ? last.p[i][3] / 100 : 0;
+            x.lineWidth = 3; x.strokeStyle = cdv <= 0 ? "#3ee6c4" : "rgba(255,255,255,.5)";
+            x.beginPath(); x.ellipse(px, gy, BR + 7, (BR + 7) * K, 0, -Math.PI / 2, -Math.PI / 2 + PI2 * (1 - cdv)); x.stroke();
+          }
+        });
+        const it = { d: py + .5, al: 1, fn: () => ball(px, gy - BR * .85 - h, col, ang[i] || 0) };
+        (h >= 10 ? top : list).push(it);                       // en l'air : passe AU-DESSUS de la barre
+        labels.push(() => {
+          const ly = gy - BR * 1.7 - h - 8;
+          x.font = "700 13px 'DM Sans',sans-serif"; x.textAlign = "center"; x.lineWidth = 3; x.strokeStyle = "rgba(0,0,0,.75)"; x.fillStyle = me ? "#ffd23f" : "#fff";
+          x.strokeText(pl[i][1], px, ly); x.fillText(pl[i][1], px, ly);
+          if (me) { x.fillStyle = "#ffd23f"; x.fillText("▼", px, ly - 13); }
+          x.textAlign = "start";
+        });
       });
-      draw.sort((u, v) => u[2] - v[2]);
-      const below = draw.filter(d => d[3] < 6), above = draw.filter(d => d[3] >= 6);
-      const drawBalls = list => list.forEach(([i, px, py, h]) => {
-        const me = i === myIdx;
-        ball(px, py, pl[i][2], ang[i] || 0, h);
-        if (me) { const cdv = last.p[i] ? last.p[i][3] / 100 : 0; x.lineWidth = 3; x.strokeStyle = cdv <= 0 ? "#3ee6c4" : "rgba(255,255,255,.4)"; x.beginPath(); x.arc(px, py - h, BR + 6, -Math.PI / 2, -Math.PI / 2 + PI2 * (1 - cdv)); x.stroke(); }
-        x.font = "700 13px 'DM Sans',sans-serif"; x.textAlign = "center"; x.lineWidth = 3; x.strokeStyle = "rgba(0,0,0,.65)"; x.fillStyle = me ? "#ffd23f" : "#fff";
-        x.strokeText(pl[i][1], px, py - h - BR - 9); x.fillText(pl[i][1], px, py - h - BR - 9);
-        if (me) { x.fillStyle = "#ffd23f"; x.fillText("▼", px, py - h - BR - 22); }
-        x.textAlign = "start";
-      });
-      if (A === 2) bar(Math.PI - barA, barL, now, eye, .78, false);     // mirage : fausse barre inoffensive (un peu transparente)
-      if (A === 3) bar(barA + Math.PI, barL, now, eye, 1, false);       // second bras
-      drawBalls(below); bar(barA, barL, now, eye, A === 1 ? .07 : 1); drawBalls(above);
+
+      shad.forEach(fn => fn());
+      list.sort((u, v) => u.d - v.d).forEach(it => { x.globalAlpha = it.al; it.fn(); x.globalAlpha = 1; });
+      top.forEach(it => it.fn());
+      labels.forEach(fn => fn());
+
       if (A === 0 || A === 4) { x.fillStyle = A === 0 ? "rgba(255,210,63,.07)" : "rgba(150,60,255,.13)"; x.fillRect(0, 0, W, H); }
-      if (A >= 0 && !last.o) { x.textAlign = "center"; x.font = "800 24px 'Bricolage Grotesque',sans-serif"; x.fillStyle = Math.floor(now / 150) % 2 ? "#ffd23f" : "#fff"; x.fillText(`${AB[A]} · ${last.at.toFixed(1)} s`, CX, 26); x.textAlign = "start"; }   // un joueur en l'air passe AU-DESSUS de la barre
+      if (A >= 0 && !last.o) { x.textAlign = "center"; x.font = "800 24px 'Bricolage Grotesque',sans-serif"; x.fillStyle = Math.floor(now / 150) % 2 ? "#ffd23f" : "#fff"; x.fillText(`${AB[A]} · ${last.at.toFixed(1)} s`, CX, 26); x.textAlign = "start"; }
 
       x.font = "700 14px 'DM Sans',sans-serif"; x.textBaseline = "middle";
       last.p.forEach((q, i) => { const y = 18 + i * 20; x.globalAlpha = q[2] ? 1 : .4; x.fillStyle = pl[i][2]; x.beginPath(); x.arc(16, y, 6, 0, 7); x.fill(); x.fillStyle = "#fff"; x.fillText(pl[i][1] + (q[2] ? "" : " ✖"), 28, y); });
@@ -342,7 +397,7 @@ export function createBarreClient(env) {
     }
 
     parts = parts.filter(o => (o.l -= dt * 2.2) > 0);
-    parts.forEach(o => { o.x += o.vx * dt; o.y += o.vy * dt; x.globalAlpha = Math.max(0, o.l); x.fillStyle = o.c; x.beginPath(); x.arc(o.x, o.y, o.s * o.l, 0, 7); x.fill(); });
+    parts.forEach(o => { o.x += o.vx * dt; o.y += o.vy * dt; x.globalAlpha = Math.max(0, o.l); x.fillStyle = o.c; x.beginPath(); x.arc(o.x, PY(o.y) - 6, o.s * o.l, 0, 7); x.fill(); });
     x.globalAlpha = 1;
     if (stick) {
       x.fillStyle = "rgba(255,255,255,.08)"; x.strokeStyle = "rgba(255,255,255,.28)"; x.lineWidth = 2; x.beginPath(); x.arc(stick.ox, stick.oy, 55, 0, 7); x.fill(); x.stroke();

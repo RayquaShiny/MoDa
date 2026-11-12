@@ -167,6 +167,8 @@ export async function startBarre(env) {
 // ---------------------------------------------------------------- Client (tous les joueurs, hôte compris)
 const KEYS = { ArrowUp: "U", w: "U", z: "U", ArrowDown: "D", s: "D", ArrowLeft: "L", a: "L", q: "L", ArrowRight: "R", d: "R" };
 const AB = ABS.map(a => a[0]);
+const ACR = ["255,210,63", "170,215,255", "255,100,220", "255,59,92", "160,90,255"], AC = ["#ffd23f", "#aad7ff", "#ff64dc", "#ff3b5c", "#a05aff"];   // couleur de chaque capacité
+const rgba = (h, a) => `rgba(${[1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) || 0)},${a})`;
 const sh = (h, k) => { const m = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) || 0).map(v => Math.round(k > 0 ? v * (1 - k) : v + (255 - v) * -k)); return `rgb(${m})`; };
 
 /* Vue 2,5D avec perspective douce : le plateau est incliné (K), ce qui est proche de la caméra est un peu plus grand (PERSP),
@@ -176,7 +178,7 @@ const K = .7, PERSP = .0007, BH = 13, FT = 18, JH = 36;   // inclinaison, perspe
 export function createBarreClient(env) {
   const { R, set, onValue, $, beep, getMe, getCode } = env;
   const cv = $("cv"), x = cv.getContext("2d"), btn = $("sdash"), ov = $("ov");
-  let active = false, raf = 0, snaps = [], pl = null, lastEv = 0, parts = [], fl = [], jt = [], ang = [], jseq = 0, sentStr = "", sentAt = 0, stick = null, tPrev = 0, myIdx = -1, ovT = "", bg = null;
+  let active = false, raf = 0, snaps = [], pl = null, lastEv = 0, parts = [], fl = [], jt = [], ang = [], jseq = 0, sentStr = "", sentAt = 0, stick = null, tPrev = 0, myIdx = -1, ovT = "", bg = null, rings = [], hit = 0, vg = null;
   const keys = new Set();
   let camA = 0, camInit = false, cc = 1, cs = 0;
   // monde (x, y, hauteur z) → écran [x, y, échelle]
@@ -226,12 +228,12 @@ export function createBarreClient(env) {
   const onEv = e => {
     const [ex, ey, ty, id] = e; if (id <= lastEv) return; lastEv = id;
     const col = pl && pl[e[4]] ? pl[e[4]][2] : "#fff";
-    if (ty === -1) { spark(ex, ey, 8, col, 110); beep(380, .15, "sine", .05, 760); }
-    else if (ty === -3) { spark(ex, ey, 18, "#ff3b5c", 200); beep(160, .35, "square", .06, 900); }
+    if (ty === -1) { rings.push({ x: ex, y: ey, col, t: 0, s: .6 }); spark(ex, ey, 8, col, 110); beep(380, .15, "sine", .05, 760); }
+    else if (ty === -3) { rings.push({ x: ex, y: ey, col: "#ff3b5c", t: 0, s: 5 }); spark(ex, ey, 18, "#ff3b5c", 200); beep(160, .35, "square", .06, 900); }
     else if (ty === -2) {
-      spark(ex, ey, 14, col, 220); beep(180, .4, "sawtooth", .06, 50);
+      rings.push({ x: ex, y: ey, col, t: 0, s: 2 }); spark(ex, ey, 22, col, 240); beep(180, .4, "sawtooth", .06, 50);
       fl.push({ x: ex, y: ey, col, t: 0 });
-      if (e[4] === myIdx && typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(150);
+      if (e[4] === myIdx) { hit = .7; if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(150); }
     }
   };
 
@@ -241,6 +243,20 @@ export function createBarreClient(env) {
     if (rt >= snaps[n - 1].at) a = b = snaps[n - 1];
     else if (rt > snaps[0].at) for (let i = n - 1; i > 0; i--) if (snaps[i - 1].at <= rt) { a = snaps[i - 1]; b = snaps[i]; f = (rt - a.at) / Math.max(1, b.at - a.at); break; }
     return { a, b, f };
+  }
+
+  // ---- Aides
+  const rr = (x0, y0, w, h, r) => { x.beginPath(); x.moveTo(x0 + r, y0); x.arcTo(x0 + w, y0, x0 + w, y0 + h, r); x.arcTo(x0 + w, y0 + h, x0, y0 + h, r); x.arcTo(x0, y0 + h, x0, y0, r); x.arcTo(x0, y0, x0 + w, y0, r); x.closePath(); };
+  const pill = (txt, cx, cy, font, fg, bgc, bd) => {
+    x.font = font; const w = x.measureText(txt).width + 20, h = parseInt(font.match(/(\d+)px/)[1]) + 10;
+    rr(cx - w / 2, cy - h / 2, w, h, h / 2); x.fillStyle = bgc; x.fill(); if (bd) { x.lineWidth = 2; x.strokeStyle = bd; x.stroke(); }
+    x.textAlign = "center"; x.textBaseline = "middle"; x.fillStyle = fg; x.fillText(txt, cx, cy + 1);
+  };
+  function vignette() {
+    if (vg) return vg;
+    vg = document.createElement("canvas"); vg.width = W; vg.height = H; const g = vg.getContext("2d");
+    const gr = g.createRadialGradient(CX, CY, 230, CX, CY, 520); gr.addColorStop(0, "rgba(4,2,16,0)"); gr.addColorStop(1, "rgba(4,2,16,.72)"); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    return vg;
   }
 
   // ---- Décor
@@ -253,22 +269,25 @@ export function createBarreClient(env) {
     return bg;
   }
   const circ = (r, z, n = 72) => { x.beginPath(); for (let i = 0; i <= n; i++) { const a = i / n * PI2, q = P(CX + Math.cos(a) * r, CY + Math.sin(a) * r, z); i ? x.lineTo(q[0], q[1]) : x.moveTo(q[0], q[1]); } x.closePath(); };
-  function floor(r, danger) {
-    const ry = r * K, rim = danger ? "#ff3b5c" : "#9b8cff";
+  function floor(r, danger, now) {
+    const ry = r * K, rim = danger ? "#ff3b5c" : "#9b8cff", pulse = .5 + .5 * Math.sin(now / 160);
     x.save(); x.translate(10, 12); x.fillStyle = "rgba(0,0,0,.38)"; circ(r + 4, -FT); x.fill(); x.restore();                            // ombre portée
-    const sg = x.createLinearGradient(CX - r, 0, CX + r, 0); sg.addColorStop(0, "#241c5c"); sg.addColorStop(.45, "#31286f"); sg.addColorStop(1, "#150f36");
+    const sg = x.createLinearGradient(CX - r, 0, CX + r, 0); sg.addColorStop(0, "#2a2168"); sg.addColorStop(.4, "#3a2f80"); sg.addColorStop(1, "#130d33");
     x.fillStyle = sg; for (let z = -FT; z < 0; z += 2) { circ(r, z, 56); x.fill(); }                                                // flanc
     circ(r, -FT, 56); x.lineWidth = 3; x.strokeStyle = danger ? "#7a0f28" : "#463cab"; x.stroke();
-    const g = x.createLinearGradient(0, CY - ry * 1.05, 0, CY + ry * 1.05); g.addColorStop(0, "#5a4cb4"); g.addColorStop(.55, "#3a3085"); g.addColorStop(1, "#2a2362");
+    const g = x.createLinearGradient(0, CY - ry * 1.05, 0, CY + ry * 1.05); g.addColorStop(0, "#6657c4"); g.addColorStop(.5, "#3d3289"); g.addColorStop(1, "#262060");
     circ(r, 0); x.fillStyle = g; x.fill();                                                                                          // dessus
     x.save(); circ(r, 0); x.clip();
-    x.fillStyle = "rgba(255,255,255,.04)";                                                                                          // secteurs en damier (repères qui tournent avec la caméra)
+    x.fillStyle = "rgba(255,255,255,.04)";                                                                                          // damier de secteurs (repères qui tournent avec la caméra)
     for (let k = 0; k < 16; k += 2) { x.beginPath(); const c0 = P(CX, CY); x.moveTo(c0[0], c0[1]); for (let j = 0; j <= 6; j++) { const a = (k + j / 6) / 16 * PI2, q = P(CX + Math.cos(a) * r, CY + Math.sin(a) * r); x.lineTo(q[0], q[1]); } x.closePath(); x.fill(); }
     x.strokeStyle = "rgba(255,255,255,.08)"; x.lineWidth = 2; for (let k = 50; k < r; k += 50) { circ(k, 0, 56); x.stroke(); }
     x.lineWidth = 1; x.strokeStyle = "rgba(255,255,255,.07)"; for (let k = 0; k < 16; k++) { const a = k / 16 * PI2, c0 = P(CX, CY), q = P(CX + Math.cos(a) * r, CY + Math.sin(a) * r); x.beginPath(); x.moveTo(c0[0], c0[1]); x.lineTo(q[0], q[1]); x.stroke(); }
+    const hl = x.createRadialGradient(CX, CY - ry * .45, 10, CX, CY - ry * .2, r * 1.05); hl.addColorStop(0, "rgba(255,255,255,.14)"); hl.addColorStop(1, "rgba(255,255,255,0)");   // reflet lustré
+    x.fillStyle = hl; x.fillRect(0, 0, W, H);
+    if (danger) { const dg = x.createRadialGradient(CX, CY, r * .45, CX, CY, r * 1.05); dg.addColorStop(0, "rgba(255,59,92,0)"); dg.addColorStop(1, `rgba(255,59,92,${(.12 + .18 * pulse).toFixed(2)})`); x.fillStyle = dg; x.fillRect(0, 0, W, H); }   // le bord rougeoie
     x.restore();
-    circ(r - 1, 0); x.lineWidth = 6; x.strokeStyle = rim; x.stroke();                                                               // bord
-    circ(r - 8, 0); x.lineWidth = 1.5; x.strokeStyle = "rgba(255,255,255,.28)"; x.stroke();
+    x.save(); x.shadowColor = rim; x.shadowBlur = danger ? 16 + 10 * pulse : 14; circ(r - 1, 0); x.lineWidth = 6; x.strokeStyle = rim; x.stroke(); x.restore();   // bord néon
+    circ(r - 8, 0); x.lineWidth = 1.5; x.strokeStyle = "rgba(255,255,255,.3)"; x.stroke();
   }
 
   // ---- Volumes
@@ -303,28 +322,34 @@ export function createBarreClient(env) {
     x.fillStyle = "rgba(255,255,255,.18)"; x.beginPath(); x.ellipse(-8, -14, 7, 3.5, -.5, 0, 7); x.fill();                                    // reflet
     x.restore();
   }
-  /* Personnage : petit « haricot » rond et haut (plus le disque aplati de la vue du dessus), avec pieds, reflet, étirement au saut.
-     (sx, gy) = point au sol, sc = échelle de perspective, fa = direction du regard DANS LA VUE (angle écran), st = étirement. */
+  /* Personnage : petit « haricot » rond et haut, pieds, reflet, joues, bouche, étirement au saut.
+     (sx, gy) = point au sol, sc = échelle de perspective, fa = direction du regard DANS LA VUE, st = étirement (> 1 en l'air). */
   function sprite(sx, gy, sc, col, fa, st) {
     x.globalAlpha = 1;
     const r = BR * sc, w = r * (1.02 / Math.sqrt(st)), hh = r * 1.3 * st, cy = gy - hh + r * .15, fx = Math.cos(fa), fy = Math.sin(fa);
-    x.fillStyle = sh(col, .5); [-1, 1].forEach(k => { x.beginPath(); x.ellipse(sx + k * w * .42, gy - r * .12, r * .34, r * .2, 0, 0, 7); x.fill(); });   // pieds
+    x.fillStyle = sh(col, .5); x.strokeStyle = "rgba(10,5,30,.7)"; x.lineWidth = 1.5;
+    [-1, 1].forEach(k => { x.beginPath(); x.ellipse(sx + k * w * .42, gy - r * .12, r * .34, r * .2, 0, 0, 7); x.fill(); x.stroke(); });                // pieds
     const g = x.createRadialGradient(sx - w * .4, cy - hh * .5, 1, sx, cy, hh * 1.15);
-    g.addColorStop(0, sh(col, -.6)); g.addColorStop(.4, col); g.addColorStop(1, sh(col, .5));
+    g.addColorStop(0, sh(col, -.62)); g.addColorStop(.4, col); g.addColorStop(1, sh(col, .5));
     x.fillStyle = g; x.beginPath(); x.ellipse(sx, cy, w, hh, 0, 0, 7); x.fill();
     x.lineWidth = 3.5; x.strokeStyle = "rgba(10,5,30,.85)"; x.stroke();
-    x.lineWidth = 1.4; x.strokeStyle = sh(col, -.5); x.beginPath(); x.ellipse(sx, cy, w - 1.8, hh - 1.8, 0, 0, 7); x.stroke();
-    const al = Math.max(0, Math.min(1, (fy + .4) / .5));                                                                                       // de dos : on ne voit plus les yeux
+    x.lineWidth = 2; x.strokeStyle = "rgba(255,255,255,.28)"; x.beginPath(); x.ellipse(sx, cy, w - 3, hh - 3, 0, -.5, 1.05); x.stroke();                       // liseré de lumière côté soleil
+    const al = Math.max(0, Math.min(1, (fy + .4) / .5));                                                                                       // de dos : on ne voit plus le visage
     if (al > 0) {
       x.globalAlpha = al; const ex = sx + fx * w * .5, ey = cy - hh * .22 + Math.max(0, fy) * hh * .08, sp = w * (.2 + .22 * Math.max(0, fy)), er = r * .3;
+      x.fillStyle = "rgba(255,110,140,.32)"; [-1, 1].forEach(k => { x.beginPath(); x.ellipse(ex + k * sp * 1.3, ey + er * 1.5, er * .55, er * .32, 0, 0, 7); x.fill(); });   // joues
       [-1, 1].forEach(k => {
-        const px = ex + k * sp;
+        const px = ex + k * sp, qx = px + fx * er * .35, qy = ey + fy * er * .35;
         x.fillStyle = "#fff"; x.beginPath(); x.ellipse(px, ey, er, er * 1.2, 0, 0, 7); x.fill();
-        x.fillStyle = "#14102b"; x.beginPath(); x.ellipse(px + fx * er * .35, ey + fy * er * .35, er * .5, er * .62, 0, 0, 7); x.fill();
+        x.fillStyle = "#14102b"; x.beginPath(); x.ellipse(qx, qy, er * .55, er * .68, 0, 0, 7); x.fill();
+        x.fillStyle = "#fff"; x.beginPath(); x.arc(qx - er * .15, qy - er * .22, er * .16, 0, 7); x.fill();                                         // éclat dans l'œil
       });
+      x.strokeStyle = "#14102b"; x.fillStyle = "#14102b"; x.lineWidth = 1.8;
+      if (st > 1.03) { x.beginPath(); x.ellipse(ex, ey + er * 2, er * .5, er * .62, 0, 0, 7); x.fill(); }                                         // bouche ouverte en l'air
+      else { x.beginPath(); x.arc(ex, ey + er * 1.55, er * .6, .2 * Math.PI, .8 * Math.PI); x.stroke(); }                                          // petit sourire
       x.globalAlpha = 1;
     }
-    x.fillStyle = "rgba(255,255,255,.45)"; x.beginPath(); x.ellipse(sx - w * .42, cy - hh * .58, w * .2, hh * .13, -.55, 0, 7); x.fill();      // reflet
+    x.fillStyle = "rgba(255,255,255,.5)"; x.beginPath(); x.ellipse(sx - w * .42, cy - hh * .58, w * .2, hh * .13, -.55, 0, 7); x.fill();      // reflet
     x.globalAlpha = 1;
   }
   function setOv(t) {
@@ -340,6 +365,8 @@ export function createBarreClient(env) {
     x.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);
     x.globalAlpha = 1;
     x.drawImage(background(), 0, 0);
+    for (let i = 0; i < 36; i++) { x.globalAlpha = .2 + .4 * Math.sin(now / 600 + i * 1.7) ** 2; x.fillStyle = "#cdb8ff"; const z = 1 + (i % 3) * .6; x.fillRect((i * 173 + 40) % W, (i * 97 + 20) % H, z, z); }   // étoiles qui scintillent
+    x.globalAlpha = 1;
     const sm = sample(now - 110);
     if (!sm) return setOv("");
     const { a, b, f } = sm, last = snaps[snaps.length - 1].s, sa = a.s, sb = b.s, rad = last.r || 230;
@@ -353,10 +380,14 @@ export function createBarreClient(env) {
       if (Math.hypot(ddx, ddy) > 40) { const tg = Math.PI / 2 - Math.atan2(ddy, ddx); camA = camInit ? camA + wrap(tg - camA) * Math.min(1, dt * 3.5) : tg; camInit = true; }
     }
     cc = Math.cos(camA); cs = Math.sin(camA);
-    floor(rad, last.s >= 0);
+    floor(rad, last.s >= 0, now);
+    rings = rings.filter(o => (o.t += dt) < .65);                                                       // ondes de choc au sol (saut, atterrissage, mort, capacité)
+    rings.forEach(o => { const k = o.t / .65, q = P(o.x, o.y), r0 = (12 + 44 * k * (o.s || 1)) * q[2]; x.globalAlpha = (1 - k) * .85; x.lineWidth = 3 * (1 - k) + 1; x.strokeStyle = o.col; x.beginPath(); x.ellipse(q[0], q[1], r0, r0 * K, 0, 0, 7); x.stroke(); });
+    x.globalAlpha = 1;
 
     let eye = sa.a, bd = 1e9;
     const barA = sa.a + (sb.a - sa.a) * f, barL = ((sa.l || 1) + ((sb.l || 1) - (sa.l || 1)) * f) * (rad - 4);
+    const tr = Math.max(-1.2, Math.min(1.2, wrap(sb.a - sa.a) * 4));   // traînée de la barre (où elle était il y a un instant)
     sa.p.forEach(p => { if (p[2]) { const d = Math.hypot(p[0] - CX, p[1] - CY); if (d < bd) { bd = d; eye = Math.atan2(p[1] - CY, p[0] - CX); } } });
 
     fl = fl.filter(o => (o.t += dt) < .8);
@@ -365,18 +396,30 @@ export function createBarreClient(env) {
 
     if (pl) {
       const shad = [], list = [], top = [], labels = [];
-      const addBar = (ba, L, al) => {
+      const addBar = (ba, L, al, tr) => {
         const ux = Math.cos(ba), uy = Math.sin(ba);
         shad.push(() => { x.globalAlpha = al; x.fillStyle = "rgba(0,0,0,.34)"; poly(quad(CX, CY, CX + ux * L, CY + uy * L, HW), 0, 10, 5); x.fill(); x.globalAlpha = 1; });
+        if (Math.abs(tr) > .015) shad.push(() => {
+          const c0 = P(CX, CY);
+          [[1, .08], [.6, .1], [.28, .13]].forEach(([m, aa]) => {
+            x.fillStyle = `rgba(255,59,92,${(aa * al).toFixed(3)})`; x.beginPath(); x.moveTo(c0[0], c0[1]);
+            for (let j = 0; j <= 8; j++) { const a2 = ba - tr * m * j / 8, q = P(CX + Math.cos(a2) * L, CY + Math.sin(a2) * L); x.lineTo(q[0], q[1]); }
+            x.closePath(); x.fill();
+          });
+        });
         for (let k = 0, i = 0; k < L; k += 28, i++) {
           const k2 = Math.min(L, k + 28), ax = CX + ux * k, ay = CY + uy * k, bx = CX + ux * k2, by = CY + uy * k2, c = quad(ax, ay, bx, by, HW), mid = [ax, ay, bx, by];
           list.push({ d: Vy((ax + bx) / 2, (ay + by) / 2), al, fn: () => i % 2 ? box(c, "#ffd23f", "#b8921a", mid) : box(c, "#ff3b5c", "#a01535", mid) });
         }
-        list.push({ d: Vy(CX + ux * L, CY + uy * L) + 1, al, fn: () => cyl(CX + ux * L, CY + uy * L, HW + 3, BH + 3, "#ff3b5c", "#a01535", "#2b0016", 2) });
+        list.push({ d: Vy(CX + ux * L, CY + uy * L) + 1, al, fn: () => {
+          const q = P(CX + ux * L, CY + uy * L, BH + 3), rg = 30 * q[2];
+          x.save(); x.globalCompositeOperation = "lighter"; const g = x.createRadialGradient(q[0], q[1], 2, q[0], q[1], rg); g.addColorStop(0, "rgba(255,80,110,.55)"); g.addColorStop(1, "rgba(255,80,110,0)"); x.fillStyle = g; x.fillRect(q[0] - rg, q[1] - rg, rg * 2, rg * 2); x.restore();   // halo du bout
+          cyl(CX + ux * L, CY + uy * L, HW + 3, BH + 3, "#ff3b5c", "#a01535", "#2b0016", 2);
+        } });
       };
-      if (A === 2) addBar(Math.PI - barA, barL, .78);
-      if (A === 3) addBar(barA + Math.PI, barL, 1);
-      addBar(barA, barL, A === 1 ? .1 : 1);
+      if (A === 2) addBar(Math.PI - barA, barL, .78, -tr);
+      if (A === 3) addBar(barA + Math.PI, barL, 1, tr);
+      addBar(barA, barL, A === 1 ? .1 : 1, tr);
       shad.push(() => { const q = P(CX, CY); x.fillStyle = "rgba(0,0,0,.34)"; x.beginPath(); x.ellipse(q[0] + 11, q[1] + 5, 30 * q[2], 30 * q[2] * K, 0, 0, 7); x.fill(); });
       list.push({ d: 26, al: 1, fn: () => head(eye + camA) });
 
@@ -384,10 +427,12 @@ export function createBarreClient(env) {
         const qb = sb.p[i]; if (!qa[2] || !pl[i]) return;
         const wx = qb && qb[2] ? qa[0] + (qb[0] - qa[0]) * f : qa[0], wy = qb && qb[2] ? qa[1] + (qb[1] - qa[1]) * f : qa[1];
         if (qb && Math.hypot(qb[0] - qa[0], qb[1] - qa[1]) > .6) ang[i] = Math.atan2(qb[1] - qa[1], qb[0] - qa[0]);
-        if (qa[4] && !jt[i]) jt[i] = now; if (!qa[4]) jt[i] = 0;
+        if (qa[4] && !jt[i]) jt[i] = now; if (!qa[4] && jt[i]) { jt[i] = 0; rings.push({ x: wx, y: wy, col: pl[i][2], t: 0, s: .7 }); }
         const u = jt[i] ? Math.min(1, (now - jt[i]) / 500) : 0, h = JH * Math.sin(Math.PI * u), st = jt[i] ? 1 + .13 * Math.abs(Math.cos(Math.PI * u)) : 1;
         const col = pl[i][2], me = i === myIdx, [px, gy, sc] = P(wx, wy), sk = Math.max(.45, 1 - h / 100);
         shad.push(() => {
+          x.save(); x.globalCompositeOperation = "lighter"; x.translate(px, gy); x.scale(1, K);                                  // halo coloré au sol
+          const gg = x.createRadialGradient(0, 0, 2, 0, 0, 44 * sc); gg.addColorStop(0, rgba(col, me ? .42 : .22)); gg.addColorStop(1, rgba(col, 0)); x.fillStyle = gg; x.beginPath(); x.arc(0, 0, 44 * sc, 0, 7); x.fill(); x.restore();
           x.fillStyle = `rgba(0,0,0,${(.45 * sk).toFixed(2)})`; x.beginPath(); x.ellipse(px, gy, BR * sk * 1.1 * sc, BR * sk * 1.1 * sc * K, 0, 0, 7); x.fill();
           if (me) {                                            // anneau de recharge du saut, posé au sol
             const cdv = last.p[i] ? last.p[i][3] / 100 : 0, rr = (BR + 8) * sc;
@@ -398,11 +443,10 @@ export function createBarreClient(env) {
         const it = { d: Vy(wx, wy) + .5, al: 1, fn: () => sprite(px, gy - h * sc, sc, col, (ang[i] || 0) + camA, st) };
         (h >= 10 ? top : list).push(it);
         labels.push(() => {
-          const ly = gy - h * sc - BR * sc * 2.6 * st - 6;
-          x.font = "700 13px 'DM Sans',sans-serif"; x.textAlign = "center"; x.lineWidth = 3; x.strokeStyle = "rgba(0,0,0,.75)"; x.fillStyle = me ? "#ffd23f" : "#fff";
-          x.strokeText(pl[i][1], px, ly); x.fillText(pl[i][1], px, ly);
-          if (me) { x.fillStyle = "#ffd23f"; x.fillText("▼", px, ly - 13); }
-          x.textAlign = "start";
+          const ly = gy - h * sc - BR * sc * 2.6 * st - 8;
+          pill(pl[i][1], px, ly, "700 13px 'DM Sans',sans-serif", me ? "#ffd23f" : "#fff", "rgba(10,5,30,.62)", me ? "#ffd23f" : rgba(col, .8));
+          if (me) { x.fillStyle = "#ffd23f"; x.fillText("▼", px, ly - 20); }
+          x.textAlign = "start"; x.textBaseline = "alphabetic";
         });
       });
 
@@ -411,14 +455,21 @@ export function createBarreClient(env) {
       top.forEach(it => it.fn());
       labels.forEach(fn => fn());
 
-      if (A === 0 || A === 4) { x.fillStyle = A === 0 ? "rgba(255,210,63,.07)" : "rgba(150,60,255,.13)"; x.fillRect(0, 0, W, H); }
-      if (A >= 0 && !last.o) { x.textAlign = "center"; x.font = "800 24px 'Bricolage Grotesque',sans-serif"; x.fillStyle = Math.floor(now / 150) % 2 ? "#ffd23f" : "#fff"; x.fillText(`${AB[A]} · ${last.at.toFixed(1)} s`, CX, 26); x.textAlign = "start"; }
+      x.drawImage(vignette(), 0, 0);
+      if (A >= 0) { const g = x.createRadialGradient(CX, CY, 200, CX, CY, 470); g.addColorStop(0, `rgba(${ACR[A]},0)`); g.addColorStop(1, `rgba(${ACR[A]},${(.2 + .1 * Math.sin(now / 120)).toFixed(2)})`); x.fillStyle = g; x.fillRect(0, 0, W, H); }   // bords colorés selon la capacité
+      if (hit > 0) { hit -= dt; const g = x.createRadialGradient(CX, CY, 120, CX, CY, 480); g.addColorStop(0, "rgba(255,20,60,0)"); g.addColorStop(1, `rgba(255,20,60,${Math.min(.6, hit).toFixed(2)})`); x.fillStyle = g; x.fillRect(0, 0, W, H); }   // flash rouge quand on meurt
+      if (A >= 0 && !last.o) pill(`${AB[A]} · ${last.at.toFixed(1)} s`, CX, 26, "800 22px 'Bricolage Grotesque',sans-serif", "#fff", "rgba(10,5,30,.7)", Math.floor(now / 150) % 2 ? AC[A] : "#fff");
 
-      x.font = "700 14px 'DM Sans',sans-serif"; x.textBaseline = "middle";
-      last.p.forEach((q, i) => { const y = 18 + i * 20; x.globalAlpha = q[2] ? 1 : .4; x.fillStyle = pl[i][2]; x.beginPath(); x.arc(16, y, 6, 0, 7); x.fill(); x.fillStyle = "#fff"; x.fillText(pl[i][1] + (q[2] ? "" : " ✖"), 28, y); });
-      x.globalAlpha = 1; x.textAlign = "right"; x.font = "600 13px 'DM Sans',sans-serif"; x.fillStyle = "#ffe9a8";
-      (last.kf || []).slice(-4).forEach((t, i) => x.fillText(t, W - 12, 18 + i * 18));
-      if (last.s >= 0 && !last.o) { x.textAlign = "center"; x.font = "800 22px 'Bricolage Grotesque',sans-serif"; x.fillStyle = Math.floor(now / 200) % 2 ? "#ff3b5c" : "#fff"; x.fillText(`⏱️ Tiens encore ${last.s.toFixed(1)} s !`, CX, H - 18); }
+      x.font = "700 14px 'DM Sans',sans-serif"; x.textAlign = "start"; x.textBaseline = "middle";
+      last.p.forEach((q, i) => {
+        const y = 18 + i * 20, t = pl[i][1] + (q[2] ? "" : " ✖");
+        x.globalAlpha = q[2] ? 1 : .45; rr(6, y - 11, x.measureText(t).width + 38, 22, 11); x.fillStyle = "rgba(10,5,30,.5)"; x.fill();
+        x.fillStyle = pl[i][2]; x.beginPath(); x.arc(18, y, 6, 0, 7); x.fill(); x.lineWidth = 1.5; x.strokeStyle = "rgba(255,255,255,.6)"; x.stroke();
+        x.fillStyle = "#fff"; x.fillText(t, 30, y);
+      });
+      x.globalAlpha = 1; x.textAlign = "right"; x.textBaseline = "alphabetic"; x.font = "600 13px 'DM Sans',sans-serif"; x.lineWidth = 3; x.strokeStyle = "rgba(0,0,0,.6)"; x.fillStyle = "#ffe9a8";
+      (last.kf || []).slice(-4).forEach((t, i) => { x.strokeText(t, W - 12, 18 + i * 18); x.fillText(t, W - 12, 18 + i * 18); });
+      if (last.s >= 0 && !last.o) pill(`⏱️ Tiens encore ${last.s.toFixed(1)} s !`, CX, H - 24, "800 20px 'Bricolage Grotesque',sans-serif", "#fff", Math.floor(now / 200) % 2 ? "rgba(255,59,92,.85)" : "rgba(10,5,30,.75)", "#fff");
       x.textAlign = "start"; x.textBaseline = "alphabetic";
       const mq = last.p[myIdx], rdy = !mq || !mq[2] || mq[3] > 0, op = rdy ? ".45" : "1"; if (btn.style.opacity !== op) btn.style.opacity = op;
     }
@@ -435,7 +486,7 @@ export function createBarreClient(env) {
 
   return {
     enter(c) {
-      active = true; snaps = []; pl = null; lastEv = 0; fl = []; parts = []; ang = []; jt = []; jseq = 0; sentStr = ""; sentAt = 0; stick = null; keys.clear(); tPrev = 0; myIdx = -1; ovT = "\u0000"; camA = 0; camInit = false; cc = 1; cs = 0;
+      active = true; snaps = []; pl = null; lastEv = 0; fl = []; parts = []; ang = []; jt = []; jseq = 0; sentStr = ""; sentAt = 0; stick = null; keys.clear(); tPrev = 0; myIdx = -1; ovT = "\u0000"; rings = []; hit = 0; camA = 0; camInit = false; cc = 1; cs = 0;
       $("ghelp").textContent = "ZQSD / WASD / flèches : bouger · Espace ou clic droit : sauter 🦘 par-dessus la barre · glisse sur mobile";
       const myUid = getMe().uid;
       set(R(`games/${c}/inputs/${myUid}`), "0,0,0").catch(() => { });

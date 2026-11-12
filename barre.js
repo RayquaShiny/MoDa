@@ -2,6 +2,7 @@
    - Le dernier en vie gagne. S'il ne tient pas 5 s tout seul face à la barre, c'est la BARRE qui gagne.
    - La barre accélère avec le temps et joue des feintes : freinage trompeur puis coup de fouet, demi-tour,
      arrêt net, zigzag, rétractation puis jaillissement.
+   - Capacités spéciales : turbo x2 pour tous, barre fantôme, mirage (fausse barre), double barre, commandes inversées.
    - Chaque joueur peut SAUTER 🦘 (Espace, bouton, clic droit) : on passe au-dessus de la barre (0,5 s, recharge 1,8 s).
    - Même fonctionnement que Sumo Arena : l'hôte simule (30 pas/s) et publie games/<code>/state ; chacun écrit
      « ax,ay,compteurSaut » dans games/<code>/inputs/<uid>. Aucun nouveau chemin Firebase. */
@@ -18,8 +19,12 @@ const MOVES = [
   (b, d) => [[-d * b * 1.2, 1.5]],                              // demi-tour
   (b, d) => [[0, .6], [d * b * 2.6, .7]],                       // arrêt net puis démarrage en trombe
   (b, d) => [[-d * b * 1.8, .45], [d * b * 1.8, .9]],           // zigzag
-  (b, d) => [[d * b * .5, .5, .55], [d * b * 1.6, .9, 1]]       // se rétracte, puis jaillit
+  (b, d) => [[d * b * .5, .5, .55], [d * b * 1.6, .9, 1]],      // se rétracte, puis jaillit
+  (b, d) => [[0, 1.1], [-d * b * 3, .5]],                       // fausse pause, puis demi-tour éclair
+  (b, d) => [[d * b * 2, .35, .7], [d * b * 2, .35, 1], [d * b * 2, .35, .6], [d * b * 3, .6, 1]] // pulsation : la pointe respire
 ];
+// Capacités spéciales (une à la fois, annoncées en haut de l'écran) : [nom, durée en s]
+const ABS = [["⚡ TURBO x2 : tout le monde !", 4], ["👻 Barre fantôme", 3], ["🪞 Mirage : laquelle est la vraie ?", 4], ["🌀 Double barre", 4], ["🔀 Commandes inversées", 3.5]];
 
 // ---------------------------------------------------------------- Hôte
 export async function startBarre(env) {
@@ -32,7 +37,7 @@ export async function startBarre(env) {
 
   const rad = 170 + ids.length * 10, P = {}, I = {}, seen = {};
   let t = 0, ang = Math.random() * PI2, om = 0, tOm = 1.2, dir = Math.random() < .5 ? 1 : -1, len = 1, tLen = 1;
-  let q = [], curT = 0, gap = 2, solo = -1, res, evId = 0, evs = [], kf = [], pubN = 0;
+  let ab = -1, abT = 0, abNext = 8, lastAb = -1, q = [], curT = 0, gap = 2, solo = -1, res, evId = 0, evs = [], kf = [], pubN = 0;
   const off = Math.random() * PI2;
   ids.forEach((u, i) => {                                   // départ en cercle, à mi-rayon
     const a = off + i / ids.length * PI2, d = rad * .6;
@@ -70,12 +75,19 @@ export async function startBarre(env) {
   const step = () => {
     ids.forEach(u => { if (isBot(u) && P[u].a) bot(u); });
     t += DT;
+    // --- capacités spéciales : la première à 8 s, puis toutes les 6 à 10 s (4 à 6 s quand il ne reste qu'un joueur)
+    if (ab >= 0) { if ((abT -= DT) <= 0) { ab = -1; abNext = t + (solo >= 0 ? 4 + Math.random() * 2 : 6 + Math.random() * 4); } }
+    else if (t >= abNext) {
+      do ab = Math.floor(Math.random() * ABS.length); while (ab === lastAb); lastAb = ab; abT = ABS[ab][1];
+      kf.push([ABS[ab][0], pubN + 40]); ev(CX, CY, -3, ab);
+    }
+    const dtp = DT * (ab === 0 ? 2 : 1), sg = ab === 4 ? -1 : 1;   // turbo : le temps file x2 pour la barre ET les joueurs
     // --- la barre et ses feintes
-    if (curT > 0) curT -= DT;
+    if (curT > 0) curT -= dtp;
     else if (q.length) { const s = q.shift(); tOm = s[0]; tLen = s[2] || 1; curT = s[1]; }
-    else { tOm = dir * base(); tLen = 1; if ((gap -= DT) <= 0) { const m = Math.floor(Math.random() * MOVES.length); if (m === 1) dir = -dir; q = MOVES[m](base(), dir); gap = .5 + Math.random() * 1.1; } }
-    om += clamp(tOm - om, 9 * DT); len += clamp(tLen - len, 1.2 * DT);
-    const a0 = ang; ang += om * DT;
+    else { tOm = dir * base(); tLen = 1; if ((gap -= dtp) <= 0) { const m = Math.floor(Math.random() * MOVES.length); if (m === 1) dir = -dir; q = MOVES[m](base(), dir); gap = .5 + Math.random() * 1.1; } }
+    om += clamp(tOm - om, 9 * dtp); len += clamp(tLen - len, 1.2 * dtp);
+    const a0 = ang; ang += om * dtp;
     // --- joueurs
     const al = alive();
     al.forEach(u => {
@@ -83,9 +95,9 @@ export async function startBarre(env) {
       if (p.cd > 0) p.cd = Math.max(0, p.cd - DT);
       if (p.j > 0) p.j = Math.max(0, p.j - DT);
       if (i.want > 0) { i.want -= DT; if (p.cd <= 0) { p.j = JUMP_T; p.cd = JUMP_CD; i.want = 0; ev(p.x, p.y, -1, ids.indexOf(u)); } }
-      p.vx += i.ax * ACC * DT; p.vy += i.ay * ACC * DT;
-      const f = Math.exp(-DAMP * DT); p.vx *= f; p.vy *= f;
-      p.x += p.vx * DT; p.y += p.vy * DT;
+      p.vx += i.ax * sg * ACC * dtp; p.vy += i.ay * sg * ACC * dtp;
+      const f = Math.exp(-DAMP * dtp); p.vx *= f; p.vy *= f;
+      p.x += p.vx * dtp; p.y += p.vy * dtp;
       const dx = p.x - CX, dy = p.y - CY, d = Math.hypot(dx, dy), mx = rad - BR;
       if (d > mx) { p.x = CX + dx / d * mx; p.y = CY + dy / d * mx; }  // le bord est un mur
     });
@@ -96,8 +108,8 @@ export async function startBarre(env) {
     }
     // --- touché ? (4 sous-pas : la pointe va vite, elle ne doit pas « traverser »)
     const L = (rad - 4) * len;
-    for (let k = 1; k <= 4; k++) {
-      const aa = a0 + (ang - a0) * k / 4, ux = Math.cos(aa), uy = Math.sin(aa);
+    for (let k = 1; k <= 6; k++) for (const arm of ab === 3 ? [0, Math.PI] : [0]) {   // double barre : 2 bras mortels
+      const aa = a0 + (ang - a0) * k / 6 + arm, ux = Math.cos(aa), uy = Math.sin(aa);
       alive().forEach(u => {
         const p = P[u]; if (p.j > 0) return;                    // en l'air : intouchable
         const s = Math.max(0, Math.min(L, (p.x - CX) * ux + (p.y - CY) * uy));
@@ -117,7 +129,7 @@ export async function startBarre(env) {
     pubN++;
     evs = evs.filter(o => o.u >= pubN); kf = kf.filter(e => e[1] > pubN);
     const o = {
-      k: "barre", t: +t.toFixed(1), a: +ang.toFixed(3), l: +len.toFixed(2), r: rad, s: solo >= 0 ? +Math.max(0, solo).toFixed(1) : -1,
+      k: "barre", t: +t.toFixed(1), ab, at: ab >= 0 ? +abT.toFixed(1) : 0, a: +ang.toFixed(3), l: +len.toFixed(2), r: rad, s: solo >= 0 ? +Math.max(0, solo).toFixed(1) : -1,
       p: ids.map(u => { const p = P[u]; return [+p.x.toFixed(1), +p.y.toFixed(1), p.a, Math.round(p.cd / JUMP_CD * 100), p.j > 0 ? 1 : 0]; }),
       ev: evs.map(o2 => o2.e), kf: kf.map(e => e[0]), ...x
     };
@@ -154,6 +166,7 @@ export async function startBarre(env) {
 
 // ---------------------------------------------------------------- Client (tous les joueurs, hôte compris)
 const KEYS = { ArrowUp: "U", w: "U", z: "U", ArrowDown: "D", s: "D", ArrowLeft: "L", a: "L", q: "L", ArrowRight: "R", d: "R" };
+const AB = ABS.map(a => a[0]);
 const sh = (h, k) => { const m = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) || 0).map(v => Math.round(k > 0 ? v * (1 - k) : v + (255 - v) * -k)); return `rgb(${m})`; };
 
 export function createBarreClient(env) {
@@ -205,6 +218,7 @@ export function createBarreClient(env) {
     const [ex, ey, ty, id] = e; if (id <= lastEv) return; lastEv = id;
     const col = pl && pl[e[4]] ? pl[e[4]][2] : "#fff";
     if (ty === -1) { spark(ex, ey, 8, col, 110); beep(380, .15, "sine", .05, 760); }
+    else if (ty === -3) { spark(ex, ey, 18, "#ff3b5c", 200); beep(160, .35, "square", .06, 900); }
     else if (ty === -2) {
       spark(ex, ey, 14, col, 220); beep(180, .4, "sawtooth", .06, 50);
       fl.push({ x: ex, y: ey, col, t: 0 });
@@ -235,13 +249,13 @@ export function createBarreClient(env) {
     for (let k = 40; k < r; k += 40) { x.beginPath(); x.arc(CX, CY, k, 0, 7); x.stroke(); }
     x.lineWidth = 5; x.strokeStyle = danger ? "#ff3b5c" : "#9b8cff"; x.beginPath(); x.arc(CX, CY, r - 1, 0, 7); x.stroke();
   }
-  function bar(a, L, now, eye) {
-    x.save(); x.translate(CX, CY); x.rotate(a);
+  function bar(a, L, now, eye, al = 1, hub = true) {
+    x.save(); x.globalAlpha = al; x.translate(CX, CY); x.rotate(a);
     x.fillStyle = "rgba(0,0,0,.35)"; x.fillRect(0, -HW + 9, L, HW * 2);
     for (let k = 0, i = 0; k < L; k += 28, i++) { x.fillStyle = i % 2 ? "#ffd23f" : "#ff3b5c"; x.fillRect(k, -HW, Math.min(28, L - k), HW * 2); }
     x.strokeStyle = "#2b0016"; x.lineWidth = 2; x.strokeRect(0, -HW, L, HW * 2);
     x.fillStyle = "#ff3b5c"; x.beginPath(); x.arc(L, 0, HW + 3, 0, 7); x.fill(); x.stroke();
-    x.restore();
+    x.restore(); if (!hub) return;
     x.fillStyle = "#2b0016"; x.beginPath(); x.arc(CX, CY, 24, 0, 7); x.fill();      // moyeu : un visage malicieux
     x.strokeStyle = "#ff3b5c"; x.lineWidth = 3; x.stroke();
     const dx = Math.cos(eye), dy = Math.sin(eye);
@@ -282,6 +296,7 @@ export function createBarreClient(env) {
     const { a, b, f } = sm, last = snaps[snaps.length - 1].s, sa = a.s, sb = b.s, rad = last.r || 230;
     snaps.forEach(sn => { if (!sn.done && sn.at <= now - 110) { sn.done = true; (sn.s.ev || []).forEach(onEv); } });
     floor(rad, last.s >= 0);
+    const A = last.ab === undefined ? -1 : last.ab;
 
     // joueur vivant le plus proche : la barre le regarde
     let eye = sa.a, bd = 1e9;
@@ -311,7 +326,11 @@ export function createBarreClient(env) {
         if (me) { x.fillStyle = "#ffd23f"; x.fillText("▼", px, py - h - BR - 22); }
         x.textAlign = "start";
       });
-      drawBalls(below); bar(barA, barL, now, eye); drawBalls(above);   // un joueur en l'air passe AU-DESSUS de la barre
+      if (A === 2) bar(Math.PI - barA, barL, now, eye, .78, false);     // mirage : fausse barre inoffensive (un peu transparente)
+      if (A === 3) bar(barA + Math.PI, barL, now, eye, 1, false);       // second bras
+      drawBalls(below); bar(barA, barL, now, eye, A === 1 ? .07 : 1); drawBalls(above);
+      if (A === 0 || A === 4) { x.fillStyle = A === 0 ? "rgba(255,210,63,.07)" : "rgba(150,60,255,.13)"; x.fillRect(0, 0, W, H); }
+      if (A >= 0 && !last.o) { x.textAlign = "center"; x.font = "800 24px 'Bricolage Grotesque',sans-serif"; x.fillStyle = Math.floor(now / 150) % 2 ? "#ffd23f" : "#fff"; x.fillText(`${AB[A]} · ${last.at.toFixed(1)} s`, CX, 26); x.textAlign = "start"; }   // un joueur en l'air passe AU-DESSUS de la barre
 
       x.font = "700 14px 'DM Sans',sans-serif"; x.textBaseline = "middle";
       last.p.forEach((q, i) => { const y = 18 + i * 20; x.globalAlpha = q[2] ? 1 : .4; x.fillStyle = pl[i][2]; x.beginPath(); x.arc(16, y, 6, 0, 7); x.fill(); x.fillStyle = "#fff"; x.fillText(pl[i][1] + (q[2] ? "" : " ✖"), 28, y); });

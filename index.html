@@ -83,6 +83,7 @@ input.err{border-color:#ff4d6d}
 .tile.tk{background:linear-gradient(135deg,#4b6b2a,#e08a1e);color:#fff;cursor:pointer}
 .tile.lab{background:linear-gradient(135deg,#1e6fd9,#7bdff2);color:#04202e;cursor:pointer}
 .tile.fruit{background:linear-gradient(135deg,#43c04f,#f5d33b);color:#10300f;cursor:pointer}
+.tile.barre{background:linear-gradient(135deg,#7b2ff7,#ff3b5c);color:#fff;cursor:pointer}
 .tile.sumo{background:linear-gradient(135deg,#e8318a,#ffb199);color:#2b0016;cursor:pointer}
 #pass2[hidden]{display:none}
 section:not([hidden]){animation:fade .28s ease backwards}
@@ -153,9 +154,9 @@ body[data-g=sim] #pad,body[data-g=sim] #gctl{display:none!important}
 .scard{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--s1);border-radius:12px;padding:10px 12px;font-size:14px}
 .scard button{white-space:nowrap}.shatch{background:#3ee6c422;border:1px solid #3ee6c466;color:var(--b);border-radius:10px;padding:8px 10px;font-weight:600}
 /* ===== Sumo Arena ===== */
-body[data-g=sumo] #pad,body[data-g=sumo] #gctl,body[data-g=sumo] #score{display:none!important}
+body[data-g=sumo] #pad,body[data-g=sumo] #gctl,body[data-g=sumo] #score,body[data-g=barre] #pad,body[data-g=barre] #gctl,body[data-g=barre] #score{display:none!important}
 #sdash{display:none;position:absolute;right:10px;bottom:10px;width:78px;height:78px;padding:0;border-radius:50%;font-size:34px;z-index:6;align-items:center;justify-content:center;background:#ff4d6dd0;color:#fff;touch-action:none;-webkit-user-select:none;user-select:none;opacity:.45}
-body[data-g=sumo] #sdash{display:flex}
+body[data-g=sumo] #sdash,body[data-g=barre] #sdash{display:flex}
 #semo{position:absolute;right:8px;bottom:60px;display:flex;gap:6px;background:#14102bec;border-radius:12px;padding:6px;z-index:6}
 #semo button{font-size:22px;padding:4px 8px;background:var(--s2)}
 
@@ -383,7 +384,7 @@ html.neon .adl{border-top-color:#ff1f4b33}
   <div class="panel"><h2>Jouer avec tes potes</h2>
    <p class="sub">Choisis un jeu ci-dessous pour créer un lobby, puis invite tes amis. Ou rejoins un pote avec son code.</p>
    <div class="row"><input id="joincode" placeholder="Code du lobby" maxlength="5" autocapitalize="characters" autocorrect="off" spellcheck="false" autocomplete="off" enterkeyhint="go" style="max-width:160px;text-transform:uppercase"><button class="alt" id="join">Rejoindre</button></div></div>
-  <div class="grid"><div class="tile snake" id="tsnake">Snake<small>1 à 8 joueurs</small></div><div class="tile surv" id="tsurv">Survie coop<small>1 à 8 joueurs</small></div><div class="tile br" id="tbr">Battle Royale<small>2 à 8 joueurs · dernier en vie</small></div><div class="tile lab" id="tlab">Évasion coop<small>1 à 8 joueurs · labyrinthe</small></div><div class="tile sim" id="tsim">Mine Simulator<small>1 à 8 joueurs · farme, améliore, renais</small></div><div class="tile tk" id="ttk">Tanks<small>2 à 8 joueurs · obus qui rebondissent</small></div><div class="tile sumo" id="tsumo">Sumo Arena<small>2 à 8 joueurs · pousse-les hors de l'arène</small></div><div class="tile fruit" id="tfruit">Fruit Forager<small>1 à 5 joueurs · cueille, vends, progresse</small></div></div>
+  <div class="grid"><div class="tile snake" id="tsnake">Snake<small>1 à 8 joueurs</small></div><div class="tile surv" id="tsurv">Survie coop<small>1 à 8 joueurs</small></div><div class="tile br" id="tbr">Battle Royale<small>2 à 8 joueurs · dernier en vie</small></div><div class="tile lab" id="tlab">Évasion coop<small>1 à 8 joueurs · labyrinthe</small></div><div class="tile sim" id="tsim">Mine Simulator<small>1 à 8 joueurs · farme, améliore, renais</small></div><div class="tile tk" id="ttk">Tanks<small>2 à 8 joueurs · obus qui rebondissent</small></div><div class="tile sumo" id="tsumo">Sumo Arena<small>2 à 8 joueurs · pousse-les hors de l'arène</small></div><div class="tile barre" id="tbarre">La barre malicieuse<small>2 à 8 joueurs · esquive, saute, survis 5 s</small></div><div class="tile fruit" id="tfruit">Fruit Forager<small>1 à 5 joueurs · cueille, vends, progresse</small></div></div>
  </section>
  <section id="stats" hidden>
   <div class="stabs" role="tablist"><button type="button" id="tbStats" class="on" role="tab" aria-selected="true">📊 Stats</button><button type="button" id="tbAdm" role="tab" aria-selected="false">🛠️ Admin</button></div>

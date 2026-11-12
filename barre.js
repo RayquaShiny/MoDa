@@ -173,19 +173,23 @@ const sh = (h, k) => { const m = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 
    joueurs = billes posées au sol avec une ombre). La caméra est FIXE : rien ne bouge à l'écran quand on saute, seul le joueur
    monte (et son ombre reste au sol). Seule la projection change : la simulation de l'hôte reste en 2D, rien d'autre n'est touché. */
 const K = .72, BH = 13, HUBH = 22, FT = 16, JH = 34;      // inclinaison, hauteur de la barre, du moyeu, épaisseur du plateau, hauteur de saut
-const PY = wy => CY + (wy - CY) * K;                       // projection verticale d'un point du sol
 
 export function createBarreClient(env) {
   const { R, set, onValue, $, beep, getMe, getCode } = env;
   const cv = $("cv"), x = cv.getContext("2d"), btn = $("sdash"), ov = $("ov");
   let active = false, raf = 0, snaps = [], pl = null, lastEv = 0, parts = [], fl = [], jt = [], ang = [], jseq = 0, sentStr = "", sentAt = 0, stick = null, tPrev = 0, myIdx = -1, ovT = "", bg = null;
   const keys = new Set();
+  // Caméra : elle tourne autour du plateau pour rester du côté de TON personnage (il est toujours en bas de l'écran, près de la caméra)
+  let camA = 0, camInit = false, cc = 1, cs = 0;
+  const P = (wx, wy) => { const dx = wx - CX, dy = wy - CY; return [CX + dx * cc - dy * cs, CY + (dx * cs + dy * cc) * K]; };   // monde → écran
+  const Vy = (wx, wy) => (wx - CX) * cs + (wy - CY) * cc;                                                                       // profondeur (plus grand = plus près de la caméra)
 
   const jump = () => { if (!active) return; jseq++; sendInput(performance.now(), true); };
   const sendInput = (now, force) => {
     let ix = 0, iy = 0;
     if (stick) { const m = Math.hypot(stick.dx, stick.dy); if (m > .18) { const k = Math.min(1, (m - .18) / .7) / m; ix = stick.dx * k; iy = stick.dy * k; } }
     else { ix = (keys.has("R") ? 1 : 0) - (keys.has("L") ? 1 : 0); iy = (keys.has("D") ? 1 : 0) - (keys.has("U") ? 1 : 0); if (ix && iy) { ix *= .7071; iy *= .7071; } }
+    { const wx = ix * cc + iy * cs, wy = -ix * cs + iy * cc; ix = wx; iy = wy; }     // haut de l'écran = loin de la caméra, quel que soit l'angle
     const str = `${ix.toFixed(2)},${iy.toFixed(2)},${jseq}`;
     if (str === sentStr || (!force && now - sentAt < 55)) return;
     sentStr = str; sentAt = now;
@@ -265,7 +269,7 @@ export function createBarreClient(env) {
   }
 
   // ---- Volumes
-  const poly = (c, z, dx = 0, dy = 0) => { x.beginPath(); c.forEach((p, i) => { const X = p[0] + dx, Y = PY(p[1] + dy) - z; i ? x.lineTo(X, Y) : x.moveTo(X, Y); }); x.closePath(); };
+  const poly = (c, z, dx = 0, dy = 0) => { x.beginPath(); c.forEach((p, i) => { const q = P(p[0], p[1]), X = q[0] + dx, Y = q[1] - z + dy; i ? x.lineTo(X, Y) : x.moveTo(X, Y); }); x.closePath(); };
   const quad = (ax, ay, bx, by, hw) => { const dx = bx - ax, dy = by - ay, m = Math.hypot(dx, dy) || 1, nx = -dy / m * hw, ny = dx / m * hw; return [[ax + nx, ay + ny], [bx + nx, by + ny], [bx - nx, by - ny], [ax - nx, ay - ny]]; };
   function box(c, top, side) {                               // poutre : couches empilées = flancs, puis le dessus
     x.fillStyle = side; x.strokeStyle = "#2b0016"; x.lineWidth = 1.5;
@@ -274,12 +278,12 @@ export function createBarreClient(env) {
     poly(c, BH); x.fillStyle = top; x.fill(); x.stroke();
   }
   function cyl(wx, wy, r, hg, top, side, rim, lw) {          // cylindre (moyeu, bout de la barre)
-    const sx = wx, sy = PY(wy);
+    const [sx, sy] = P(wx, wy);
     x.fillStyle = side; for (let z = 0; z < hg; z += 2) { x.beginPath(); x.ellipse(sx, sy - z, r, r * K, 0, 0, 7); x.fill(); }
     x.beginPath(); x.ellipse(sx, sy - hg, r, r * K, 0, 0, 7); x.fillStyle = top; x.fill(); x.lineWidth = lw; x.strokeStyle = rim; x.stroke();
   }
   function face(eye) {                                       // visage malicieux posé sur le dessus du moyeu
-    x.save(); x.translate(CX, PY(CY) - HUBH); x.scale(1, K);
+    x.save(); x.translate(CX, CY - HUBH); x.scale(1, K);
     const dx = Math.cos(eye), dy = Math.sin(eye);
     [-1, 1].forEach(s => {
       x.fillStyle = "#fff"; x.beginPath(); x.arc(s * 9, -3, 6, 0, 7); x.fill();
@@ -324,13 +328,21 @@ export function createBarreClient(env) {
     floor(rad, last.s >= 0);
     const A = last.ab === undefined ? -1 : last.ab;
 
+    // caméra : se place du côté de mon personnage, avec un mouvement doux (elle ne bouge pas quand on saute : seule la position au sol compte)
+    const mi = sa.p[myIdx], mj = sb.p[myIdx];
+    if (mi && mi[2]) {
+      const mx = mj && mj[2] ? mi[0] + (mj[0] - mi[0]) * f : mi[0], my = mj && mj[2] ? mi[1] + (mj[1] - mi[1]) * f : mi[1], ddx = mx - CX, ddy = my - CY;
+      if (Math.hypot(ddx, ddy) > 35) { const tg = Math.PI / 2 - Math.atan2(ddy, ddx); camA = camInit ? camA + wrap(tg - camA) * Math.min(1, dt * 5) : tg; camInit = true; }
+    }
+    cc = Math.cos(camA); cs = Math.sin(camA);
+
     // joueur vivant le plus proche : la barre le regarde
     let eye = sa.a, bd = 1e9;
     const barA = sa.a + (sb.a - sa.a) * f, barL = ((sa.l || 1) + ((sb.l || 1) - (sa.l || 1)) * f) * (rad - 4);
     sa.p.forEach(p => { if (p[2]) { const d = Math.hypot(p[0] - CX, p[1] - CY); if (d < bd) { bd = d; eye = Math.atan2(p[1] - CY, p[0] - CX); } } });
 
     fl = fl.filter(o => (o.t += dt) < .8);
-    fl.forEach(o => { const k = 1 - o.t / .8; x.save(); x.globalAlpha = k; x.translate(o.x, PY(o.y) - BR * .85); x.scale(k, k); x.rotate(o.t * 8); ball(0, 0, o.col, 0); x.restore(); });
+    fl.forEach(o => { const k = 1 - o.t / .8; x.save(); x.globalAlpha = k; { const q = P(o.x, o.y); x.translate(q[0], q[1] - BR * .85); }; x.scale(k, k); x.rotate(o.t * 8); ball(0, 0, o.col, 0); x.restore(); });
     x.globalAlpha = 1;
 
     if (pl) {
@@ -339,27 +351,27 @@ export function createBarreClient(env) {
       // barre (ou bras / mirage) : une poutre découpée en tronçons, chacun trié en profondeur
       const addBar = (ba, L, al) => {
         const ux = Math.cos(ba), uy = Math.sin(ba);
-        shad.push(() => { x.globalAlpha = al; x.fillStyle = "rgba(0,0,0,.32)"; poly(quad(CX, CY, CX + ux * L, CY + uy * L, HW), 0, 9, 6); x.fill(); x.globalAlpha = 1; });
+        shad.push(() => { x.globalAlpha = al; x.fillStyle = "rgba(0,0,0,.32)"; poly(quad(CX, CY, CX + ux * L, CY + uy * L, HW), 0, 9, 4); x.fill(); x.globalAlpha = 1; });
         for (let k = 0, i = 0; k < L; k += 28, i++) {
           const k2 = Math.min(L, k + 28), ax = CX + ux * k, ay = CY + uy * k, bx = CX + ux * k2, by = CY + uy * k2, c = quad(ax, ay, bx, by, HW);
-          list.push({ d: (ay + by) / 2, al, fn: () => i % 2 ? box(c, "#ffd23f", "#b8921a") : box(c, "#ff3b5c", "#a01535") });
+          list.push({ d: Vy((ax + bx) / 2, (ay + by) / 2), al, fn: () => i % 2 ? box(c, "#ffd23f", "#b8921a") : box(c, "#ff3b5c", "#a01535") });
         }
-        list.push({ d: CY + uy * L + 1, al, fn: () => cyl(CX + ux * L, CY + uy * L, HW + 3, BH + 3, "#ff3b5c", "#a01535", "#2b0016", 2) });
+        list.push({ d: Vy(CX + ux * L, CY + uy * L) + 1, al, fn: () => cyl(CX + ux * L, CY + uy * L, HW + 3, BH + 3, "#ff3b5c", "#a01535", "#2b0016", 2) });
       };
       if (A === 2) addBar(Math.PI - barA, barL, .78);          // mirage : fausse barre inoffensive (un peu transparente)
       if (A === 3) addBar(barA + Math.PI, barL, 1);            // second bras
       addBar(barA, barL, A === 1 ? .1 : 1);                    // barre fantôme : presque invisible, c'est voulu
-      shad.push(() => { x.fillStyle = "rgba(0,0,0,.32)"; x.beginPath(); x.ellipse(CX + 9, PY(CY) + 6, 26, 26 * K, 0, 0, 7); x.fill(); });
-      list.push({ d: CY + 24, al: 1, fn: () => { cyl(CX, CY, 24, HUBH, "#3a0b24", "#2b0016", "#ff3b5c", 3); face(eye); } });
+      shad.push(() => { x.fillStyle = "rgba(0,0,0,.32)"; x.beginPath(); x.ellipse(CX + 9, CY + 4, 26, 26 * K, 0, 0, 7); x.fill(); });
+      list.push({ d: 24, al: 1, fn: () => { cyl(CX, CY, 24, HUBH, "#3a0b24", "#2b0016", "#ff3b5c", 3); face(eye + camA); } });
 
       // joueurs
       sa.p.forEach((qa, i) => {
         const qb = sb.p[i]; if (!qa[2] || !pl[i]) return;
-        const px = qb && qb[2] ? qa[0] + (qb[0] - qa[0]) * f : qa[0], py = qb && qb[2] ? qa[1] + (qb[1] - qa[1]) * f : qa[1];
+        const wx = qb && qb[2] ? qa[0] + (qb[0] - qa[0]) * f : qa[0], wy = qb && qb[2] ? qa[1] + (qb[1] - qa[1]) * f : qa[1];
         if (qb && Math.hypot(qb[0] - qa[0], qb[1] - qa[1]) > .6) ang[i] = Math.atan2(qb[1] - qa[1], qb[0] - qa[0]);
         if (qa[4] && !jt[i]) jt[i] = now; if (!qa[4]) jt[i] = 0;
         const h = jt[i] ? JH * Math.sin(Math.PI * Math.min(1, (now - jt[i]) / 500)) : 0;
-        const col = pl[i][2], me = i === myIdx, gy = PY(py), sk = Math.max(.45, 1 - h / 90);
+        const col = pl[i][2], me = i === myIdx, [px, gy] = P(wx, wy), sk = Math.max(.45, 1 - h / 90);
         shad.push(() => {
           x.fillStyle = `rgba(0,0,0,${(.42 * sk).toFixed(2)})`; x.beginPath(); x.ellipse(px, gy, BR * sk * 1.05, BR * sk * 1.05 * K, 0, 0, 7); x.fill();   // l'ombre reste au sol
           if (me) {                                            // anneau de recharge du saut, posé au sol
@@ -368,7 +380,7 @@ export function createBarreClient(env) {
             x.beginPath(); x.ellipse(px, gy, BR + 7, (BR + 7) * K, 0, -Math.PI / 2, -Math.PI / 2 + PI2 * (1 - cdv)); x.stroke();
           }
         });
-        const it = { d: py + .5, al: 1, fn: () => ball(px, gy - BR * .85 - h, col, ang[i] || 0) };
+        const it = { d: Vy(wx, wy) + .5, al: 1, fn: () => ball(px, gy - BR * .85 - h, col, (ang[i] || 0) + camA) };
         (h >= 10 ? top : list).push(it);                       // en l'air : passe AU-DESSUS de la barre
         labels.push(() => {
           const ly = gy - BR * 1.7 - h - 8;
@@ -397,7 +409,7 @@ export function createBarreClient(env) {
     }
 
     parts = parts.filter(o => (o.l -= dt * 2.2) > 0);
-    parts.forEach(o => { o.x += o.vx * dt; o.y += o.vy * dt; x.globalAlpha = Math.max(0, o.l); x.fillStyle = o.c; x.beginPath(); x.arc(o.x, PY(o.y) - 6, o.s * o.l, 0, 7); x.fill(); });
+    parts.forEach(o => { o.x += o.vx * dt; o.y += o.vy * dt; x.globalAlpha = Math.max(0, o.l); x.fillStyle = o.c; x.beginPath(); { const q = P(o.x, o.y); x.arc(q[0], q[1] - 6, o.s * o.l, 0, 7); }; x.fill(); });
     x.globalAlpha = 1;
     if (stick) {
       x.fillStyle = "rgba(255,255,255,.08)"; x.strokeStyle = "rgba(255,255,255,.28)"; x.lineWidth = 2; x.beginPath(); x.arc(stick.ox, stick.oy, 55, 0, 7); x.fill(); x.stroke();
@@ -408,7 +420,7 @@ export function createBarreClient(env) {
 
   return {
     enter(c) {
-      active = true; snaps = []; pl = null; lastEv = 0; fl = []; parts = []; ang = []; jt = []; jseq = 0; sentStr = ""; sentAt = 0; stick = null; keys.clear(); tPrev = 0; myIdx = -1; ovT = "\u0000";
+      active = true; snaps = []; pl = null; lastEv = 0; fl = []; parts = []; ang = []; jt = []; jseq = 0; sentStr = ""; sentAt = 0; stick = null; keys.clear(); tPrev = 0; myIdx = -1; ovT = "\u0000"; camA = 0; camInit = false; cc = 1; cs = 0;
       $("ghelp").textContent = "ZQSD / WASD / flèches : bouger · Espace ou clic droit : sauter 🦘 par-dessus la barre · glisse sur mobile";
       const myUid = getMe().uid;
       set(R(`games/${c}/inputs/${myUid}`), "0,0,0").catch(() => { });

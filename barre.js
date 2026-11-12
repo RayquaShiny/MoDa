@@ -169,20 +169,19 @@ const KEYS = { ArrowUp: "U", w: "U", z: "U", ArrowDown: "D", s: "D", ArrowLeft: 
 const AB = ABS.map(a => a[0]);
 const sh = (h, k) => { const m = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) || 0).map(v => Math.round(k > 0 ? v * (1 - k) : v + (255 - v) * -k)); return `rgb(${m})`; };
 
-/* Vue 2,5D : le plateau est incliné (écrasé verticalement par K), les objets ont du volume (barre = poutre, moyeu = cylindre,
-   joueurs = billes posées au sol avec une ombre). La caméra est FIXE : rien ne bouge à l'écran quand on saute, seul le joueur
-   monte (et son ombre reste au sol). Seule la projection change : la simulation de l'hôte reste en 2D, rien d'autre n'est touché. */
-const K = .72, BH = 13, HUBH = 22, FT = 16, JH = 34;      // inclinaison, hauteur de la barre, du moyeu, épaisseur du plateau, hauteur de saut
+/* Vue 2,5D avec perspective douce : le plateau est incliné (K), ce qui est proche de la caméra est un peu plus grand (PERSP),
+   les objets ont du volume. La caméra tourne autour du plateau pour rester du côté de TON personnage, et reste fixe quand on saute. */
+const K = .7, PERSP = .0007, BH = 13, FT = 18, JH = 36;   // inclinaison, perspective, hauteur de la barre, épaisseur du plateau, hauteur de saut
 
 export function createBarreClient(env) {
   const { R, set, onValue, $, beep, getMe, getCode } = env;
   const cv = $("cv"), x = cv.getContext("2d"), btn = $("sdash"), ov = $("ov");
   let active = false, raf = 0, snaps = [], pl = null, lastEv = 0, parts = [], fl = [], jt = [], ang = [], jseq = 0, sentStr = "", sentAt = 0, stick = null, tPrev = 0, myIdx = -1, ovT = "", bg = null;
   const keys = new Set();
-  // Caméra : elle tourne autour du plateau pour rester du côté de TON personnage (il est toujours en bas de l'écran, près de la caméra)
   let camA = 0, camInit = false, cc = 1, cs = 0;
-  const P = (wx, wy) => { const dx = wx - CX, dy = wy - CY; return [CX + dx * cc - dy * cs, CY + (dx * cs + dy * cc) * K]; };   // monde → écran
-  const Vy = (wx, wy) => (wx - CX) * cs + (wy - CY) * cc;                                                                       // profondeur (plus grand = plus près de la caméra)
+  // monde (x, y, hauteur z) → écran [x, y, échelle]
+  const P = (wx, wy, z = 0) => { const dx = wx - CX, dy = wy - CY, vx = dx * cc - dy * cs, vy = dx * cs + dy * cc, s = 1 + vy * PERSP; return [CX + vx * s, CY + vy * K * s - z * s, s]; };
+  const Vy = (wx, wy) => (wx - CX) * cs + (wy - CY) * cc;   // profondeur (plus grand = plus près de la caméra)
 
   const jump = () => { if (!active) return; jseq++; sendInput(performance.now(), true); };
   const sendInput = (now, force) => {
@@ -244,69 +243,89 @@ export function createBarreClient(env) {
     return { a, b, f };
   }
 
+  // ---- Décor
   function background() {
     if (bg) return bg;
     bg = document.createElement("canvas"); bg.width = W; bg.height = H; const g = bg.getContext("2d");
-    const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, "#0b0a1f"); gr.addColorStop(1, "#1c0f3a"); g.fillStyle = gr; g.fillRect(0, 0, W, H);
-    for (let i = 0; i < 50; i++) { g.fillStyle = `rgba(190,160,255,${.04 + (i % 5) * .02})`; g.beginPath(); g.arc((i * 211) % W, (i * 127) % H, 2 + (i * 7) % 5, 0, 7); g.fill(); }
+    const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, "#0a0920"); gr.addColorStop(.6, "#190e38"); gr.addColorStop(1, "#2a1352"); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    for (let i = 0; i < 70; i++) { g.fillStyle = `rgba(200,175,255,${.03 + (i % 5) * .02})`; g.beginPath(); g.arc((i * 211) % W, (i * 127) % H, 1 + (i * 7) % 4, 0, 7); g.fill(); }
+    const gl = g.createRadialGradient(CX, CY + 40, 40, CX, CY + 40, 420); gl.addColorStop(0, "rgba(120,80,255,.28)"); gl.addColorStop(1, "rgba(120,80,255,0)"); g.fillStyle = gl; g.fillRect(0, 0, W, H);   // halo sous le plateau
     return bg;
   }
-
-  // ---- Plateau : disque épais vu en perspective (dessus elliptique + flanc)
+  const circ = (r, z, n = 72) => { x.beginPath(); for (let i = 0; i <= n; i++) { const a = i / n * PI2, q = P(CX + Math.cos(a) * r, CY + Math.sin(a) * r, z); i ? x.lineTo(q[0], q[1]) : x.moveTo(q[0], q[1]); } x.closePath(); };
   function floor(r, danger) {
     const ry = r * K, rim = danger ? "#ff3b5c" : "#9b8cff";
-    x.fillStyle = "rgba(0,0,0,.35)"; x.beginPath(); x.ellipse(CX + 8, CY + FT + 12, r + 6, ry + 6, 0, 0, 7); x.fill();       // ombre portée
-    const sg = x.createLinearGradient(CX - r, 0, CX + r, 0); sg.addColorStop(0, "#1f1850"); sg.addColorStop(.5, "#2c2468"); sg.addColorStop(1, "#110c2a");
-    x.fillStyle = sg; x.beginPath(); x.ellipse(CX, CY + FT, r, ry, 0, 0, 7); x.fill(); x.fillRect(CX - r, CY, r * 2, FT);          // flanc
-    x.save(); x.translate(CX, CY); x.scale(1, K);                                                                                   // dessus
-    const g = x.createRadialGradient(0, -r * .3, r * .1, 0, 0, r); g.addColorStop(0, "#4a3f95"); g.addColorStop(1, "#2c2663");
-    x.fillStyle = g; x.beginPath(); x.arc(0, 0, r, 0, 7); x.fill();
-    x.strokeStyle = "rgba(255,255,255,.07)"; x.lineWidth = 2;
-    for (let k = 40; k < r; k += 40) { x.beginPath(); x.arc(0, 0, k, 0, 7); x.stroke(); }
+    x.save(); x.translate(10, 12); x.fillStyle = "rgba(0,0,0,.38)"; circ(r + 4, -FT); x.fill(); x.restore();                            // ombre portée
+    const sg = x.createLinearGradient(CX - r, 0, CX + r, 0); sg.addColorStop(0, "#241c5c"); sg.addColorStop(.45, "#31286f"); sg.addColorStop(1, "#150f36");
+    x.fillStyle = sg; for (let z = -FT; z < 0; z += 2) { circ(r, z, 56); x.fill(); }                                                // flanc
+    circ(r, -FT, 56); x.lineWidth = 3; x.strokeStyle = danger ? "#7a0f28" : "#463cab"; x.stroke();
+    const g = x.createLinearGradient(0, CY - ry * 1.05, 0, CY + ry * 1.05); g.addColorStop(0, "#5a4cb4"); g.addColorStop(.55, "#3a3085"); g.addColorStop(1, "#2a2362");
+    circ(r, 0); x.fillStyle = g; x.fill();                                                                                          // dessus
+    x.save(); circ(r, 0); x.clip();
+    x.fillStyle = "rgba(255,255,255,.04)";                                                                                          // secteurs en damier (repères qui tournent avec la caméra)
+    for (let k = 0; k < 16; k += 2) { x.beginPath(); const c0 = P(CX, CY); x.moveTo(c0[0], c0[1]); for (let j = 0; j <= 6; j++) { const a = (k + j / 6) / 16 * PI2, q = P(CX + Math.cos(a) * r, CY + Math.sin(a) * r); x.lineTo(q[0], q[1]); } x.closePath(); x.fill(); }
+    x.strokeStyle = "rgba(255,255,255,.08)"; x.lineWidth = 2; for (let k = 50; k < r; k += 50) { circ(k, 0, 56); x.stroke(); }
+    x.lineWidth = 1; x.strokeStyle = "rgba(255,255,255,.07)"; for (let k = 0; k < 16; k++) { const a = k / 16 * PI2, c0 = P(CX, CY), q = P(CX + Math.cos(a) * r, CY + Math.sin(a) * r); x.beginPath(); x.moveTo(c0[0], c0[1]); x.lineTo(q[0], q[1]); x.stroke(); }
     x.restore();
-    x.lineWidth = 5; x.strokeStyle = rim; x.beginPath(); x.ellipse(CX, CY, r - 1, ry - 1, 0, 0, 7); x.stroke();
-    x.lineWidth = 3; x.strokeStyle = danger ? "#a01535" : "#5b4fc0"; x.beginPath(); x.ellipse(CX, CY + FT, r, ry, 0, 0, Math.PI); x.stroke();   // arête basse
+    circ(r - 1, 0); x.lineWidth = 6; x.strokeStyle = rim; x.stroke();                                                               // bord
+    circ(r - 8, 0); x.lineWidth = 1.5; x.strokeStyle = "rgba(255,255,255,.28)"; x.stroke();
   }
 
   // ---- Volumes
-  const poly = (c, z, dx = 0, dy = 0) => { x.beginPath(); c.forEach((p, i) => { const q = P(p[0], p[1]), X = q[0] + dx, Y = q[1] - z + dy; i ? x.lineTo(X, Y) : x.moveTo(X, Y); }); x.closePath(); };
+  const poly = (c, z, dx = 0, dy = 0) => { x.beginPath(); c.forEach((p, i) => { const q = P(p[0], p[1], z); i ? x.lineTo(q[0] + dx, q[1] + dy) : x.moveTo(q[0] + dx, q[1] + dy); }); x.closePath(); };
   const quad = (ax, ay, bx, by, hw) => { const dx = bx - ax, dy = by - ay, m = Math.hypot(dx, dy) || 1, nx = -dy / m * hw, ny = dx / m * hw; return [[ax + nx, ay + ny], [bx + nx, by + ny], [bx - nx, by - ny], [ax - nx, ay - ny]]; };
-  function box(c, top, side) {                               // poutre : couches empilées = flancs, puis le dessus
+  function box(c, top, side, mid) {                           // poutre : flancs empilés, dessus, reflet
     x.fillStyle = side; x.strokeStyle = "#2b0016"; x.lineWidth = 1.5;
     poly(c, 0); x.fill(); x.stroke();
     for (let z = 2; z < BH; z += 2) { poly(c, z); x.fill(); }
     poly(c, BH); x.fillStyle = top; x.fill(); x.stroke();
+    const m0 = P(mid[0], mid[1], BH), m1 = P(mid[2], mid[3], BH);
+    x.strokeStyle = "rgba(255,255,255,.35)"; x.lineWidth = 2; x.beginPath(); x.moveTo(m0[0], m0[1]); x.lineTo(m1[0], m1[1]); x.stroke();
   }
-  function cyl(wx, wy, r, hg, top, side, rim, lw) {          // cylindre (moyeu, bout de la barre)
-    const [sx, sy] = P(wx, wy);
-    x.fillStyle = side; for (let z = 0; z < hg; z += 2) { x.beginPath(); x.ellipse(sx, sy - z, r, r * K, 0, 0, 7); x.fill(); }
-    x.beginPath(); x.ellipse(sx, sy - hg, r, r * K, 0, 0, 7); x.fillStyle = top; x.fill(); x.lineWidth = lw; x.strokeStyle = rim; x.stroke();
+  function cyl(wx, wy, r, hg, top, side, rim, lw) {           // cylindre (base du moyeu, bout de la barre)
+    const [sx, sy, s] = P(wx, wy), rx = r * s, ry = r * s * K;
+    x.fillStyle = side; for (let z = 0; z < hg; z += 2) { x.beginPath(); x.ellipse(sx, sy - z * s, rx, ry, 0, 0, 7); x.fill(); }
+    x.beginPath(); x.ellipse(sx, sy - hg * s, rx, ry, 0, 0, 7); x.fillStyle = top; x.fill(); x.lineWidth = lw; x.strokeStyle = rim; x.stroke();
   }
-  function face(eye) {                                       // visage malicieux posé sur le dessus du moyeu
-    x.save(); x.translate(CX, CY - HUBH); x.scale(1, K);
-    const dx = Math.cos(eye), dy = Math.sin(eye);
-    [-1, 1].forEach(s => {
-      x.fillStyle = "#fff"; x.beginPath(); x.arc(s * 9, -3, 6, 0, 7); x.fill();
-      x.fillStyle = "#14102b"; x.beginPath(); x.arc(s * 9 + dx * 2.5, -3 + dy * 2.5, 3, 0, 7); x.fill();
-      x.strokeStyle = "#ff3b5c"; x.lineWidth = 2.5; x.beginPath(); x.moveTo(s * 15, -12); x.lineTo(s * 3, -8); x.stroke();   // sourcils en colère
+  function head(eye) {                                         // le moyeu : une grosse tête malicieuse, debout, qui regarde le joueur le plus proche
+    cyl(CX, CY, 27, 8, "#3a0b24", "#2b0016", "#ff3b5c", 3);
+    const [sx, sy, s] = P(CX, CY, 8 + 20), R0 = 22;
+    x.save(); x.translate(sx, sy); x.scale(s, s);
+    const g = x.createRadialGradient(-7, -9, 2, 0, 0, R0 * 1.1); g.addColorStop(0, "#7a1a48"); g.addColorStop(.5, "#3a0b24"); g.addColorStop(1, "#1a0010");
+    x.fillStyle = g; x.beginPath(); x.arc(0, 0, R0, 0, 7); x.fill(); x.lineWidth = 3; x.strokeStyle = "#ff3b5c"; x.stroke();
+    const dx = Math.cos(eye) * 2.8, dy = Math.sin(eye) * 2.4;
+    [-1, 1].forEach(k => {
+      x.fillStyle = "#fff"; x.beginPath(); x.ellipse(k * 8, -3, 6, 6.8, 0, 0, 7); x.fill();
+      x.fillStyle = "#14102b"; x.beginPath(); x.arc(k * 8 + dx, -3 + dy, 3.2, 0, 7); x.fill();
+      x.strokeStyle = "#ff3b5c"; x.lineWidth = 3; x.lineCap = "round"; x.beginPath(); x.moveTo(k * 14, -13); x.lineTo(k * 3, -8); x.stroke();   // sourcils en colère
     });
-    x.strokeStyle = "#fff"; x.lineWidth = 2; x.beginPath(); x.arc(0, 5, 8, .15, Math.PI - .15); x.stroke();
+    x.strokeStyle = "#fff"; x.lineWidth = 2.2; x.beginPath(); x.arc(0, 7, 8, .2, Math.PI - .2); x.stroke(); x.lineCap = "butt";
+    x.fillStyle = "rgba(255,255,255,.18)"; x.beginPath(); x.ellipse(-8, -14, 7, 3.5, -.5, 0, 7); x.fill();                                    // reflet
     x.restore();
   }
-  // Joueur : bille opaque, bien éclairée, avec contour sombre + liseré clair (toujours lisible, jamais « fantôme »)
-  function ball(sx, sy, col, a, r = BR) {
+  /* Personnage : petit « haricot » rond et haut (plus le disque aplati de la vue du dessus), avec pieds, reflet, étirement au saut.
+     (sx, gy) = point au sol, sc = échelle de perspective, fa = direction du regard DANS LA VUE (angle écran), st = étirement. */
+  function sprite(sx, gy, sc, col, fa, st) {
     x.globalAlpha = 1;
-    const g = x.createRadialGradient(sx - r * .35, sy - r * .4, 2, sx, sy, r * 1.05);
-    g.addColorStop(0, sh(col, -.55)); g.addColorStop(.35, col); g.addColorStop(1, sh(col, .45));
-    x.fillStyle = g; x.beginPath(); x.arc(sx, sy, r, 0, 7); x.fill();
+    const r = BR * sc, w = r * (1.02 / Math.sqrt(st)), hh = r * 1.3 * st, cy = gy - hh + r * .15, fx = Math.cos(fa), fy = Math.sin(fa);
+    x.fillStyle = sh(col, .5); [-1, 1].forEach(k => { x.beginPath(); x.ellipse(sx + k * w * .42, gy - r * .12, r * .34, r * .2, 0, 0, 7); x.fill(); });   // pieds
+    const g = x.createRadialGradient(sx - w * .4, cy - hh * .5, 1, sx, cy, hh * 1.15);
+    g.addColorStop(0, sh(col, -.6)); g.addColorStop(.4, col); g.addColorStop(1, sh(col, .5));
+    x.fillStyle = g; x.beginPath(); x.ellipse(sx, cy, w, hh, 0, 0, 7); x.fill();
     x.lineWidth = 3.5; x.strokeStyle = "rgba(10,5,30,.85)"; x.stroke();
-    x.lineWidth = 1.5; x.strokeStyle = sh(col, .65); x.beginPath(); x.arc(sx, sy, r - 1.5, 0, 7); x.stroke();
-    const dx = Math.cos(a), dy = Math.sin(a);
-    [-1, 1].forEach(s => {
-      const ex = sx + dx * r * .42 - dy * r * .34 * s, ey = sy + dy * r * .42 + dx * r * .34 * s;
-      x.fillStyle = "#fff"; x.beginPath(); x.arc(ex, ey, r * .27, 0, 7); x.fill();
-      x.fillStyle = "#14102b"; x.beginPath(); x.arc(ex + dx * r * .09, ey + dy * r * .09, r * .13, 0, 7); x.fill();
-    });
+    x.lineWidth = 1.4; x.strokeStyle = sh(col, -.5); x.beginPath(); x.ellipse(sx, cy, w - 1.8, hh - 1.8, 0, 0, 7); x.stroke();
+    const al = Math.max(0, Math.min(1, (fy + .4) / .5));                                                                                       // de dos : on ne voit plus les yeux
+    if (al > 0) {
+      x.globalAlpha = al; const ex = sx + fx * w * .5, ey = cy - hh * .22 + Math.max(0, fy) * hh * .08, sp = w * (.2 + .22 * Math.max(0, fy)), er = r * .3;
+      [-1, 1].forEach(k => {
+        const px = ex + k * sp;
+        x.fillStyle = "#fff"; x.beginPath(); x.ellipse(px, ey, er, er * 1.2, 0, 0, 7); x.fill();
+        x.fillStyle = "#14102b"; x.beginPath(); x.ellipse(px + fx * er * .35, ey + fy * er * .35, er * .5, er * .62, 0, 0, 7); x.fill();
+      });
+      x.globalAlpha = 1;
+    }
+    x.fillStyle = "rgba(255,255,255,.45)"; x.beginPath(); x.ellipse(sx - w * .42, cy - hh * .58, w * .2, hh * .13, -.55, 0, 7); x.fill();      // reflet
+    x.globalAlpha = 1;
   }
   function setOv(t) {
     if (t === ovT) return; ovT = t; ov.textContent = t;
@@ -318,72 +337,68 @@ export function createBarreClient(env) {
     raf = requestAnimationFrame(frame);
     const dt = Math.min(.05, (now - (tPrev || now)) / 1000); tPrev = now;
     sendInput(now);
-    x.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);   // caméra fixe : aucun décalage, aucun tremblement
+    x.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);
     x.globalAlpha = 1;
     x.drawImage(background(), 0, 0);
     const sm = sample(now - 110);
     if (!sm) return setOv("");
     const { a, b, f } = sm, last = snaps[snaps.length - 1].s, sa = a.s, sb = b.s, rad = last.r || 230;
     snaps.forEach(sn => { if (!sn.done && sn.at <= now - 110) { sn.done = true; (sn.s.ev || []).forEach(onEv); } });
-    floor(rad, last.s >= 0);
     const A = last.ab === undefined ? -1 : last.ab;
 
-    // caméra : se place du côté de mon personnage, avec un mouvement doux (elle ne bouge pas quand on saute : seule la position au sol compte)
+    // caméra : du côté de mon personnage, mouvement doux ; le saut ne la bouge pas
     const mi = sa.p[myIdx], mj = sb.p[myIdx];
     if (mi && mi[2]) {
       const mx = mj && mj[2] ? mi[0] + (mj[0] - mi[0]) * f : mi[0], my = mj && mj[2] ? mi[1] + (mj[1] - mi[1]) * f : mi[1], ddx = mx - CX, ddy = my - CY;
-      if (Math.hypot(ddx, ddy) > 35) { const tg = Math.PI / 2 - Math.atan2(ddy, ddx); camA = camInit ? camA + wrap(tg - camA) * Math.min(1, dt * 5) : tg; camInit = true; }
+      if (Math.hypot(ddx, ddy) > 40) { const tg = Math.PI / 2 - Math.atan2(ddy, ddx); camA = camInit ? camA + wrap(tg - camA) * Math.min(1, dt * 3.5) : tg; camInit = true; }
     }
     cc = Math.cos(camA); cs = Math.sin(camA);
+    floor(rad, last.s >= 0);
 
-    // joueur vivant le plus proche : la barre le regarde
     let eye = sa.a, bd = 1e9;
     const barA = sa.a + (sb.a - sa.a) * f, barL = ((sa.l || 1) + ((sb.l || 1) - (sa.l || 1)) * f) * (rad - 4);
     sa.p.forEach(p => { if (p[2]) { const d = Math.hypot(p[0] - CX, p[1] - CY); if (d < bd) { bd = d; eye = Math.atan2(p[1] - CY, p[0] - CX); } } });
 
     fl = fl.filter(o => (o.t += dt) < .8);
-    fl.forEach(o => { const k = 1 - o.t / .8; x.save(); x.globalAlpha = k; { const q = P(o.x, o.y); x.translate(q[0], q[1] - BR * .85); }; x.scale(k, k); x.rotate(o.t * 8); ball(0, 0, o.col, 0); x.restore(); });
+    fl.forEach(o => { const k = 1 - o.t / .8, q = P(o.x, o.y); x.save(); x.globalAlpha = k; x.translate(q[0], q[1] - 20 * q[2]); x.scale(k, k); x.rotate(o.t * 8); sprite(0, 20 * q[2], q[2], o.col, Math.PI / 2, 1); x.restore(); });
     x.globalAlpha = 1;
 
     if (pl) {
       const shad = [], list = [], top = [], labels = [];
-
-      // barre (ou bras / mirage) : une poutre découpée en tronçons, chacun trié en profondeur
       const addBar = (ba, L, al) => {
         const ux = Math.cos(ba), uy = Math.sin(ba);
-        shad.push(() => { x.globalAlpha = al; x.fillStyle = "rgba(0,0,0,.32)"; poly(quad(CX, CY, CX + ux * L, CY + uy * L, HW), 0, 9, 4); x.fill(); x.globalAlpha = 1; });
+        shad.push(() => { x.globalAlpha = al; x.fillStyle = "rgba(0,0,0,.34)"; poly(quad(CX, CY, CX + ux * L, CY + uy * L, HW), 0, 10, 5); x.fill(); x.globalAlpha = 1; });
         for (let k = 0, i = 0; k < L; k += 28, i++) {
-          const k2 = Math.min(L, k + 28), ax = CX + ux * k, ay = CY + uy * k, bx = CX + ux * k2, by = CY + uy * k2, c = quad(ax, ay, bx, by, HW);
-          list.push({ d: Vy((ax + bx) / 2, (ay + by) / 2), al, fn: () => i % 2 ? box(c, "#ffd23f", "#b8921a") : box(c, "#ff3b5c", "#a01535") });
+          const k2 = Math.min(L, k + 28), ax = CX + ux * k, ay = CY + uy * k, bx = CX + ux * k2, by = CY + uy * k2, c = quad(ax, ay, bx, by, HW), mid = [ax, ay, bx, by];
+          list.push({ d: Vy((ax + bx) / 2, (ay + by) / 2), al, fn: () => i % 2 ? box(c, "#ffd23f", "#b8921a", mid) : box(c, "#ff3b5c", "#a01535", mid) });
         }
         list.push({ d: Vy(CX + ux * L, CY + uy * L) + 1, al, fn: () => cyl(CX + ux * L, CY + uy * L, HW + 3, BH + 3, "#ff3b5c", "#a01535", "#2b0016", 2) });
       };
-      if (A === 2) addBar(Math.PI - barA, barL, .78);          // mirage : fausse barre inoffensive (un peu transparente)
-      if (A === 3) addBar(barA + Math.PI, barL, 1);            // second bras
-      addBar(barA, barL, A === 1 ? .1 : 1);                    // barre fantôme : presque invisible, c'est voulu
-      shad.push(() => { x.fillStyle = "rgba(0,0,0,.32)"; x.beginPath(); x.ellipse(CX + 9, CY + 4, 26, 26 * K, 0, 0, 7); x.fill(); });
-      list.push({ d: 24, al: 1, fn: () => { cyl(CX, CY, 24, HUBH, "#3a0b24", "#2b0016", "#ff3b5c", 3); face(eye + camA); } });
+      if (A === 2) addBar(Math.PI - barA, barL, .78);
+      if (A === 3) addBar(barA + Math.PI, barL, 1);
+      addBar(barA, barL, A === 1 ? .1 : 1);
+      shad.push(() => { const q = P(CX, CY); x.fillStyle = "rgba(0,0,0,.34)"; x.beginPath(); x.ellipse(q[0] + 11, q[1] + 5, 30 * q[2], 30 * q[2] * K, 0, 0, 7); x.fill(); });
+      list.push({ d: 26, al: 1, fn: () => head(eye + camA) });
 
-      // joueurs
       sa.p.forEach((qa, i) => {
         const qb = sb.p[i]; if (!qa[2] || !pl[i]) return;
         const wx = qb && qb[2] ? qa[0] + (qb[0] - qa[0]) * f : qa[0], wy = qb && qb[2] ? qa[1] + (qb[1] - qa[1]) * f : qa[1];
         if (qb && Math.hypot(qb[0] - qa[0], qb[1] - qa[1]) > .6) ang[i] = Math.atan2(qb[1] - qa[1], qb[0] - qa[0]);
         if (qa[4] && !jt[i]) jt[i] = now; if (!qa[4]) jt[i] = 0;
-        const h = jt[i] ? JH * Math.sin(Math.PI * Math.min(1, (now - jt[i]) / 500)) : 0;
-        const col = pl[i][2], me = i === myIdx, [px, gy] = P(wx, wy), sk = Math.max(.45, 1 - h / 90);
+        const u = jt[i] ? Math.min(1, (now - jt[i]) / 500) : 0, h = JH * Math.sin(Math.PI * u), st = jt[i] ? 1 + .13 * Math.abs(Math.cos(Math.PI * u)) : 1;
+        const col = pl[i][2], me = i === myIdx, [px, gy, sc] = P(wx, wy), sk = Math.max(.45, 1 - h / 100);
         shad.push(() => {
-          x.fillStyle = `rgba(0,0,0,${(.42 * sk).toFixed(2)})`; x.beginPath(); x.ellipse(px, gy, BR * sk * 1.05, BR * sk * 1.05 * K, 0, 0, 7); x.fill();   // l'ombre reste au sol
+          x.fillStyle = `rgba(0,0,0,${(.45 * sk).toFixed(2)})`; x.beginPath(); x.ellipse(px, gy, BR * sk * 1.1 * sc, BR * sk * 1.1 * sc * K, 0, 0, 7); x.fill();
           if (me) {                                            // anneau de recharge du saut, posé au sol
-            const cdv = last.p[i] ? last.p[i][3] / 100 : 0;
+            const cdv = last.p[i] ? last.p[i][3] / 100 : 0, rr = (BR + 8) * sc;
             x.lineWidth = 3; x.strokeStyle = cdv <= 0 ? "#3ee6c4" : "rgba(255,255,255,.5)";
-            x.beginPath(); x.ellipse(px, gy, BR + 7, (BR + 7) * K, 0, -Math.PI / 2, -Math.PI / 2 + PI2 * (1 - cdv)); x.stroke();
+            x.beginPath(); x.ellipse(px, gy, rr, rr * K, 0, -Math.PI / 2, -Math.PI / 2 + PI2 * (1 - cdv)); x.stroke();
           }
         });
-        const it = { d: Vy(wx, wy) + .5, al: 1, fn: () => ball(px, gy - BR * .85 - h, col, (ang[i] || 0) + camA) };
-        (h >= 10 ? top : list).push(it);                       // en l'air : passe AU-DESSUS de la barre
+        const it = { d: Vy(wx, wy) + .5, al: 1, fn: () => sprite(px, gy - h * sc, sc, col, (ang[i] || 0) + camA, st) };
+        (h >= 10 ? top : list).push(it);
         labels.push(() => {
-          const ly = gy - BR * 1.7 - h - 8;
+          const ly = gy - h * sc - BR * sc * 2.6 * st - 6;
           x.font = "700 13px 'DM Sans',sans-serif"; x.textAlign = "center"; x.lineWidth = 3; x.strokeStyle = "rgba(0,0,0,.75)"; x.fillStyle = me ? "#ffd23f" : "#fff";
           x.strokeText(pl[i][1], px, ly); x.fillText(pl[i][1], px, ly);
           if (me) { x.fillStyle = "#ffd23f"; x.fillText("▼", px, ly - 13); }
@@ -409,7 +424,7 @@ export function createBarreClient(env) {
     }
 
     parts = parts.filter(o => (o.l -= dt * 2.2) > 0);
-    parts.forEach(o => { o.x += o.vx * dt; o.y += o.vy * dt; x.globalAlpha = Math.max(0, o.l); x.fillStyle = o.c; x.beginPath(); { const q = P(o.x, o.y); x.arc(q[0], q[1] - 6, o.s * o.l, 0, 7); }; x.fill(); });
+    parts.forEach(o => { o.x += o.vx * dt; o.y += o.vy * dt; const q = P(o.x, o.y, 8); x.globalAlpha = Math.max(0, o.l); x.fillStyle = o.c; x.beginPath(); x.arc(q[0], q[1], o.s * o.l * q[2], 0, 7); x.fill(); });
     x.globalAlpha = 1;
     if (stick) {
       x.fillStyle = "rgba(255,255,255,.08)"; x.strokeStyle = "rgba(255,255,255,.28)"; x.lineWidth = 2; x.beginPath(); x.arc(stick.ox, stick.oy, 55, 0, 7); x.fill(); x.stroke();

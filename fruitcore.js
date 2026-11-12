@@ -1,4 +1,4 @@
-/* MoDa : « Fruit Forager » 🍎 : règles et économie (aucune dépendance : testable hors navigateur)
+/* MoDa : « Fruit Forager » : règles et économie (aucune dépendance : testable hors navigateur)
    Contenu de la première version = uniquement ce qui est confirmé sur le vrai jeu (Roblox, FaultyMarkus Games).
    Les valeurs marquées « À CONFIRMER » sont des estimations en attendant des données plus précises. */
 
@@ -15,17 +15,17 @@ export const RAR = {
 // Fruits de la Forêt (zone 1) et du Désert (zone 2) : valeur de vente en pièces
 // (la rareté exacte de chaque fruit est déduite des fourchettes du wiki : À CONFIRMER, sauf Pomme = Commun)
 export const FRUITS = {
-  apple:        { n: "Pomme",         e: "🍎", r: "common",   v: 2,  z: 1, col: "#e53935" },
-  pear:         { n: "Poire",         e: "🍐", r: "common",   v: 3,  z: 1, col: "#c6d64a" },
-  green_apple:  { n: "Pomme verte",   e: "🍏", r: "uncommon", v: 4,  z: 1, col: "#7cd04b" },
-  crimson_pear: { n: "Poire carmin",  e: "🍐", r: "rare",     v: 12, z: 1, col: "#c2185b" },
-  sugar_apple:  { n: "Pomme sucrée",  e: "🍈", r: "uncommon", v: 37, z: 1, col: "#a5d6a7" },
-  lime:         { n: "Lime",          e: "🍈", r: "rare",     v: 26, z: 2, col: "#9ccc3a" },   // valeur À CONFIRMER
-  cactus_fruit: { n: "Fruit de cactus", e: "🌵", r: "rare",   v: 32, z: 2, col: "#e91e8c" },   // valeur À CONFIRMER
-  banana:       { n: "Banane",        e: "🍌", r: "uncommon", v: 14, z: 2, col: "#ffe135" },
-  lemon:        { n: "Citron",        e: "🍋", r: "uncommon", v: 18, z: 2, col: "#fff176" },
-  embum_banana: { n: "Banane Embum",  e: "🍌", r: "rare",     v: 22, z: 2, col: "#ff9800" },
-  java_banana:  { n: "Banane Java",   e: "🍌", r: "epic",     v: 84, z: 2, col: "#8fd3ff" }
+  apple:        { n: "Pomme",         r: "common",   v: 2,  z: 1, col: "#e53935" },
+  pear:         { n: "Poire",         r: "common",   v: 3,  z: 1, col: "#c6d64a" },
+  green_apple:  { n: "Pomme verte",   r: "uncommon", v: 4,  z: 1, col: "#7cd04b" },
+  crimson_pear: { n: "Poire carmin",  r: "rare",     v: 12, z: 1, col: "#c2185b" },
+  sugar_apple:  { n: "Pomme sucrée",  r: "uncommon", v: 37, z: 1, col: "#a5d6a7" },
+  lime:         { n: "Lime",          r: "rare",     v: 26, z: 2, col: "#9ccc3a" },   // valeur À CONFIRMER
+  cactus_fruit: { n: "Fruit de cactus", r: "rare",   v: 32, z: 2, col: "#e91e8c" },   // valeur À CONFIRMER
+  banana:       { n: "Banane",        r: "uncommon", v: 14, z: 2, col: "#ffe135" },
+  lemon:        { n: "Citron",        r: "uncommon", v: 18, z: 2, col: "#fff176" },
+  embum_banana: { n: "Banane Embum",  r: "rare",     v: 22, z: 2, col: "#ff9800" },
+  java_banana:  { n: "Banane Java",   r: "epic",     v: 84, z: 2, col: "#8fd3ff" }
 };
 export const FRUIT_IDS = Object.keys(FRUITS);
 
@@ -230,13 +230,13 @@ export const nearSlab = (X, Y, d) => SLABS.some(([a, b]) => Math.hypot(a * K - X
 
 // Sacs (emplacements = nombre de fruits portés) et bottes (bonus de vitesse en « unités Roblox » ; le saut n'existe pas dans cette version 2D)
 export const BAGS = [
-  { n: "Mini sac",         e: "👜", cap: 2, cost: 0 },
-  { n: "Beginner Green Bag", e: "🎒", cap: 3, cost: 20 },
-  { n: "Red Ranger Bag",   e: "🎒", cap: 4, cost: 100 }
+  { n: "Mini sac",         cap: 2, cost: 0 },
+  { n: "Beginner Green Bag", cap: 3, cost: 20 },
+  { n: "Red Ranger Bag",   cap: 4, cost: 100 }
 ];
 export const BOOTS = [
-  { n: "Leather Boots", e: "🥾", spd: 2, cost: 250 },
-  { n: "Iron Boots",    e: "🥾", spd: 4, cost: 1250 }
+  { n: "Leather Boots", spd: 2, cost: 250 },
+  { n: "Iron Boots",    spd: 4, cost: 1250 }
 ];
 export const PX_PER_STUD = 14.7;   // 16 unités/s de marche Roblox = 235 px/s ici
 export const BASE_SPEED = 235;

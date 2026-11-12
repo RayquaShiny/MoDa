@@ -1,4 +1,4 @@
-/* MoDa : « Fruit Forager » 🍎 (d'après le jeu Roblox du même nom)
+/* MoDa : « Fruit Forager » (d'après le jeu Roblox du même nom)
    Chaque joueur cueille des fruits sur les arbres dans le même monde, remplit son sac, vend au coffre « SELL HERE »,
    achète sacs et bottes chez Mike's Market, gagne de l'XP et des niveaux. Les joueurs du lobby (5 max) se voient en direct.
    Firebase : la progression de chacun est sauvegardée dans users/<uid>/fruit ; les positions passent par
@@ -57,18 +57,86 @@ function drawFruit(c, id, X, Y, r) {
   }
   c.restore();
 }
+// ----- Icônes dessinées (pièce, ticket, sacs, bottes, caddie, cadenas) : remplacent tous les emojis -----
+function drawIcon(c, name, X, Y, r) {
+  if (FRUITS[name]) return drawFruit(c, name, X, Y, r);
+  c.save(); c.translate(X, Y); c.lineJoin = "round"; c.lineCap = "round";
+  const rrect = (x0, y0, w, hh, rad) => { c.beginPath(); c.moveTo(x0 + rad, y0); c.arcTo(x0 + w, y0, x0 + w, y0 + hh, rad); c.arcTo(x0 + w, y0 + hh, x0, y0 + hh, rad); c.arcTo(x0, y0 + hh, x0, y0, rad); c.arcTo(x0, y0, x0 + w, y0, rad); c.closePath(); };
+  const fillOut = fill => { c.fillStyle = fill; c.fill(); c.strokeStyle = "#00000077"; c.lineWidth = Math.max(1, r * .1); c.stroke(); };
+  const star = (rad, inner) => { c.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, q = i % 2 ? inner : rad; c.lineTo(Math.cos(a) * q, Math.sin(a) * q); } c.closePath(); c.fill(); };
+  const pack = (main, dark, light) => {
+    c.strokeStyle = dark; c.lineWidth = r * .2; c.beginPath(); c.arc(0, -r * .55, r * .3, Math.PI, 0); c.stroke();
+    rrect(-r * .72, -r * .6, r * 1.44, r * 1.6, r * .3); fillOut(main); rrect(-r * .72, -r * .6, r * 1.44, r * .72, r * .3); fillOut(dark); rrect(-r * .46, r * .3, r * .92, r * .5, r * .12); fillOut(light);
+    c.fillStyle = "#ffd23f"; c.fillRect(-r * .12, r * .02, r * .24, r * .22); c.fillStyle = "#ffffff40"; c.fillRect(-r * .6, -r * .5, r * .12, r * 1.2);
+  };
+  const boot = (main, dark, cuff, rivet) => {
+    c.beginPath(); c.moveTo(-r * .5, -r * .95); c.lineTo(r * .3, -r * .95); c.lineTo(r * .3, r * .05); c.quadraticCurveTo(r * .7, r * .1, r * .95, r * .45); c.lineTo(r * .95, r * .85); c.lineTo(-r * .5, r * .85); c.closePath(); fillOut(main);
+    c.fillStyle = dark; c.fillRect(-r * .5, r * .62, r * 1.45, r * .26); rrect(-r * .55, -r * .98, r * .9, r * .3, r * .08); fillOut(cuff);
+    if (rivet) { c.fillStyle = rivet; [[-.2, -.4], [.05, -.2], [-.2, .1]].forEach(([a, b]) => { c.beginPath(); c.arc(a * r, b * r, r * .08, 0, 7); c.fill(); }); }
+  };
+  switch (name) {
+    case "coin": c.beginPath(); c.arc(0, 0, r * .95, 0, 7); fillOut("#b8860b"); c.beginPath(); c.arc(-r * .03, -r * .04, r * .8, 0, 7); c.fillStyle = "#ffd23f"; c.fill(); c.strokeStyle = "#e0a800"; c.lineWidth = r * .12; c.beginPath(); c.arc(0, 0, r * .58, 0, 7); c.stroke(); c.fillStyle = "#e0a800"; star(r * .34, r * .14); c.fillStyle = "#ffffff90"; c.beginPath(); c.ellipse(-r * .42, -r * .42, r * .12, r * .22, .7, 0, 7); c.fill(); break;
+    case "ticket": c.rotate(-.3); c.beginPath(); c.moveTo(-r * .95, -r * .55); c.lineTo(r * .95, -r * .55); c.lineTo(r * .95, -r * .15); c.arc(r * .95, 0, r * .15, -Math.PI / 2, Math.PI / 2, true); c.lineTo(r * .95, r * .55); c.lineTo(-r * .95, r * .55); c.lineTo(-r * .95, r * .15); c.arc(-r * .95, 0, r * .15, Math.PI / 2, -Math.PI / 2, true); c.closePath(); fillOut("#ff5fa2");
+      c.setLineDash([r * .12, r * .12]); c.strokeStyle = "#ffffffaa"; c.lineWidth = r * .07; c.beginPath(); c.moveTo(-r * .4, -r * .45); c.lineTo(-r * .4, r * .45); c.stroke(); c.setLineDash([]); c.save(); c.translate(r * .32, 0); c.fillStyle = "#fff"; star(r * .3, r * .13); c.restore(); break;
+    case "bag0": c.strokeStyle = "#7a4a21"; c.lineWidth = r * .18; c.beginPath(); c.arc(0, -r * .1, r * .5, Math.PI, 0); c.stroke(); rrect(-r * .9, -r * .1, r * 1.8, r * 1.0, r * .25); fillOut("#c98f4f"); rrect(-r * .9, -r * .1, r * 1.8, r * .4, r * .2); fillOut("#a8692f"); c.fillStyle = "#ffd23f"; c.fillRect(-r * .14, r * .12, r * .28, r * .22); break;
+    case "bag1": pack("#3fae48", "#27803a", "#6fd678"); break;
+    case "bag2": pack("#e53935", "#a8201c", "#ff7a74"); break;
+    case "boots0": boot("#a8692f", "#4a2c0f", "#d49a5a", null); break;
+    case "boots1": boot("#8fa3b8", "#4b5b6e", "#cfd9e4", "#e9f0f7"); break;
+    case "cart": c.strokeStyle = "#f1f1f1"; c.lineWidth = r * .16; c.beginPath(); c.moveTo(-r, -r * .8); c.lineTo(-r * .6, -r * .8); c.lineTo(-r * .3, r * .35); c.lineTo(r * .75, r * .35); c.stroke();
+      c.beginPath(); c.moveTo(-r * .5, -r * .4); c.lineTo(r * .95, -r * .4); c.lineTo(r * .75, r * .35); c.lineTo(-r * .3, r * .35); c.closePath(); fillOut("#ffd23f"); c.fillStyle = "#f1f1f1"; [[-.2, .72], [.6, .72]].forEach(([a, b]) => { c.beginPath(); c.arc(a * r, b * r, r * .2, 0, 7); c.fill(); c.stroke(); }); break;
+    case "close": c.strokeStyle = "#fff"; c.lineWidth = r * .32; c.beginPath(); c.moveTo(-r * .6, -r * .6); c.lineTo(r * .6, r * .6); c.moveTo(r * .6, -r * .6); c.lineTo(-r * .6, r * .6); c.stroke(); break;
+    case "lock": c.strokeStyle = "#cfd6df"; c.lineWidth = r * .28; c.beginPath(); c.arc(0, -r * .2, r * .5, Math.PI, 0); c.moveTo(r * .5, -r * .2); c.lineTo(r * .5, r * .1); c.moveTo(-r * .5, -r * .2); c.lineTo(-r * .5, r * .1); c.stroke(); rrect(-r * .75, -r * .05, r * 1.5, r * 1.0, r * .18); fillOut("#ffd23f"); c.fillStyle = "#7a5a00"; c.beginPath(); c.arc(0, r * .4, r * .14, 0, 7); c.fill(); c.fillRect(-r * .05, r * .4, r * .1, r * .28); break;
+  }
+  c.restore();
+}
 const fIcons = {};
-const fruitURL = id => fIcons[id] || (fIcons[id] = (() => { const cv = document.createElement("canvas"); cv.width = cv.height = 96; drawFruit(cv.getContext("2d"), id, 48, 52, 32); return cv.toDataURL(); })());
+const iconURL = id => fIcons[id] || (fIcons[id] = (() => { const cv = document.createElement("canvas"); cv.width = cv.height = 96; drawIcon(cv.getContext("2d"), id, 48, 52, 32); return cv.toDataURL(); })());
+const fruitURL = iconURL;
+const ico = (name, px) => `<img class="ic" alt="" width="${px}" height="${px}" src="${iconURL(name)}">`;
+
+// ----- Arbres : un arbre différent pour chaque fruit (dessiné une fois dans un sprite, puis recopié) -----
+function paintDecor(c, d, X, Y) {
+  const blk = (x0, y0, w, hh, c0, hi, lo) => { c.fillStyle = c0; c.fillRect(x0, y0, w, hh); c.fillStyle = hi; c.fillRect(x0, y0, w, 4); c.fillRect(x0, y0, 4, hh); c.fillStyle = lo; c.fillRect(x0, y0 + hh - 4, w, 4); c.fillRect(x0 + w - 4, y0, 4, hh); };
+  const trunk = h => blk(X - 8, Y - h, 16, h, "#7a4a21", "#a06a3a", "#573316");
+  const tier = (w, h, yy, P) => blk(X - w / 2, Y - yy - h, w, h, P[0], P[1], P[2]);
+  const fruits = (id, pts, r) => pts.forEach(([a, b]) => drawFruit(c, id, X + a, Y + b, r));
+  c.fillStyle = "#00000040"; c.beginPath(); c.ellipse(X + 8, Y + 3, d.k === "tree" ? 38 : 28, 10, 0, 0, 7); c.fill();
+  if (d.k === "tree") {
+    if (d.f === "pear") { const P = ["#6aa33a", "#8dc556", "#4a7a28"]; trunk(40); tier(56, 30, 30, P); tier(46, 32, 58, P); tier(34, 26, 88, P); fruits("pear", [[-18, -40], [16, -36], [-10, -66], [12, -62], [0, -92]], 7); }
+    else if (d.f === "green_apple") { const P = ["#4fa33a", "#74cc58", "#357a26"]; trunk(26); tier(90, 30, 22, P); tier(68, 28, 50, P); tier(42, 20, 76, P); fruits("green_apple", [[-30, -34], [26, -32], [-8, -40], [-18, -62], [18, -60], [0, -84]], 6.5); }
+    else if (d.f === "crimson_pear") { const P = ["#2a6f5e", "#3f9a82", "#1c4f43"]; trunk(42); tier(52, 28, 36, P); tier(44, 30, 62, P); tier(30, 26, 90, P); fruits("crimson_pear", [[-16, -48], [14, -44], [-8, -72], [10, -70], [0, -98]], 7); }
+    else if (d.f === "sugar_apple") { const P = ["#2f7d4a", "#4aa36a", "#205a35"]; trunk(20); tier(86, 26, 14, P); tier(64, 24, 38, P); tier(40, 18, 58, P); fruits("sugar_apple", [[-28, -22], [24, -20], [-12, -46], [14, -44], [0, -62]], 7.5); }
+    else { const P = ["#2a8238", "#47ad56", "#1c6228"]; trunk(34); tier(72, 30, 28, P); tier(54, 28, 56, ["#2f8c3d", "#4fb85e", "#206a2c"]); tier(32, 20, 82, ["#37984a", "#5bc66b", "#277a35"]); fruits("apple", [[-24, -40], [20, -36], [-4, -46], [-14, -62], [16, -58], [0, -84]], 6.5); }
+  } else if (d.k === "palm") {
+    blk(X - 5, Y - 36, 10, 36, "#8a5a2b", "#b07a43", "#5e3a17"); blk(X - 2, Y - 62, 10, 28, "#8a5a2b", "#b07a43", "#5e3a17");
+    blk(X - 40, Y - 76, 80, 13, "#3fae48", "#6cd674", "#2b8a35"); blk(X - 13, Y - 90, 26, 42, "#43b44d", "#6cd674", "#2b8a35"); blk(X - 28, Y - 70, 12, 12, "#2f9a3a", "#52c25b", "#237a2c"); blk(X + 16, Y - 70, 12, 12, "#2f9a3a", "#52c25b", "#237a2c");
+    fruits(d.f, [[10, -52], [20, -48], [14, -40]], 8);
+  } else if (d.k === "ctree") {
+    const P = d.f === "lime" ? ["#2f9a4a", "#4fc26a", "#207636"] : ["#74b840", "#96d85c", "#528a2c"]; trunk(28); tier(60, 30, 28, P); tier(44, 24, 56, P); fruits(d.f, [[-20, -40], [16, -38], [-6, -50], [8, -62], [-12, -62]], 6);
+  } else {
+    const hh = 52 + (d.v || 0) * 6, g = ["#3f9a3a", "#62c85a", "#2a7a2a"];
+    blk(X - 8, Y - hh, 16, hh, g[0], g[1], g[2]); blk(X - 24, Y - 38, 18, 10, g[0], g[1], g[2]); blk(X - 24, Y - 54, 10, 26, g[0], g[1], g[2]); blk(X + 6, Y - 30, 18, 10, g[0], g[1], g[2]); blk(X + 14, Y - 46, 10, 26, g[0], g[1], g[2]);
+    fruits("cactus_fruit", [[-19, -60], [19, -50], [0, -hh - 6]], 5.5);
+  }
+}
+const decorSprites = {};
+const decorSprite = d => { const key = d.k + ":" + d.f + ":" + (d.v || 0); if (!decorSprites[key]) { const cv = document.createElement("canvas"); cv.width = 360; cv.height = 400; const c = cv.getContext("2d"); c.scale(2, 2); paintDecor(c, d, 90, 176); decorSprites[key] = cv; } return decorSprites[key]; };
 const rng = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 const randIn = (z, r) => { const A = z.rects.map(q => q.w * q.h), tot = A.reduce((a, b) => a + b, 0); let t = r() * tot, i = 0; while (i < A.length - 1 && t >= A[i]) { t -= A[i]; i++; } const q = z.rects[i]; return { x: q.x + r() * q.w, y: q.y + r() * q.h }; };
 const okSpot = (X, Y, m) => [[0, 0], [m, 0], [-m, 0], [0, m], [0, -m]].every(([a, b]) => C.walkable(null, X + a, Y + b)) && !C.onSpot(X, Y, m);
 const segD = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], l = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((p.x - a[0]) * dx + (p.y - a[1]) * dy) / l)); return Math.hypot(p.x - a[0] - t * dx, p.y - a[1] - t * dy); };
 const nearPath = (p, d) => C.SLABS.some(([a, b]) => Math.hypot(p.x - a * C.K, p.y - b * C.K) < d);
 const pickW = (w, r) => { let t = Object.values(w).reduce((a, b) => a + b, 0) * r, k; for (k in w) { t -= w[k]; if (t < 0) return k; } return k; };
-export function genDecor() { // arbres et cactus : positions relevées sur la vue de dessus du vrai jeu
-  const r = rng(4321), K = C.K;
-  return C.TREES.filter(([a, b]) => !C.keepClear(a * K, b * K) && !C.nearSlab(a * K, b * K + 34, 46)).map(([a, b]) => ({ k: "tree", x: a * K, y: b * K + 34, v: Math.floor(r() * 3) }))
-    .concat(C.CACTI.filter(([a, b]) => !C.keepClear(a * K, b * K) && !C.nearSlab(a * K, b * K + 30, 40)).map(([a, b]) => ({ k: b < 118 ? "cactus" : "palm", x: a * K, y: b * K + (b < 118 ? 30 : 34), v: Math.floor(r() * 3) })));
+export function genDecor() { // arbres, palmiers, cactus : positions relevées sur la vue de dessus du vrai jeu, un arbre différent par fruit
+  const r = rng(4321), K = C.K, zone = id => C.ZONES.find(z => z.id === id);
+  const pickW = w => { const e = Object.entries(w), t = e.reduce((a, [, v]) => a + v, 0); let q = r() * t; for (const [k, v] of e) if ((q -= v) < 0) return k; return e[0][0]; };
+  const fw = zone("forest").fruit.w, bw = zone("desert").fruit.w, out = [];
+  C.TREES.filter(([a, b]) => !C.keepClear(a * K, b * K) && !C.nearSlab(a * K, b * K + 34, 46)).forEach(([a, b]) => out.push({ k: "tree", f: pickW(fw), x: a * K, y: b * K + 34, v: 0 }));
+  C.CACTI.filter(([a, b]) => !C.keepClear(a * K, b * K) && !C.nearSlab(a * K, b * K + 30, 40)).forEach(([a, b]) => out.push(b < 118 ? { k: "cactus", f: "cactus_fruit", x: a * K, y: b * K + 30, v: Math.floor(r() * 3) } : { k: "palm", f: pickW(bw), x: a * K, y: b * K + 34, v: 0 }));
+  const cz = zone("cactus"), q = rng(777); let tries = 0, added = 0; // plateau des cactus : citronniers et limettiers
+  while (added < 16 && tries++ < 800) { const p = randIn(cz, q); if (!C.walkable(null, p.x, p.y) || C.onSpot(p.x, p.y, 50) || C.keepClear(p.x, p.y) || C.nearSlab(p.x, p.y + 34, 50) || out.some(o => Math.hypot(o.x - p.x, o.y - 34 - p.y) < 80)) continue; out.push({ k: "ctree", f: added % 2 ? "lime" : "lemon", x: p.x, y: p.y + 34, v: 0 }); added++; }
+  return out;
 }
 
 // ----- Hôte : ouvre la partie (chaque joueur gère sa propre progression) -----
@@ -85,7 +153,7 @@ body[data-g=fruit] #fui{display:block}
 body[data-g=fruit] #pad,body[data-g=fruit] #gctl{display:none!important}
 #fui .ftop{position:absolute;top:6px;left:6px;right:6px;display:flex;gap:6px}
 #fui .fb{display:flex;align-items:center;gap:6px;border-radius:12px;padding:2px 12px 2px 6px;font-weight:800;font-size:clamp(14px,3.6vw,19px);color:#fff;text-shadow:0 1px 3px #000;border:2px solid #0006}
-#fui .fc{background:linear-gradient(#ffe45c,#d9aa00);flex:1.5}#fui .ft{background:linear-gradient(#8a4dff,#5320c4);flex:1}
+#fui .fc{background:linear-gradient(#ffe45c,#d9aa00);flex:1.5}#fui .fg{position:relative;overflow:hidden;background:#4a0d12;flex:1.2}#fui #fBagF{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(#ff7a7a,#d4202c);transition:width .18s}#fui .fg>i,#fui .fg>b{position:relative}#fui .fg.full #fBagF{background:linear-gradient(#ffb454,#e2701a)}#fui .ic{display:inline-block;vertical-align:middle;pointer-events:none}
 #fui .fb b{margin-left:auto}#fui .fb i{font-style:normal}
 #fui .fxp{position:absolute;top:42px;left:6px;right:6px;height:11px;background:#0a2a52;border:2px solid #0006;border-radius:8px;overflow:hidden}
 #fui #fXpF{height:100%;width:0;background:linear-gradient(#69c1ff,#1d73e0)}
@@ -149,15 +217,15 @@ export function createFruitClient(env) {
     if (ui) return ui;
     const st = document.createElement("style"); st.textContent = CSS; document.head.append(st);
     const root = document.createElement("div"); root.id = "fui";
-    root.innerHTML = `<div class="ftop"><div class="fb fc"><i>🪙</i><b id="fCoins">0</b></div><div class="fb ft"><i>🎟️</i><b id="fTix">0</b></div></div><div class="fxp"><div id="fXpF"></div></div><div class="flvl" id="fLvl"></div><div id="fPrompts"></div><div id="fBar"></div>`;
+    root.innerHTML = `<div class="ftop"><div class="fb fc"><i>${ico("coin", 26)}</i><b id="fCoins">0</b></div><div class="fb fg" id="fBagBox"><div id="fBagF"></div><i id="fBagI"></i><b id="fBag">0/0</b></div></div><div class="fxp"><div id="fXpF"></div></div><div class="flvl" id="fLvl"></div><div id="fPrompts"></div><div id="fBar"></div>`;
     cv.parentNode.append(root);
-    ui = { coins: root.querySelector("#fCoins"), tix: root.querySelector("#fTix"), xp: root.querySelector("#fXpF"), lvl: root.querySelector("#fLvl"), prompts: root.querySelector("#fPrompts"), bar: root.querySelector("#fBar") };
+    ui = { coins: root.querySelector("#fCoins"), bag: root.querySelector("#fBag"), bagF: root.querySelector("#fBagF"), bagI: root.querySelector("#fBagI"), bagBox: root.querySelector("#fBagBox"), bagIc: -1, xp: root.querySelector("#fXpF"), lvl: root.querySelector("#fLvl"), prompts: root.querySelector("#fPrompts"), bar: root.querySelector("#fBar") };
     return ui;
   }
   const selId = () => { const st = C.stacks(s); if (!st.includes(sel)) sel = st[0] || null; return sel; };
   function renderUI(force) {
     if (!ui) return;
-    ui.coins.textContent = s.coins.toLocaleString("fr-FR"); ui.tix.textContent = s.tickets.toLocaleString("fr-FR");
+    ui.coins.textContent = s.coins.toLocaleString("fr-FR"); { const cp = C.capacity(s), cn = C.count(s); ui.bag.textContent = cn + "/" + cp; ui.bagF.style.width = Math.min(100, cn / cp * 100) + "%"; ui.bagBox.classList.toggle("full", cn >= cp); if (ui.bagIc !== s.bag) { ui.bagIc = s.bag; ui.bagI.innerHTML = ico("bag" + s.bag, 28); } }
     ui.xp.style.width = Math.min(100, s.xp / C.xpNeed(s.lvl) * 100) + "%"; ui.lvl.textContent = "NIVEAU " + s.lvl;
     const st = C.stacks(s), id = selId(), cap = C.capacity(s), n = C.count(s);
     const p = [];
@@ -184,8 +252,8 @@ export function createFruitClient(env) {
   function coinBurst(X, Y) { for (let i = 0; i < 10 && fx.length < 100; i++) { const a = -Math.PI / 2 + (Math.random() - .5) * 2.2, v = 110 + Math.random() * 120; fx.push({ x: X, y: Y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, l: 1, g: 520 }); } }
   const float = (X, Y, t, col, ic) => { if (floats.length < 30) floats.push({ x: X, y: Y, t, col, l: 1, ic }); };
   function afterSale(g, X, Y) {
-    float(X, Y - 70, `+${fmt(g.coins)} 🪙` + (g.tickets ? `  +${g.tickets} 🎟️` : ""), "#ffd23f"); coinBurst(X, Y - 30); beep(780, .12, "sine", .06, 1560); touch(); save(true);
-    if (g.up) { const lv = s.lvl; toast(`⭐ Niveau ${lv} !` + (lv === ZONES[2].lvl ? " Le Désert est débloqué 🏜️" : "")); beep(520, .2, "triangle", .05, 1040); }
+    float(X, Y - 70, `+${fmt(g.coins)}`, "#ffd23f", "coin"); if (g.tickets) float(X, Y - 46, `+${g.tickets}`, "#ff8fd0", "ticket"); coinBurst(X, Y - 30); beep(780, .12, "sine", .06, 1560); touch(); save(true);
+    if (g.up) { const lv = s.lvl; toast(`Niveau ${lv} !` + (lv === ZONES[2].lvl ? " Le Désert est débloqué" : "")); beep(520, .2, "triangle", .05, 1040); }
     sel = null; renderUI(true);
   }
   function act(k) {
@@ -205,27 +273,27 @@ export function createFruitClient(env) {
   // ---------- boutique ----------
   const card = (title, sub, label, can, fn) => {
     const d = h("div"); d.className = "scard";
-    const t = h("div"); t.append(h("b", title), h("div", sub)); t.lastChild.className = "hint";
-    const b = h("button", label, fn); b.disabled = !can; d.append(t, b); return d;
+    const t = h("div"), tb = h("b"); tb.innerHTML = title; t.append(tb, h("div", sub)); t.lastChild.className = "hint";
+    const b = h("button", "", fn); b.innerHTML = label; b.disabled = !can; d.append(t, b); return d;
   };
   function openShop() { mod.hidden = false; renderShop(); }
   function closeShop() { mod.hidden = true; }
   function renderShop() {
     if (mod.hidden) return; mod.replaceChildren();
-    const top = h("div"); top.className = "stabs"; const tt = h("b", "🛒 Mike's Market"); const x0 = h("button", "✕", closeShop); x0.className = "alt"; top.append(tt, x0); mod.append(top);
-    const m = h("div", `🪙 ${fmt(s.coins)}  ·  🎟️ ${s.tickets}`); m.className = "smoney"; mod.append(m);
+    const top = h("div"); top.className = "stabs"; const tt = h("b"); tt.innerHTML = ico("cart", 24) + " Mike's Market"; const x0 = h("button", "", closeShop); x0.innerHTML = ico("close", 20); x0.className = "alt"; top.append(tt, x0); mod.append(top);
+    const m = h("div"); m.innerHTML = `${ico("coin", 20)} ${fmt(s.coins)} &nbsp;·&nbsp; ${ico("ticket", 20)} ${s.tickets}`; m.className = "smoney"; mod.append(m);
     const body = h("div"); body.className = "sbody";
     const after = ok => { if (ok) { beep(700, .08, "square", .04, 1000); touch(); save(true); } else beep(160, .15, "sawtooth", .04); renderShop(); renderUI(true); };
     body.append(h("div", "Sacs")); body.lastChild.className = "hint";
     BAGS.forEach((b, i) => {
-      if (i === 0) return body.append(card(`${b.e} ${b.n}`, `${b.cap} emplacements · de départ`, s.bag === 0 ? "Équipé" : "Possédé", false));
+      if (i === 0) return body.append(card(`${ico("bag" + i, 26)} ${b.n}`, `${b.cap} emplacements · de départ`, s.bag === 0 ? "Équipé" : "Possédé", false));
       const own = i <= s.bag, nxt = i === s.bag + 1;
-      body.append(card(`${b.e} ${b.n}`, `${b.cap} emplacements`, own ? (i === s.bag ? "Équipé" : "Possédé") : nxt ? `Acheter · ${fmt(b.cost)} 🪙` : "🔒 Achète le précédent", nxt && s.coins >= b.cost, () => after(C.buyBag(s))));
+      body.append(card(`${ico("bag" + i, 26)} ${b.n}`, `${b.cap} emplacements`, own ? (i === s.bag ? "Équipé" : "Possédé") : nxt ? `Acheter · ${fmt(b.cost)} ${ico("coin", 16)}` : `${ico("lock", 16)} Achète le précédent`, nxt && s.coins >= b.cost, () => after(C.buyBag(s))));
     });
     body.append(h("div", "Bottes")); body.lastChild.className = "hint";
     BOOTS.forEach((b, i) => {
       const own = i < s.boots, nxt = i === s.boots;
-      body.append(card(`${b.e} ${b.n}`, `Vitesse +${b.spd}`, own ? (i === s.boots - 1 ? "Équipées" : "Possédées") : nxt ? `Acheter · ${fmt(b.cost)} 🪙` : "🔒 Achète les précédentes", nxt && s.coins >= b.cost, () => after(C.buyBoots(s))));
+      body.append(card(`${ico("boots" + i, 26)} ${b.n}`, `Vitesse +${b.spd}`, own ? (i === s.boots - 1 ? "Équipées" : "Possédées") : nxt ? `Acheter · ${fmt(b.cost)} ${ico("coin", 16)}` : `${ico("lock", 16)} Achète les précédentes`, nxt && s.coins >= b.cost, () => after(C.buyBoots(s))));
     });
     mod.append(body);
   }
@@ -361,22 +429,7 @@ export function createFruitClient(env) {
     return c;
   }
   function label(t, X, Y, col = "#fff", size = 13) { x.font = `800 ${size}px system-ui,sans-serif`; x.textAlign = "center"; x.lineJoin = "round"; x.lineWidth = 4; x.strokeStyle = "#000b"; x.strokeText(t, X, Y); x.fillStyle = col; x.fillText(t, X, Y); }
-  const bx = (X, Y, w, hh, c0, hi, lo) => { x.fillStyle = c0; x.fillRect(X, Y, w, hh); x.fillStyle = hi; x.fillRect(X, Y, w, 4); x.fillRect(X, Y, 4, hh); x.fillStyle = lo; x.fillRect(X, Y + hh - 4, w, 4); x.fillRect(X + w - 4, Y, 4, hh); };
-  function drawDecor(d) {
-    const X = d.x, Y = d.y; x.fillStyle = "#00000040"; x.beginPath(); x.ellipse(X + 8, Y + 3, d.k === "tree" ? 38 : 26, 10, 0, 0, 7); x.fill();
-    if (d.k === "tree") {
-      bx(X - 8, Y - 34, 16, 34, "#7a4a21", "#a06a3a", "#573316");
-      bx(X - 36, Y - 58, 72, 30, "#2a8238", "#47ad56", "#1c6228"); bx(X - 27, Y - 74, 54, 28, "#2f8c3d", "#4fb85e", "#206a2c"); bx(X - 16, Y - 88, 32, 20, "#37984a", "#5bc66b", "#277a35");
-      x.fillStyle = "#ffffff30"; [[-24, -48], [8, -50], [-14, -66], [12, -64], [-4, -80]].forEach(([a, b]) => { x.beginPath(); x.arc(X + a, Y + b, 4, 0, 7); x.fill(); });
-    } else if (d.k === "palm") {
-      bx(X - 5, Y - 36, 10, 36, "#8a5a2b", "#b07a43", "#5e3a17"); bx(X - 2, Y - 62, 10, 28, "#8a5a2b", "#b07a43", "#5e3a17");
-      bx(X - 40, Y - 76, 80, 13, "#3fae48", "#6cd674", "#2b8a35"); bx(X - 13, Y - 90, 26, 42, "#43b44d", "#6cd674", "#2b8a35"); bx(X - 28, Y - 70, 12, 12, "#2f9a3a", "#52c25b", "#237a2c"); bx(X + 16, Y - 70, 12, 12, "#2f9a3a", "#52c25b", "#237a2c");
-    } else {
-      const hh = 52 + d.v * 6; bx(X - 8, Y - hh, 16, hh, "#3f9a3a", "#62c85a", "#2a7a2a");
-      bx(X - 24, Y - 38, 18, 10, "#3f9a3a", "#62c85a", "#2a7a2a"); bx(X - 24, Y - 54, 10, 26, "#3f9a3a", "#62c85a", "#2a7a2a"); bx(X + 6, Y - 30, 18, 10, "#3f9a3a", "#62c85a", "#2a7a2a"); bx(X + 14, Y - 46, 10, 26, "#3f9a3a", "#62c85a", "#2a7a2a");
-      x.fillStyle = "#ff4fa3"; x.fillRect(X - 5, Y - hh - 7, 10, 9); x.fillStyle = "#ffa6d2"; x.fillRect(X - 5, Y - hh - 7, 10, 3);
-    }
-  }
+  function drawDecor(d) { x.drawImage(decorSprite(d), d.x - 90, d.y - 176, 180, 200); }
   function drawItem(it, isT, now) {
     const f = FRUITS[it.id], X = it.x, Y = it.y, b = Math.sin(now / 320 + it.x) * 2.5;
     x.fillStyle = "#0004"; x.beginPath(); x.ellipse(X, Y + 6, 11, 4, 0, 0, 7); x.fill();
@@ -400,7 +453,7 @@ export function createFruitClient(env) {
     if (!worldC) worldC = buildWorld(); x.drawImage(worldC, 0, 0, WORLD.w, WORLD.h);
     ZONES.forEach(z => { if (C.zoneOpen(s, z)) return; const q = z.rects.slice().sort((m, n) => n.w * n.h - m.w * m.h)[0];
       if (z.closed) { z.rects.forEach(r => { x.fillStyle = "#000"; x.fillRect(r.x - 1, r.y - 1, r.w + 2, r.h + 2); }); label(z.n, q.x + q.w / 2, q.y + q.h / 2 - 34, "#8d93a3", 20); label("SOON", q.x + q.w / 2, q.y + q.h / 2 + 12, "#fff", 46); return; }
-      z.rects.forEach(r => { x.fillStyle = "#0a0a14b3"; x.fillRect(r.x, r.y, r.w, r.h); }); label(`🔒 Niveau ${z.lvl} requis`, q.x + q.w / 2, q.y + q.h / 2, "#fff", 20); });
+      z.rects.forEach(r => { x.fillStyle = "#0a0a14b3"; x.fillRect(r.x, r.y, r.w, r.h); }); drawIcon(x, "lock", q.x + q.w / 2, q.y + q.h / 2 - 34, 17); label(`Niveau ${z.lvl} requis`, q.x + q.w / 2, q.y + q.h / 2 + 4, "#fff", 20); });
     // cercle sous le coffre / la boutique quand on est à portée
     [["sell", "#ffd23f"], ["shop", "#8dff8d"]].forEach(([k, col]) => { if (!near[k]) return; const P = PADS[k]; x.strokeStyle = col; x.lineWidth = 3; x.globalAlpha = .6 + .3 * Math.sin(now / 200); x.beginPath(); x.ellipse(P.x, P.y + 40, 96, 22, 0, 0, 7); x.stroke(); x.globalAlpha = 1; });
     const vx0 = camX - 460, vx1 = camX + 460, vy0 = camY - 380, vy1 = camY + 360, inV = (X, Y) => X > vx0 && X < vx1 && Y > vy0 && Y < vy1;
@@ -411,7 +464,7 @@ export function createFruitClient(env) {
     list.push({ y: py, f: () => avatar(px, py, (pl[me().uid] && pl[me().uid].color) || "#ffd23f", me().name || "Moi", C.count(s), C.capacity(s), s.boots, s.bag, mv, now, true, face) });
     list.sort((a, b) => a.y - b.y).forEach(o => o.f());
     fx.forEach(p => { x.globalAlpha = Math.max(0, p.l); x.fillStyle = "#b8860b"; x.beginPath(); x.arc(p.x, p.y, 6, 0, 7); x.fill(); x.fillStyle = "#ffd23f"; x.beginPath(); x.arc(p.x, p.y, 4.8, 0, 7); x.fill(); }); x.globalAlpha = 1;
-    floats.forEach(f => { x.globalAlpha = Math.max(0, Math.min(1, f.l * 1.5)); label(f.t, f.x, f.y, f.col, 16); if (f.ic) drawFruit(x, f.ic, f.x + 24, f.y - 6, 10); }); x.globalAlpha = 1;
+    floats.forEach(f => { x.globalAlpha = Math.max(0, Math.min(1, f.l * 1.5)); label(f.t, f.x, f.y, f.col, 16); if (f.ic) drawIcon(x, f.ic, f.x + 26, f.y - 6, 10); }); x.globalAlpha = 1;
     x.setTransform(DPR, 0, 0, DPR, 0, 0);
     if (stick) { x.globalAlpha = .35; x.fillStyle = "#fff"; x.beginPath(); x.arc(stick.ox, stick.oy, 40, 0, 7); x.fill(); x.beginPath(); x.arc(stick.ox + stick.dx * 40, stick.oy + stick.dy * 40, 20, 0, 7); x.fill(); x.globalAlpha = 1; }
   }
@@ -434,8 +487,8 @@ export function createFruitClient(env) {
       $("ghelp").textContent = "ZQSD / WASD / flèches pour bouger · E : ramasser / vendre · F : tout vendre · 1-9 : choisir un fruit";
       const myUid = me().uid;
       const ready = msg => { if (!active) return; loaded = true; $("ov").textContent = ""; renderUI(true); if (msg) toast(msg); if (!raf) raf = requestAnimationFrame(frame); };
-      get(path()).then(r => { if (!active) return; s = C.sanitize(r.val()); ready(s.total > 0 ? `Bon retour ! 🪙 ${fmt(s.coins)}` : "Bienvenue ! Ramasse les fruits au sol (E) et vends-les au coffre 🍎"); })
-        .catch(() => ready("⚠️ Sauvegarde illisible : tu démarres à zéro (vérifie les règles Firebase pour users/<uid>/fruit)"));
+      get(path()).then(r => { if (!active) return; s = C.sanitize(r.val()); ready(s.total > 0 ? `Bon retour ! ${fmt(s.coins)} pièces` : "Bienvenue ! Ramasse les fruits au sol (E) et vends-les au coffre"); })
+        .catch(() => ready("Sauvegarde illisible : tu démarres à zéro (vérifie les règles Firebase pour users/<uid>/fruit)"));
       const un = onValue(R(`games/${c}/inputs`), snap => { inputs = snap.val() || {}; Object.entries(inputs).forEach(([u, v]) => { if (u !== myUid) parse(u, v); }); Object.keys(others).forEach(u => { if (!inputs[u]) delete others[u]; }); });
       return () => { if (active && loaded) save(true); active = false; un(); raf = 0; mod.hidden = true; $("ov").textContent = ""; $("score").replaceChildren(); scoreboard.k = ""; x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.textBaseline = "alphabetic"; };
     }

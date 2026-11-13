@@ -196,7 +196,7 @@ const K = .7, PERSP = .0007, BH = 13, FT = 18, JH = 36;   // inclinaison, perspe
 export function createBarreClient(env) {
   const { R, set, onValue, $, beep, getMe, getCode } = env;
   const cv = $("cv"), x = cv.getContext("2d"), btn = $("sdash"), ov = $("ov");
-  let active = false, raf = 0, snaps = [], pl = null, lastEv = 0, parts = [], fl = [], jt = [], ang = [], jseq = 0, sentStr = "", sentAt = 0, stick = null, tPrev = 0, myIdx = -1, ovT = "", bg = null, rings = [], hit = 0, vg = null;
+  let active = false, raf = 0, snaps = [], pl = null, lastEv = 0, parts = [], fl = [], jt = [], ang = [], jseq = 0, sentStr = "", sentAt = 0, stick = null, tPrev = 0, myIdx = -1, ovT = "", bg = null, rings = [], hit = 0, vg = null, shk = 0;   // shk : intensité du tremblement de caméra (px)
   const keys = new Set();
   let camA = 0, camInit = false, cc = 1, cs = 0;
   // monde (x, y, hauteur z) → écran [x, y, échelle]
@@ -246,7 +246,7 @@ export function createBarreClient(env) {
   const onEv = e => {
     const [ex, ey, ty, id] = e; if (id <= lastEv) return; lastEv = id;
     const col = pl && pl[e[4]] ? pl[e[4]][2] : "#fff";
-    if (ty === -1) { rings.push({ x: ex, y: ey, col, t: 0, s: .6 }); spark(ex, ey, 8, col, 110); beep(380, .15, "sine", .05, 760); }
+    if (ty === -1) { if (e[4] === myIdx) shk = Math.max(shk, 5); rings.push({ x: ex, y: ey, col, t: 0, s: .6 }); spark(ex, ey, 8, col, 110); beep(380, .15, "sine", .05, 760); }
     else if (ty === -3) { rings.push({ x: ex, y: ey, col: "#ff3b5c", t: 0, s: 5 }); spark(ex, ey, 18, "#ff3b5c", 200); beep(160, .35, "square", .06, 900); }
     else if (ty === -2) {
       rings.push({ x: ex, y: ey, col, t: 0, s: 2 }); spark(ex, ey, 22, col, 240); beep(180, .4, "sawtooth", .06, 50);
@@ -380,7 +380,8 @@ export function createBarreClient(env) {
     raf = requestAnimationFrame(frame);
     const dt = Math.min(.05, (now - (tPrev || now)) / 1000); tPrev = now;
     sendInput(now);
-    x.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);
+    const T = (ax, ay) => x.setTransform(cv.width / W, 0, 0, cv.height / H, ax * cv.width / W, ay * cv.height / H);   // décalage de caméra (le décor de fond et l'interface restent fixes)
+    T(0, 0);
     x.globalAlpha = 1;
     x.drawImage(background(), 0, 0);
     for (let i = 0; i < 36; i++) { x.globalAlpha = .2 + .4 * Math.sin(now / 600 + i * 1.7) ** 2; x.fillStyle = "#cdb8ff"; const z = 1 + (i % 3) * .6; x.fillRect((i * 173 + 40) % W, (i * 97 + 20) % H, z, z); }   // étoiles qui scintillent
@@ -398,6 +399,9 @@ export function createBarreClient(env) {
       if (Math.hypot(ddx, ddy) > 40) { const tg = Math.PI / 2 - Math.atan2(ddy, ddx); camA = camInit ? camA + wrap(tg - camA) * Math.min(1, dt * 3.5) : tg; camInit = true; }
     }
     cc = Math.cos(camA); cs = Math.sin(camA);
+    shk = Math.max(0, shk - dt * 32);                                                  // tremblement façon Stumble Guys : sec, court, qui s'éteint vite
+    const shx = Math.sin(now * .19) * shk, shy = Math.cos(now * .23) * shk * .8;
+    T(shx, shy);
     floor(rad, last.s >= 0, now);
     rings = rings.filter(o => (o.t += dt) < .65);                                                       // ondes de choc au sol (saut, atterrissage, mort, capacité)
     rings.forEach(o => { const k = o.t / .65, q = P(o.x, o.y), r0 = (12 + 44 * k * (o.s || 1)) * q[2]; x.globalAlpha = (1 - k) * .85; x.lineWidth = 3 * (1 - k) + 1; x.strokeStyle = o.col; x.beginPath(); x.ellipse(q[0], q[1], r0, r0 * K, 0, 0, 7); x.stroke(); });
@@ -445,7 +449,7 @@ export function createBarreClient(env) {
         const qb = sb.p[i]; if (!qa[2] || !pl[i]) return;
         const wx = qb && qb[2] ? qa[0] + (qb[0] - qa[0]) * f : qa[0], wy = qb && qb[2] ? qa[1] + (qb[1] - qa[1]) * f : qa[1];
         if (qb && Math.hypot(qb[0] - qa[0], qb[1] - qa[1]) > .6) ang[i] = Math.atan2(qb[1] - qa[1], qb[0] - qa[0]);
-        if (qa[4] && !jt[i]) jt[i] = now; if (!qa[4] && jt[i]) { jt[i] = 0; rings.push({ x: wx, y: wy, col: pl[i][2], t: 0, s: .7 }); }
+        if (qa[4] && !jt[i]) jt[i] = now; if (!qa[4] && jt[i]) { jt[i] = 0; rings.push({ x: wx, y: wy, col: pl[i][2], t: 0, s: .7 }); if (i === myIdx) shk = Math.max(shk, 3); }
         const u = jt[i] ? Math.min(1, (now - jt[i]) / ((last.jd || .5) * 1000)) : 0, h = JH * Math.sin(Math.PI * u), st = jt[i] ? 1 + .13 * Math.abs(Math.cos(Math.PI * u)) : 1;
         const col = pl[i][2], me = i === myIdx, [px, gy, sc] = P(wx, wy), sk = Math.max(.45, 1 - h / 100);
         shad.push(() => {
@@ -472,6 +476,7 @@ export function createBarreClient(env) {
       list.sort((u, v) => u.d - v.d).forEach(it => { x.globalAlpha = it.al; it.fn(); x.globalAlpha = 1; });
       top.forEach(it => it.fn());
       labels.forEach(fn => fn());
+      T(0, 0);                                                         // l'interface ne tremble pas
 
       x.drawImage(vignette(), 0, 0);
       if (A >= 0) { const g = x.createRadialGradient(CX, CY, 200, CX, CY, 470); g.addColorStop(0, `rgba(${ACR[A]},0)`); g.addColorStop(1, `rgba(${ACR[A]},${(.2 + .1 * Math.sin(now / 120)).toFixed(2)})`); x.fillStyle = g; x.fillRect(0, 0, W, H); }   // bords colorés selon la capacité
@@ -492,9 +497,10 @@ export function createBarreClient(env) {
       const mq = last.p[myIdx], rdy = !mq || !mq[2] || mq[3] > 0, op = rdy ? ".45" : "1"; if (btn.style.opacity !== op) btn.style.opacity = op;
     }
 
+    T(shx, shy);
     parts = parts.filter(o => (o.l -= dt * 2.2) > 0);
     parts.forEach(o => { o.x += o.vx * dt; o.y += o.vy * dt; const q = P(o.x, o.y, 8); x.globalAlpha = Math.max(0, o.l); x.fillStyle = o.c; x.beginPath(); x.arc(q[0], q[1], o.s * o.l * q[2], 0, 7); x.fill(); });
-    x.globalAlpha = 1;
+    x.globalAlpha = 1; T(0, 0);
     if (stick) {
       x.fillStyle = "rgba(255,255,255,.08)"; x.strokeStyle = "rgba(255,255,255,.28)"; x.lineWidth = 2; x.beginPath(); x.arc(stick.ox, stick.oy, 55, 0, 7); x.fill(); x.stroke();
       x.fillStyle = "rgba(255,255,255,.65)"; x.beginPath(); x.arc(stick.ox + stick.dx * 55, stick.oy + stick.dy * 55, 22, 0, 7); x.fill();
@@ -504,7 +510,7 @@ export function createBarreClient(env) {
 
   return {
     enter(c) {
-      active = true; snaps = []; pl = null; lastEv = 0; fl = []; parts = []; ang = []; jt = []; jseq = 0; sentStr = ""; sentAt = 0; stick = null; keys.clear(); tPrev = 0; myIdx = -1; ovT = "\u0000"; rings = []; hit = 0; camA = 0; camInit = false; cc = 1; cs = 0;
+      active = true; snaps = []; pl = null; lastEv = 0; fl = []; parts = []; ang = []; jt = []; jseq = 0; sentStr = ""; sentAt = 0; stick = null; keys.clear(); tPrev = 0; myIdx = -1; ovT = "\u0000"; rings = []; hit = 0; shk = 0; camA = 0; camInit = false; cc = 1; cs = 0;
       $("ghelp").textContent = "ZQSD / WASD / flèches : bouger · Espace ou clic droit : sauter 🦘 par-dessus la barre · glisse sur mobile";
       const myUid = getMe().uid;
       set(R(`games/${c}/inputs/${myUid}`), "0,0,0").catch(() => { });

@@ -27,6 +27,7 @@ const MOVES = [
   (b, d) => [[d * b * 2.3, 1.3]],                                                                  // toupie
   (b, d) => [[-d * b * 1.6, .35], [0, .35], [d * b * 2.4, .35, .6], [-d * b * 2.4, .5, 1]]      // zigzag + rétractation
 ];
+const TN = ["🔵 Bleus", "🟠 Oranges"];   // noms des équipes (mode équipes)
 // Difficultés : s0 = vitesse de départ (rad/s), sg = gain par seconde, smax = plafond, acc = nervosité, delay = la barre attend avant de partir,
 // ramp = durée de la montée en vitesse, gap0/gapMin/gapVar = délai entre feintes, ab* = capacités, jt/jcd = durée/recharge du saut,
 // solo = secondes à tenir seul, hw = demi-largeur de la barre, shrink = rétrécissement du plateau par seconde (après 6 s), bot = fiabilité des bots
@@ -45,6 +46,8 @@ export async function startBarre(env) {
   const c = getCode(), lob = getLobby() || {}, dfi = (lob.opts || {}).df, dif = DIFFS[dfi === 0 || dfi === 2 ? dfi : 1], players = env.bots ? env.bots(lob) : lob.players || {}, ids = Object.keys(players);
   const isBot = u => u.indexOf("bot_") === 0;
   if (ids.length < 2) return toast("Il faut au moins 2 joueurs pour lancer La barre malicieuse (ajoute un bot 🤖 dans le lobby)");
+  const teamOn = !!(lob.opts || {}).tm;                      // option du lobby : 2 équipes, la dernière avec un survivant gagne
+  if (teamOn && ids.length % 2) return toast("Le mode équipes demande un nombre pair de joueurs (bots inclus)");
   await remove(R(`games/${c}`));
   await update(R(`lobbies/${c}`), { status: "playing" });
 
@@ -59,6 +62,9 @@ export async function startBarre(env) {
     P[u] = { n: players[u].name, c: players[u].color, x: CX + Math.cos(a) * d, y: CY + Math.sin(a) * d, vx: 0, vy: 0, a: 1, cd: 0, j: 0 };
     I[u] = { ax: 0, ay: 0, d: 0, want: 0 };
   });
+  const TEAM = {};                                           // équipes tirées au hasard, à effectifs égaux
+  if (teamOn) { const sh = ids.slice(); for (let i = sh.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [sh[i], sh[j]] = [sh[j], sh[i]]; } sh.forEach((u, i) => { TEAM[u] = i % 2; }); }
+  const teamOf = u => teamOn ? TEAM[u] : -1;
   const alive = () => ids.filter(u => P[u].a);
   const ev = (x, y, ty, ...r) => evs.push({ e: [Math.round(x), Math.round(y), ty, ++evId, ...r], u: pubN + 4 });
   // la barre ATTEND (dif.delay) puis monte progressivement en vitesse : plus personne ne se fait tuer sans avoir pu réagir
@@ -133,12 +139,18 @@ export async function startBarre(env) {
         if (Math.hypot(p.x - CX - ux * s, p.y - CY - uy * s) < BR * .85 + hw) die(u);
       });
     }
-    // --- règle des 5 secondes
-    const n = alive().length;
-    if (n === 0) res = null;                                     // plus personne : la barre gagne
-    else if (n === 1) {
-      if (solo < 0) { solo = dif.solo; kf.push([`⏱️ ${P[alive()[0]].n} doit tenir ${dif.solo} s !`, pubN + 40]); }
-      else if ((solo -= DT) <= 0) res = alive()[0];
+    // --- fin de partie : solo = le dernier survivant doit tenir quelques secondes ; équipes = la dernière équipe avec un survivant gagne
+    const al2 = alive();
+    if (!teamOn) {
+      if (al2.length === 0) res = null;                          // plus personne : la barre gagne
+      else if (al2.length === 1) {
+        if (solo < 0) { solo = dif.solo; kf.push([`⏱️ ${P[al2[0]].n} doit tenir ${dif.solo} s !`, pubN + 40]); }
+        else if ((solo -= DT) <= 0) res = al2[0];
+      }
+    } else {
+      const ts = [...new Set(al2.map(teamOf))];
+      if (ts.length === 0) res = null;
+      else if (ts.length === 1) res = { t: ts[0] };               // une seule équipe a encore un survivant : elle gagne tout de suite
     }
   };
 
@@ -146,27 +158,30 @@ export async function startBarre(env) {
     pubN++;
     evs = evs.filter(o => o.u >= pubN); kf = kf.filter(e => e[1] > pubN);
     const o = {
-      k: "barre", t: +t.toFixed(1), ab, at: ab >= 0 ? +abT.toFixed(1) : 0, a: +ang.toFixed(3), l: +len.toFixed(2), r: +rad.toFixed(1), w: hw, jd: JT, s: solo >= 0 ? +Math.max(0, solo).toFixed(1) : -1,
+      k: "barre", T: teamOn ? 1 : 0, t: +t.toFixed(1), ab, at: ab >= 0 ? +abT.toFixed(1) : 0, a: +ang.toFixed(3), l: +len.toFixed(2), r: +rad.toFixed(1), w: hw, jd: JT, s: solo >= 0 ? +Math.max(0, solo).toFixed(1) : -1,
       p: ids.map(u => { const p = P[u]; return [+p.x.toFixed(1), +p.y.toFixed(1), p.a, Math.round(p.cd / JCD * 100), p.j > 0 ? 1 : 0]; }),
       ev: evs.map(o2 => o2.e), kf: kf.map(e => e[0]), ...x
     };
-    if (x.cd || x.o || pubN % 10 === 1) o.pl = ids.map(u => [u, P[u].n, P[u].c]);
+    if (x.cd || x.o || pubN % 10 === 1) o.pl = ids.map(u => [u, P[u].n, P[u].c, teamOf(u)]);
     return set(R(`games/${c}/state`), JSON.stringify(o));
   };
 
   const finish = w => {
     un(); if (env.played) env.played("barre"); else set(R("stats/gamesPlayed"), increment(1)).catch(() => { });
-    pub({ o: 1, msg: w ? `🏆 ${P[w].n} a survécu à la barre !` : "🌀 La barre malicieuse gagne !" });
+    const wt = w && w.t !== undefined;
+    pub({ o: 1, msg: wt ? `🏆 Les ${TN[w.t]} ont survécu à la barre !` : w ? `🏆 ${P[w].n} a survécu à la barre !` : "🌀 La barre malicieuse gagne !" });
     setTimeout(async () => {
       if (getCode() !== c) return;
       const cp = (getLobby() || {}).players || {}, up = { status: "lobby" };
       ids.filter(u => cp[u]).forEach(u => up[`players/${u}/ready`] = u === getMe().uid);
-      if (w && cp[w]) up[`players/${w}/wins`] = (cp[w].wins || 0) + 1;
+      if (wt) ids.filter(u => TEAM[u] === w.t && cp[u]).forEach(u => { up[`players/${u}/wins`] = (cp[u].wins || 0) + 1; });
+      else if (w && cp[w]) up[`players/${w}/wins`] = (cp[w].wins || 0) + 1;
       try { await update(R(`lobbies/${c}`), up); } catch { }
     }, 6000);
   };
 
   kf.push([`🎚️ Difficulté : ${dif.n}`, pubN + 70]);
+  if (teamOn) kf.push([`👥 ${TN[0]} contre ${TN[1]}`, pubN + 70]);
   for (let n = 3; n > 0; n--) { await pub({ cd: n }); await new Promise(r => setTimeout(r, 1000)); if (getCode() !== c) { un(); return; } }
   ids.forEach(u => { I[u].want = 0; });
   let last = performance.now(), acc = 0;
@@ -187,6 +202,7 @@ const KEYS = { ArrowUp: "U", w: "U", z: "U", ArrowDown: "D", s: "D", ArrowLeft: 
 const AB = ABS.map(a => a[0]);
 const ACR = ["255,210,63", "170,215,255", "255,100,220", "255,59,92", "160,90,255"], AC = ["#ffd23f", "#aad7ff", "#ff64dc", "#ff3b5c", "#a05aff"];   // couleur de chaque capacité
 const rgba = (h, a) => `rgba(${[1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) || 0)},${a})`;
+const TEAMC = ["#4da3ff", "#ff9f43"], TEAMN = TN;   // couleurs d'équipe
 const sh = (h, k) => { const m = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) || 0).map(v => Math.round(k > 0 ? v * (1 - k) : v + (255 - v) * -k)); return `rgb(${m})`; };
 
 /* Vue 2,5D avec perspective douce : le plateau est incliné (K), ce qui est proche de la caméra est un peu plus grand (PERSP),
@@ -196,14 +212,21 @@ const K = .7, PERSP = .0007, BH = 13, FT = 18, JH = 36;   // inclinaison, perspe
 export function createBarreClient(env) {
   const { R, set, onValue, $, beep, getMe, getCode } = env;
   const cv = $("cv"), x = cv.getContext("2d"), btn = $("sdash"), ov = $("ov");
-  let active = false, raf = 0, snaps = [], pl = null, lastEv = 0, parts = [], fl = [], jt = [], ang = [], jseq = 0, sentStr = "", sentAt = 0, stick = null, tPrev = 0, myIdx = -1, ovT = "", bg = null, rings = [], hit = 0, vg = null, shk = 0;   // shk : intensité du tremblement de caméra (px)
+  let active = false, raf = 0, snaps = [], pl = null, lastEv = 0, parts = [], fl = [], jt = [], ang = [], jseq = 0, sentStr = "", sentAt = 0, stick = null, tPrev = 0, myIdx = -1, ovT = "", bg = null, rings = [], hit = 0, vg = null, shk = 0, specIdx = -1;   // shk : intensité du tremblement de caméra (px)
   const keys = new Set();
   let camA = 0, camInit = false, cc = 1, cs = 0;
   // monde (x, y, hauteur z) → écran [x, y, échelle]
   const P = (wx, wy, z = 0) => { const dx = wx - CX, dy = wy - CY, vx = dx * cc - dy * cs, vy = dx * cs + dy * cc, s = 1 + vy * PERSP; return [CX + vx * s, CY + vy * K * s - z * s, s]; };
   const Vy = (wx, wy) => (wx - CX) * cs + (wy - CY) * cc;   // profondeur (plus grand = plus près de la caméra)
 
-  const jump = () => { if (!active) return; jseq++; sendInput(performance.now(), true); };
+  const lastS = () => snaps.length ? snaps[snaps.length - 1].s : null;
+  const iAmDead = () => { const L = lastS(); return !!(L && !L.o && !L.cd && myIdx >= 0 && L.p[myIdx] && !L.p[myIdx][2]); };
+  const cycleSpec = d => {                                   // éliminé : on change de joueur suivi
+    const L = lastS(); if (!L) return;
+    const al = L.p.map((q, i) => q[2] ? i : -1).filter(i => i >= 0); if (!al.length) return;
+    const k = al.indexOf(specIdx); specIdx = al[(k < 0 ? 0 : k + d + al.length) % al.length];
+  };
+  const jump = () => { if (!active) return; if (iAmDead()) return cycleSpec(1); jseq++; sendInput(performance.now(), true); };
   const sendInput = (now, force) => {
     let ix = 0, iy = 0;
     if (stick) { const m = Math.hypot(stick.dx, stick.dy); if (m > .18) { const k = Math.min(1, (m - .18) / .7) / m; ix = stick.dx * k; iy = stick.dy * k; } }
@@ -217,6 +240,12 @@ export function createBarreClient(env) {
 
   addEventListener("keydown", e => {
     if (!active || /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+    if (iAmDead()) {                                         // spectateur : ← / → (ou Espace, Tab) changent de joueur suivi
+      const k0 = e.key.length > 1 ? e.key : e.key.toLowerCase();
+      if (k0 === "ArrowLeft" || k0 === "q" || k0 === "a") { e.preventDefault(); if (!e.repeat) cycleSpec(-1); }
+      else if (k0 === "ArrowRight" || k0 === "d" || k0 === "Tab" || k0 === " ") { e.preventDefault(); if (!e.repeat) cycleSpec(1); }
+      return;
+    }
     if (e.key === " " || e.key === "Shift") { e.preventDefault(); if (!e.repeat) jump(); return; }
     const k = KEYS[e.key.length > 1 ? e.key : e.key.toLowerCase()]; if (k) { e.preventDefault(); keys.add(k); }
   });
@@ -226,6 +255,7 @@ export function createBarreClient(env) {
   cv.addEventListener("pointerdown", e => {
     if (!active) return; e.preventDefault();
     if (e.button === 2) return jump();
+    if (iAmDead()) return cycleSpec(1);                      // spectateur : un tap change de joueur
     if (stick) return;
     try { cv.setPointerCapture(e.pointerId); } catch { }
     const p = rel(e); stick = { id: e.pointerId, ox: p.x, oy: p.y, dx: 0, dy: 0 };
@@ -246,7 +276,7 @@ export function createBarreClient(env) {
   const onEv = e => {
     const [ex, ey, ty, id] = e; if (id <= lastEv) return; lastEv = id;
     const col = pl && pl[e[4]] ? pl[e[4]][2] : "#fff";
-    if (ty === -1) { if (e[4] === myIdx) shk = Math.max(shk, 5); rings.push({ x: ex, y: ey, col, t: 0, s: .6 }); spark(ex, ey, 8, col, 110); beep(380, .15, "sine", .05, 760); }
+    if (ty === -1) { if (e[4] === myIdx) shk = Math.max(shk, 11); rings.push({ x: ex, y: ey, col, t: 0, s: .6 }); spark(ex, ey, 8, col, 110); beep(380, .15, "sine", .05, 760); }
     else if (ty === -3) { rings.push({ x: ex, y: ey, col: "#ff3b5c", t: 0, s: 5 }); spark(ex, ey, 18, "#ff3b5c", 200); beep(160, .35, "square", .06, 900); }
     else if (ty === -2) {
       rings.push({ x: ex, y: ey, col, t: 0, s: 2 }); spark(ex, ey, 22, col, 240); beep(180, .4, "sawtooth", .06, 50);
@@ -393,14 +423,24 @@ export function createBarreClient(env) {
     const A = last.ab === undefined ? -1 : last.ab;
 
     // caméra : du côté de mon personnage, mouvement doux ; le saut ne la bouge pas
-    const mi = sa.p[myIdx], mj = sb.p[myIdx];
+    let ci = myIdx;
+    if (myIdx < 0 || !last.p[myIdx] || !last.p[myIdx][2]) {  // éliminé : la caméra suit un joueur encore en vie (un coéquipier en priorité)
+      const al = last.p.map((q, i) => q[2] ? i : -1).filter(i => i >= 0);
+      if (!(specIdx >= 0 && last.p[specIdx] && last.p[specIdx][2])) {
+        const mate = last.T && pl && pl[myIdx] ? al.find(i => pl[i] && pl[i][3] === pl[myIdx][3]) : undefined;
+        specIdx = mate !== undefined ? mate : al.length ? al[0] : -1;
+      }
+      ci = specIdx;
+    }
+    const spec = ci >= 0 && ci !== myIdx;
+    const mi = sa.p[ci], mj = sb.p[ci];
     if (mi && mi[2]) {
       const mx = mj && mj[2] ? mi[0] + (mj[0] - mi[0]) * f : mi[0], my = mj && mj[2] ? mi[1] + (mj[1] - mi[1]) * f : mi[1], ddx = mx - CX, ddy = my - CY;
       if (Math.hypot(ddx, ddy) > 40) { const tg = Math.PI / 2 - Math.atan2(ddy, ddx); camA = camInit ? camA + wrap(tg - camA) * Math.min(1, dt * 3.5) : tg; camInit = true; }
     }
     cc = Math.cos(camA); cs = Math.sin(camA);
-    shk = Math.max(0, shk - dt * 32);                                                  // tremblement façon Stumble Guys : sec, court, qui s'éteint vite
-    const shx = Math.sin(now * .19) * shk, shy = Math.cos(now * .23) * shk * .8;
+    shk = Math.max(0, shk - dt * 34);                                                  // tremblement façon Stumble Guys : sec, court, qui s'éteint vite
+    const shx = Math.sin(now * .19) * shk, shy = Math.cos(now * .23) * shk;
     T(shx, shy);
     floor(rad, last.s >= 0, now);
     rings = rings.filter(o => (o.t += dt) < .65);                                                       // ondes de choc au sol (saut, atterrissage, mort, capacité)
@@ -449,12 +489,13 @@ export function createBarreClient(env) {
         const qb = sb.p[i]; if (!qa[2] || !pl[i]) return;
         const wx = qb && qb[2] ? qa[0] + (qb[0] - qa[0]) * f : qa[0], wy = qb && qb[2] ? qa[1] + (qb[1] - qa[1]) * f : qa[1];
         if (qb && Math.hypot(qb[0] - qa[0], qb[1] - qa[1]) > .6) ang[i] = Math.atan2(qb[1] - qa[1], qb[0] - qa[0]);
-        if (qa[4] && !jt[i]) jt[i] = now; if (!qa[4] && jt[i]) { jt[i] = 0; rings.push({ x: wx, y: wy, col: pl[i][2], t: 0, s: .7 }); if (i === myIdx) shk = Math.max(shk, 3); }
+        if (qa[4] && !jt[i]) jt[i] = now; if (!qa[4] && jt[i]) { jt[i] = 0; rings.push({ x: wx, y: wy, col: pl[i][2], t: 0, s: .7 }); if (i === myIdx) shk = Math.max(shk, 6); }
         const u = jt[i] ? Math.min(1, (now - jt[i]) / ((last.jd || .5) * 1000)) : 0, h = JH * Math.sin(Math.PI * u), st = jt[i] ? 1 + .13 * Math.abs(Math.cos(Math.PI * u)) : 1;
-        const col = pl[i][2], me = i === myIdx, [px, gy, sc] = P(wx, wy), sk = Math.max(.45, 1 - h / 100);
+        const col = pl[i][2], me = i === myIdx, spt = spec && i === ci, tcol = last.T && pl[i][3] >= 0 ? TEAMC[pl[i][3]] : null, [px, gy, sc] = P(wx, wy), sk = Math.max(.45, 1 - h / 100);
         shad.push(() => {
           x.save(); x.globalCompositeOperation = "lighter"; x.translate(px, gy); x.scale(1, K);                                  // halo coloré au sol
           const gg = x.createRadialGradient(0, 0, 2, 0, 0, 44 * sc); gg.addColorStop(0, rgba(col, me ? .42 : .22)); gg.addColorStop(1, rgba(col, 0)); x.fillStyle = gg; x.beginPath(); x.arc(0, 0, 44 * sc, 0, 7); x.fill(); x.restore();
+          if (tcol) { x.lineWidth = 3.5; x.strokeStyle = tcol; x.beginPath(); x.ellipse(px, gy, (BR + 3) * sc, (BR + 3) * sc * K, 0, 0, 7); x.stroke(); }   // anneau d'équipe
           x.fillStyle = `rgba(0,0,0,${(.45 * sk).toFixed(2)})`; x.beginPath(); x.ellipse(px, gy, BR * sk * 1.1 * sc, BR * sk * 1.1 * sc * K, 0, 0, 7); x.fill();
           if (me) {                                            // anneau de recharge du saut, posé au sol
             const cdv = last.p[i] ? last.p[i][3] / 100 : 0, rr = (BR + 8) * sc;
@@ -466,8 +507,9 @@ export function createBarreClient(env) {
         (h >= 10 ? top : list).push(it);
         labels.push(() => {
           const ly = gy - h * sc - BR * sc * 2.6 * st - 8;
-          pill(pl[i][1], px, ly, "700 13px 'DM Sans',sans-serif", me ? "#ffd23f" : "#fff", "rgba(10,5,30,.62)", me ? "#ffd23f" : rgba(col, .8));
+          pill(pl[i][1], px, ly, "700 13px 'DM Sans',sans-serif", me ? "#ffd23f" : "#fff", "rgba(10,5,30,.62)", me ? "#ffd23f" : tcol || rgba(col, .8));
           if (me) { x.fillStyle = "#ffd23f"; x.fillText("▼", px, ly - 20); }
+          if (spt) { x.fillStyle = "#fff"; x.fillText("▼", px, ly - 20); }
           x.textAlign = "start"; x.textBaseline = "alphabetic";
         });
       });
@@ -487,12 +529,15 @@ export function createBarreClient(env) {
       last.p.forEach((q, i) => {
         const y = 18 + i * 20, t = pl[i][1] + (q[2] ? "" : " ✖");
         x.globalAlpha = q[2] ? 1 : .45; rr(6, y - 11, x.measureText(t).width + 38, 22, 11); x.fillStyle = "rgba(10,5,30,.5)"; x.fill();
+        if (last.T && pl[i][3] >= 0) { rr(6, y - 11, 6, 22, 3); x.fillStyle = TEAMC[pl[i][3]]; x.fill(); }
         x.fillStyle = pl[i][2]; x.beginPath(); x.arc(18, y, 6, 0, 7); x.fill(); x.lineWidth = 1.5; x.strokeStyle = "rgba(255,255,255,.6)"; x.stroke();
         x.fillStyle = "#fff"; x.fillText(t, 30, y);
       });
       x.globalAlpha = 1; x.textAlign = "right"; x.textBaseline = "alphabetic"; x.font = "600 13px 'DM Sans',sans-serif"; x.lineWidth = 3; x.strokeStyle = "rgba(0,0,0,.6)"; x.fillStyle = "#ffe9a8";
       (last.kf || []).slice(-4).forEach((t, i) => { x.strokeText(t, W - 12, 18 + i * 18); x.fillText(t, W - 12, 18 + i * 18); });
       if (last.s >= 0 && !last.o) pill(`⏱️ Tiens encore ${last.s.toFixed(1)} s !`, CX, H - 24, "800 20px 'Bricolage Grotesque',sans-serif", "#fff", Math.floor(now / 200) % 2 ? "rgba(255,59,92,.85)" : "rgba(10,5,30,.75)", "#fff");
+      if (last.T && myIdx >= 0 && pl[myIdx] && pl[myIdx][3] >= 0) pill(`Ton équipe : ${TEAMN[pl[myIdx][3]]}`, 100, H - 24, "700 14px 'DM Sans',sans-serif", "#fff", "rgba(10,5,30,.65)", TEAMC[pl[myIdx][3]]);
+      if (spec && pl[ci] && !last.o) pill(`👁️ Tu regardes ${pl[ci][1]} · touche ou tape pour changer`, CX, H - 62, "700 14px 'DM Sans',sans-serif", "#fff", "rgba(10,5,30,.65)", "#fff");
       x.textAlign = "start"; x.textBaseline = "alphabetic";
       const mq = last.p[myIdx], rdy = !mq || !mq[2] || mq[3] > 0, op = rdy ? ".45" : "1"; if (btn.style.opacity !== op) btn.style.opacity = op;
     }
@@ -510,7 +555,7 @@ export function createBarreClient(env) {
 
   return {
     enter(c) {
-      active = true; snaps = []; pl = null; lastEv = 0; fl = []; parts = []; ang = []; jt = []; jseq = 0; sentStr = ""; sentAt = 0; stick = null; keys.clear(); tPrev = 0; myIdx = -1; ovT = "\u0000"; rings = []; hit = 0; shk = 0; camA = 0; camInit = false; cc = 1; cs = 0;
+      active = true; snaps = []; pl = null; lastEv = 0; fl = []; parts = []; ang = []; jt = []; jseq = 0; sentStr = ""; sentAt = 0; stick = null; keys.clear(); tPrev = 0; myIdx = -1; ovT = "\u0000"; rings = []; hit = 0; shk = 0; specIdx = -1; camA = 0; camInit = false; cc = 1; cs = 0;
       $("ghelp").textContent = "ZQSD / WASD / flèches : bouger · Espace ou clic droit : sauter 🦘 par-dessus la barre · glisse sur mobile";
       const myUid = getMe().uid;
       set(R(`games/${c}/inputs/${myUid}`), "0,0,0").catch(() => { });

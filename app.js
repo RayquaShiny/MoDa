@@ -5,11 +5,12 @@ import {startSim,createSimClient} from "./sim.js";
 import {startFruit,createFruitClient} from "./fruit.js";
 import {startSumo,createSumoClient} from "./sumo.js";
 import {startBarre,createBarreClient} from "./barre.js";
+import {startAmog,createAmogClient} from "./amog.js";
 
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="47";
+const VER="52";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -221,10 +222,10 @@ function watchSocial(){
 
 // ---------- Lobby ----------
 // ---------- Bots 🤖 (Battle Royale, Tanks, Sumo Arena : jeux à 2 joueurs minimum) ----------
-const BOTN=["Rex","Zap","Bolt","Nova","Byte","Pixel","Turbo"];
+const BOTN=["Rex","Zap","Bolt","Nova","Byte","Pixel","Turbo","Ghost","Comet"];
 const isBot=u=>String(u).indexOf("bot_")===0;
-const botGame=l=>!!l&&["br","tk","sumo","barre"].includes(l.game);
-const maxBots=l=>Math.max(0,8-Object.keys((l&&l.players)||{}).length);
+const botGame=l=>!!l&&["br","tk","sumo","barre","amog"].includes(l.game);
+const maxBots=l=>Math.max(0,(l&&l.game==="amog"?10:8)-Object.keys((l&&l.players)||{}).length);
 const botCount=l=>botGame(l)?Math.max(0,Math.min(maxBots(l),Math.floor(+((l.opts||{}).bots))||0)):0;
 function withBots(l){ // joueurs réels + bots (ids « bot_1 », « bot_2 »…, jamais écrits dans Firebase)
   const pl={...((l&&l.players)||{})},used=new Set(Object.values(pl).map(p=>p.color)),n=botCount(l);
@@ -244,7 +245,7 @@ const mkLobby=game=>async()=>{
   await set(R(`lobbies/${c}`),{host:me.uid,game,status:"lobby",opts:{sp:1,wr:0,bo:1},players:{[me.uid]:{name:me.name,color:COLORS[0],ready:true,...ownTag()}}});
   onDisconnect(R(`lobbies/${c}`)).remove();enter(c);
 };
-$("tsnake").onclick=mkLobby("snake");$("tsurv").onclick=mkLobby("surv");$("tbr").onclick=mkLobby("br");$("ttk").onclick=mkLobby("tk");$("tlab").onclick=mkLobby("lab");$("tsim").onclick=mkLobby("sim");$("tsumo").onclick=mkLobby("sumo");$("tbarre").onclick=mkLobby("barre");$("tfruit").onclick=mkLobby("fruit");
+$("tsnake").onclick=mkLobby("snake");$("tsurv").onclick=mkLobby("surv");$("tbr").onclick=mkLobby("br");$("ttk").onclick=mkLobby("tk");$("tlab").onclick=mkLobby("lab");$("tsim").onclick=mkLobby("sim");$("tsumo").onclick=mkLobby("sumo");$("tbarre").onclick=mkLobby("barre");$("tfruit").onclick=mkLobby("fruit");$("tamog").onclick=mkLobby("amog");
 $("join").onclick=()=>joinLobby($("joincode").value.trim().toUpperCase());
 $("joincode").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();$("join").click()}});
 async function joinLobby(c){
@@ -275,12 +276,12 @@ function renderLobby(){
   Object.entries(pl).forEach(([u,p])=>{const r=h("div",null);r.className="pl";const sw=h("span");sw.className="sw";sw.style.background=p.color;
     r.append(sw,h("span",(p.ow?"🛡️ ":"")+p.name+(u===lobby.host?" (hôte)":"")+(p.wins?` 🏆${p.wins}`:"")),h("span",p.ready?"✔ prêt":"…"));b.append(r)});
   $("ready").hidden=host;$("ready").textContent=pl[me.uid]?.ready?"Pas prêt":"Prêt";
-  $("ltitle").textContent={snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",tk:"💥 Tanks",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",barre:"🌀 La barre malicieuse",fruit:"🍎 Fruit Forager"}[lobby.game]||"Lobby";
+  $("ltitle").textContent={snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",tk:"💥 Tanks",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",barre:"🌀 La barre malicieuse",fruit:"🍎 Fruit Forager",amog:"🚀 Amog Us"}[lobby.game]||"Lobby";
   $("opts").style.display=lobby.game==="snake"?"":"none";
   const op=lobby.opts||{};$("oSp").textContent="⚡ Vitesse : "+["lente","normale","rapide"][op.sp??1];
   $("oWr").textContent=op.wr?"🌀 Murs : traversables":"🧱 Murs : mortels";$("oBo").textContent=op.bo===0?"🎁 Bonus : non":"🎁 Bonus : oui";
   ["oSp","oWr","oBo"].forEach(i=>$(i).disabled=!host);
-  const nb=botCount(lobby),need=lobby.game==="br"||lobby.game==="tk"||lobby.game==="sumo"||lobby.game==="barre"?2:1,cnt=Object.keys(pl).length+nb,all=Object.values(pl).every(p=>p.ready); // le battle royale ne se lance jamais seul
+  const nb=botCount(lobby),need=lobby.game==="br"||lobby.game==="tk"||lobby.game==="sumo"||lobby.game==="barre"?2:lobby.game==="amog"?4:1,cnt=Object.keys(pl).length+nb,all=Object.values(pl).every(p=>p.ready); // le battle royale ne se lance jamais seul
   $("botrow").style.display=botGame(lobby)?"":"none";$("oBt").textContent="🤖 Bots : "+nb;$("oBt").disabled=!host;
   $("dfrow").style.display=lobby.game==="barre"?"":"none";$("oDf").textContent="🎚️ Difficulté : "+["😊 facile","😐 normale","💀 difficile"][op.df===0||op.df===2?op.df:1];$("oDf").disabled=!host; // La barre malicieuse : choisie par l'hôte
   $("oTm").textContent=op.tm?"👥 Équipes : oui":"👥 Équipes : non";$("oTm").disabled=!host;
@@ -369,6 +370,7 @@ function unwake(){try{wl&&wl.release()}catch{}wl=null}
 let hinted=0;
 function orientHint(){if(!TOUCH||hinted||gk==="snake")return;if(matchMedia("(orientation:portrait)").matches){hinted=1;setTimeout(()=>{if(cur==="game")toast("📱 Astuce : tourne ton téléphone en paysage pour une vue plus grande")},1600)}}
 function enterGame(c){
+  if(lobby&&lobby.game==="amog"){show("game");st=pv=null;gk="amog";held.clear();lastMv="";scoreKey="";document.body.dataset.g="amog";wake();orientHint();unState=enterAmogGame(c);return}
   if(lobby&&lobby.game==="barre"){show("game");st=pv=null;gk="barre";held.clear();lastMv="";scoreKey="";document.body.dataset.g="barre";wake();orientHint();unState=enterBarreGame(c);return}
   if(lobby&&lobby.game==="sumo"){show("game");st=pv=null;gk="sumo";held.clear();lastMv="";scoreKey="";document.body.dataset.g="sumo";wake();orientHint();unState=enterSumoGame(c);return}
   if(lobby&&lobby.game==="fruit"){show("game");st=pv=null;gk="fruit";held.clear();lastMv="";scoreKey="";document.body.dataset.g="fruit";wake();orientHint();unState=enterFruitGame(c);return}
@@ -961,6 +963,7 @@ $("start").onclick=async()=>{
   if(lobby.game==="sumo")return startSumo(simEnv());
   if(lobby.game==="barre")return startBarre(simEnv());
   if(lobby.game==="fruit")return startFruit(simEnv());
+  if(lobby.game==="amog")return startAmog(simEnv());
   if(lobby.game==="surv")return startSurv();
   if(lobby.game==="lab")return startLab();
   if(lobby.game==="br")return startBr();
@@ -994,8 +997,7 @@ $("start").onclick=async()=>{
       s.b.unshift([x,y]);const fi=food.findIndex(f=>f[0]===x&&f[1]===y);
       if(fi>=0){const f=food.splice(fi,1)[0];
         if(f[2]===2)s.sh=40;else{const n=f[2]===1?3:1;s.p+=n;s.g+=n}
-        if(!f[2])food.push([...free(),0,0])}
-      if(s.g>0)s.g--;else s.b.pop()});
+        if(!f[2])food.push([...free(),0,0])}      if(s.g>0)s.g--;else s.b.pop()});
     food.forEach(f=>{if(f[2])f[3]--});
     for(let i=food.length;i--;)if(food[i][2]&&food[i][3]<=0)food.splice(i,1);
     if(bonus&&food.filter(f=>f[2]).length<2&&(tk===20||Math.random()<.04))food.push([...free(),Math.random()<.65?1:2,100]);
@@ -1598,7 +1600,7 @@ function startStats(){
 function renderStats(D){
   const pr=D.presence||{},us=D.users||{},lobs=Object.entries(D.lobbies||{}),fr=D.friends||{},now=Date.now();
   const online=Object.keys(pr).filter(u=>pr[u]),made=Object.values(us).map(u=>u.createdAt||0),nUsers=Object.keys(us).length;
-  const GN={tk:["💥","Tanks"],snake:["🐍","Snake"],surv:["🧟","Survie coop"],br:["🔫","Battle Royale"],lab:["🧩","Évasion coop"],sim:["⛏️","Mine Simulator"],sumo:["🤼","Sumo Arena"],barre:["🌀","La barre malicieuse"],fruit:["🍎","Fruit Forager"]};
+  const GN={tk:["💥","Tanks"],snake:["🐍","Snake"],surv:["🧟","Survie coop"],br:["🔫","Battle Royale"],lab:["🧩","Évasion coop"],sim:["⛏️","Mine Simulator"],sumo:["🤼","Sumo Arena"],barre:["🌀","La barre malicieuse"],fruit:["🍎","Fruit Forager"],amog:["🚀","Amog Us"]};
   const ago=t=>{if(!t)return"date inconnue";const m=Math.floor((now-t)/6e4);return m<1?"à l'instant":m<60?`il y a ${m} min`:m<1440?`il y a ${Math.floor(m/60)} h`:`il y a ${Math.floor(m/1440)} j`};
   const card=([ic,v,l])=>{const d=h("div");d.className="stat";const i=h("span",ic);i.className="ic";d.append(i,h("b",String(v)),h("span",l));return d};
   const playing=lobs.filter(([,l])=>l&&l.status==="playing"),open=lobs.filter(([,l])=>l&&l.status==="lobby");
@@ -1899,7 +1901,7 @@ $("adReset").onclick=async()=>{if(!confirm("Remettre le compteur « parties jou�
   try{await set(R("stats/gamesPlayed"),0);await remove(R("stats/byGame"));await remove(R("stats/hours"));toast("Statistiques remises à zéro")}catch{admErr()}};
 function renderAdmin(D){
   if(!me||!me.owner)return;
-  const GN={tk:"💥 Tanks",snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",barre:"🌀 La barre malicieuse",fruit:"🍎 Fruit Forager"};
+  const GN={tk:"💥 Tanks",snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",barre:"🌀 La barre malicieuse",fruit:"🍎 Fruit Forager",amog:"🚀 Amog Us"};
   const lobs=Object.entries(D.lobbies||{}).filter(([,l])=>l).sort((x,y)=>(y[1].status==="playing")-(x[1].status==="playing"));
   $("adLobH").textContent=`Lobbys (${lobs.length})`;$("adAll").hidden=!lobs.length;
   $("adLob").replaceChildren(...(lobs.length?lobs.map(([c,l])=>{

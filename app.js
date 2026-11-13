@@ -312,6 +312,8 @@ let su=null;
 function enterSumoGame(c){su=su||createSumoClient(simEnv());return su.enter(c)}
 let ba=null;
 function enterBarreGame(c){ba=ba||createBarreClient(simEnv());return ba.enter(c)}
+let amogClient=null;
+function enterAmogGame(c){amogClient=amogClient||createAmogClient(simEnv());return amogClient.enter(c)}
 function local(){unLobby&&unLobby();unState&&unState();unLobby=unState=null;code=lobby=null;if(me)showHome()}
 
 // ---------- Jeu : affichage (tous les joueurs) ----------

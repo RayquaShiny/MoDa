@@ -282,11 +282,13 @@ function renderLobby(){
   ["oSp","oWr","oBo"].forEach(i=>$(i).disabled=!host);
   const nb=botCount(lobby),need=lobby.game==="br"||lobby.game==="tk"||lobby.game==="sumo"||lobby.game==="barre"?2:1,cnt=Object.keys(pl).length+nb,all=Object.values(pl).every(p=>p.ready); // le battle royale ne se lance jamais seul
   $("botrow").style.display=botGame(lobby)?"":"none";$("oBt").textContent="🤖 Bots : "+nb;$("oBt").disabled=!host;
+  $("dfrow").style.display=lobby.game==="barre"?"":"none";$("oDf").textContent="🎚️ Difficulté : "+["😊 facile","😐 normale","💀 difficile"][op.df===0||op.df===2?op.df:1];$("oDf").disabled=!host; // La barre malicieuse : choisie par l'hôte
   $("start").hidden=!host;$("start").disabled=!all||cnt<need;
   $("lneed").textContent=cnt<need?`⏳ Il faut au moins ${need} joueurs pour lancer la partie (${cnt}/${need}) : invite un pote${botGame(lobby)?" ou ajoute un bot 🤖":""} !`:!all?"En attente que tout le monde soit prêt…":"";
 }
 const setOpt=(k,f)=>()=>{if(lobby&&lobby.host===me.uid)update(R(`lobbies/${code}/opts`),{[k]:f(lobby.opts||{})}).catch(err)};
 $("oSp").onclick=setOpt("sp",o=>((o.sp??1)+1)%3);$("oWr").onclick=setOpt("wr",o=>o.wr?0:1);$("oBo").onclick=setOpt("bo",o=>o.bo===0?1:0);
+$("oDf").onclick=setOpt("df",o=>((o.df===0||o.df===2?o.df:1)+1)%3);
 $("oBt").onclick=()=>{if(!lobby||lobby.host!==me.uid||!botGame(lobby))return;const m=maxBots(lobby),n=botCount(lobby)+1>m?0:botCount(lobby)+1;update(R(`lobbies/${code}/opts`),{bots:n}).catch(err)};
 $("ready").onclick=()=>set(R(`lobbies/${code}/players/${me.uid}/ready`),!lobby.players[me.uid].ready);
 $("leave").onclick=leaveLobby;

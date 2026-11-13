@@ -8,7 +8,7 @@
      « ax,ay,compteurSaut » dans games/<code>/inputs/<uid>. Aucun nouveau chemin Firebase. */
 
 const W = 800, H = 560, CX = 400, CY = 285, BR = 16, HW = 8;
-const ACC = 900, DAMP = 3.0, DT = 1 / 30, JUMP_T = .5, JUMP_CD = 1.8, SOLO = 5, PI2 = Math.PI * 2;
+const ACC = 900, DAMP = 3.0, DT = 1 / 30, PI2 = Math.PI * 2;
 const wrap = a => { while (a > Math.PI) a -= PI2; while (a < -Math.PI) a += PI2; return a; };
 const clamp = (v, m) => Math.max(-m, Math.min(m, v));
 const TAUNTS = ["s'est fait balayer", "a pris la barre en pleine tête", "a été cueilli", "n'a pas sauté à temps", "est passé à la casserole"];
@@ -21,7 +21,20 @@ const MOVES = [
   (b, d) => [[-d * b * 1.8, .45], [d * b * 1.8, .9]],           // zigzag
   (b, d) => [[d * b * .5, .5, .55], [d * b * 1.6, .9, 1]],      // se rétracte, puis jaillit
   (b, d) => [[0, 1.1], [-d * b * 3, .5]],                       // fausse pause, puis demi-tour éclair
-  (b, d) => [[d * b * 2, .35, .7], [d * b * 2, .35, 1], [d * b * 2, .35, .6], [d * b * 3, .6, 1]] // pulsation : la pointe respire
+  (b, d) => [[d * b * 2, .35, .7], [d * b * 2, .35, 1], [d * b * 2, .35, .6], [d * b * 3, .6, 1]], // pulsation : la pointe respire
+  (b, d) => [[0, .35], [d * b * 2.6, .45], [0, .3], [-d * b * 2.6, .55]],                         // double fouet : coup, pause, contre-coup
+  (b, d) => [[d * b * .1, 1], [d * b * 2.4, .9]],                                                  // faux ralenti long puis accélération
+  (b, d) => [[d * b * 2.3, 1.3]],                                                                  // toupie
+  (b, d) => [[-d * b * 1.6, .35], [0, .35], [d * b * 2.4, .35, .6], [-d * b * 2.4, .5, 1]]      // zigzag + rétractation
+];
+// Difficultés : s0 = vitesse de départ (rad/s), sg = gain par seconde, smax = plafond, acc = nervosité, delay = la barre attend avant de partir,
+// ramp = durée de la montée en vitesse, gap0/gapMin/gapVar = délai entre feintes, ab* = capacités, jt/jcd = durée/recharge du saut,
+// solo = secondes à tenir seul, hw = demi-largeur de la barre, shrink = rétrécissement du plateau par seconde (après 6 s), bot = fiabilité des bots
+const ALL = [0, 1, 2, 3, 4, 5, 6];
+const DIFFS = [
+  { n: "Facile",    s0: .85, sg: .012, smax: 1.8, acc: 6,  delay: 2.2, ramp: 5,   gap0: 3,  gapMin: 1.4, gapVar: 1.8, abFirst: 16, abMin: 11,  abVar: 6, abSolo: [6, 3],     abs: [1, 2],             moves: [0, 1, 3],                                   jt: .6,  jcd: 1.2, solo: 4, hw: 7,  shrink: 0,    minRad: 1,  soloMul: 1.1,  bot: .8 },
+  { n: "Normale",   s0: 1.2,  sg: .025, smax: 2.6, acc: 9,  delay: 1.2, ramp: 3,   gap0: 2,  gapMin: .5,  gapVar: 1.1, abFirst: 8,  abMin: 6,   abVar: 4, abSolo: [4, 2],     abs: [0, 1, 2, 3, 4],    moves: ALL,                                         jt: .5,  jcd: 1.8, solo: 5, hw: 8,  shrink: 0,    minRad: 1,  soloMul: 1.35, bot: .8 },
+  { n: "Difficile", s0: 1.7,  sg: .05,  smax: 3.0, acc: 20, delay: .8,  ramp: 1.8, gap0: 1,  gapMin: .15, gapVar: .45, abFirst: 4,  abMin: 2.5, abVar: 2, abSolo: [2.5, 1.5], abs: [0, 1, 2, 3, 4, 3], moves: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 7, 10], jt: .4,  jcd: 2.0, solo: 8, hw: 11, shrink: .012, minRad: .6, soloMul: 1.4,  bot: .55 }
 ];
 // Capacités spéciales (une à la fois, annoncées en haut de l'écran) : [nom, durée en s]
 const ABS = [["⚡ TURBO x2 : tout le monde !", 4], ["👻 Barre fantôme", 3], ["🪞 Mirage : laquelle est la vraie ?", 4], ["🌀 Double barre", 4], ["🔀 Commandes inversées", 3.5]];
@@ -29,16 +42,18 @@ const ABS = [["⚡ TURBO x2 : tout le monde !", 4], ["👻 Barre fantôme", 3], 
 // ---------------------------------------------------------------- Hôte
 export async function startBarre(env) {
   const { R, update, remove, set, onValue, increment, getCode, getLobby, getMe, toast } = env;
-  const c = getCode(), lob = getLobby() || {}, players = env.bots ? env.bots(lob) : lob.players || {}, ids = Object.keys(players);
+  const c = getCode(), lob = getLobby() || {}, dfi = (lob.opts || {}).df, dif = DIFFS[dfi === 0 || dfi === 2 ? dfi : 1], players = env.bots ? env.bots(lob) : lob.players || {}, ids = Object.keys(players);
   const isBot = u => u.indexOf("bot_") === 0;
   if (ids.length < 2) return toast("Il faut au moins 2 joueurs pour lancer La barre malicieuse (ajoute un bot 🤖 dans le lobby)");
   await remove(R(`games/${c}`));
   await update(R(`lobbies/${c}`), { status: "playing" });
 
-  const rad = 170 + ids.length * 10, P = {}, I = {}, seen = {};
-  let t = 0, ang = Math.random() * PI2, om = 0, tOm = 1.2, dir = Math.random() < .5 ? 1 : -1, len = 1, tLen = 1;
-  let ab = -1, abT = 0, abNext = 8, lastAb = -1, q = [], curT = 0, gap = 2, solo = -1, res, evId = 0, evs = [], kf = [], pubN = 0;
+  const rad0 = 170 + ids.length * 10, P = {}, I = {}, seen = {}, JT = dif.jt, JCD = dif.jcd, hw = dif.hw;
+  let rad = rad0;
+  let t = 0, ang = 0, om = 0, tOm = 0, dir = Math.random() < .5 ? 1 : -1, len = 1, tLen = 1;
+  let ab = -1, abT = 0, abNext = dif.abFirst, lastAb = -1, q = [], curT = 0, gap = dif.delay + dif.gap0, solo = -1, res, evId = 0, evs = [], kf = [], pubN = 0;
   const off = Math.random() * PI2;
+  ang = off + (2 * Math.floor(Math.random() * ids.length) + 1) * Math.PI / ids.length;   // la barre démarre pile ENTRE deux joueurs (jamais sur l'un d'eux)
   ids.forEach((u, i) => {                                   // départ en cercle, à mi-rayon
     const a = off + i / ids.length * PI2, d = rad * .6;
     P[u] = { n: players[u].name, c: players[u].color, x: CX + Math.cos(a) * d, y: CY + Math.sin(a) * d, vx: 0, vy: 0, a: 1, cd: 0, j: 0 };
@@ -46,7 +61,8 @@ export async function startBarre(env) {
   });
   const alive = () => ids.filter(u => P[u].a);
   const ev = (x, y, ty, ...r) => evs.push({ e: [Math.round(x), Math.round(y), ty, ++evId, ...r], u: pubN + 4 });
-  const base = () => Math.min(2.6, 1.2 + t * .025) * (solo >= 0 ? 1.35 : 1);
+  // la barre ATTEND (dif.delay) puis monte progressivement en vitesse : plus personne ne se fait tuer sans avoir pu réagir
+  const base = () => t < dif.delay ? 0 : Math.min(dif.smax, dif.s0 + t * dif.sg) * Math.min(1, .35 + .65 * (t - dif.delay) / dif.ramp) * (solo >= 0 ? dif.soloMul : 1);
 
   const un = onValue(R(`games/${c}/inputs`), s => Object.entries(s.val() || {}).forEach(([u, v]) => {
     if (!P[u] || seen[u] === v) return; seen[u] = v;
@@ -66,7 +82,7 @@ export async function startBarre(env) {
     const p = P[u], i = I[u], b = bs[u] || (bs[u] = { k: Math.floor(Math.random() * 4), r: .45 + Math.random() * .3 });
     if (b.k-- > 0) return; b.k = 2 + Math.floor(Math.random() * 3);
     const dx = p.x - CX, dy = p.y - CY, pr = Math.hypot(dx, dy), d = wrap(Math.atan2(dy, dx) - ang), L = (rad - 4) * len;
-    if (p.cd <= 0 && pr < L + BR && Math.abs(d) < .55 && om * d > 0 && Math.abs(d) / (Math.abs(om) || 1) < .4 && Math.random() < .8) i.want = .25;
+    if (p.cd <= 0 && pr < L + BR && Math.abs(d) < .55 && om * d > 0 && Math.abs(d) / (Math.abs(om) || 1) < .4 && Math.random() < dif.bot) i.want = .25;
     const ta = ang + Math.PI + om * .35, tr = rad * b.r;
     const vx = CX + Math.cos(ta) * tr - p.x, vy = CY + Math.sin(ta) * tr - p.y, m = Math.hypot(vx, vy) || 1;
     i.ax = vx / m + (Math.random() - .5) * .3; i.ay = vy / m + (Math.random() - .5) * .3;
@@ -76,25 +92,26 @@ export async function startBarre(env) {
     ids.forEach(u => { if (isBot(u) && P[u].a) bot(u); });
     t += DT;
     // --- capacités spéciales : la première à 8 s, puis toutes les 6 à 10 s (4 à 6 s quand il ne reste qu'un joueur)
-    if (ab >= 0) { if ((abT -= DT) <= 0) { ab = -1; abNext = t + (solo >= 0 ? 4 + Math.random() * 2 : 6 + Math.random() * 4); } }
+    if (ab >= 0) { if ((abT -= DT) <= 0) { ab = -1; abNext = t + (solo >= 0 ? dif.abSolo[0] + Math.random() * dif.abSolo[1] : dif.abMin + Math.random() * dif.abVar); } }
     else if (t >= abNext) {
-      do ab = Math.floor(Math.random() * ABS.length); while (ab === lastAb); lastAb = ab; abT = ABS[ab][1];
+      do ab = dif.abs[Math.floor(Math.random() * dif.abs.length)]; while (ab === lastAb); lastAb = ab; abT = ABS[ab][1];
       kf.push([ABS[ab][0], pubN + 40]); ev(CX, CY, -3, ab);
     }
     const dtp = DT * (ab === 0 ? 2 : 1), sg = ab === 4 ? -1 : 1;   // turbo : le temps file x2 pour la barre ET les joueurs
     // --- la barre et ses feintes
     if (curT > 0) curT -= dtp;
     else if (q.length) { const s = q.shift(); tOm = s[0]; tLen = s[2] || 1; curT = s[1]; }
-    else { tOm = dir * base(); tLen = 1; if ((gap -= dtp) <= 0) { const m = Math.floor(Math.random() * MOVES.length); if (m === 1) dir = -dir; q = MOVES[m](base(), dir); gap = .5 + Math.random() * 1.1; } }
-    om += clamp(tOm - om, 9 * dtp); len += clamp(tLen - len, 1.2 * dtp);
+    else { tOm = dir * base(); tLen = 1; if ((gap -= dtp) <= 0) { const m = dif.moves[Math.floor(Math.random() * dif.moves.length)]; if (m === 1) dir = -dir; q = MOVES[m](base(), dir); gap = dif.gapMin + Math.random() * dif.gapVar; } }
+    om += clamp(tOm - om, dif.acc * dtp); len += clamp(tLen - len, 1.2 * dtp);
     const a0 = ang; ang += om * dtp;
+    if (dif.shrink) rad = Math.max(rad0 * dif.minRad, rad0 * (1 - dif.shrink * Math.max(0, t - 6)));   // difficile : le plateau rétrécit
     // --- joueurs
     const al = alive();
     al.forEach(u => {
       const p = P[u], i = I[u];
       if (p.cd > 0) p.cd = Math.max(0, p.cd - DT);
       if (p.j > 0) p.j = Math.max(0, p.j - DT);
-      if (i.want > 0) { i.want -= DT; if (p.cd <= 0) { p.j = JUMP_T; p.cd = JUMP_CD; i.want = 0; ev(p.x, p.y, -1, ids.indexOf(u)); } }
+      if (i.want > 0) { i.want -= DT; if (p.cd <= 0) { p.j = JT; p.cd = JCD; i.want = 0; ev(p.x, p.y, -1, ids.indexOf(u)); } }
       p.vx += i.ax * sg * ACC * dtp; p.vy += i.ay * sg * ACC * dtp;
       const f = Math.exp(-DAMP * dtp); p.vx *= f; p.vy *= f;
       p.x += p.vx * dtp; p.y += p.vy * dtp;
@@ -108,19 +125,19 @@ export async function startBarre(env) {
     }
     // --- touché ? (4 sous-pas : la pointe va vite, elle ne doit pas « traverser »)
     const L = (rad - 4) * len;
-    for (let k = 1; k <= 6; k++) for (const arm of ab === 3 ? [0, Math.PI] : [0]) {   // double barre : 2 bras mortels
+    if (t > dif.delay + .5) for (let k = 1; k <= 6; k++) for (const arm of ab === 3 ? [0, Math.PI] : [0]) {   // double barre : 2 bras mortels
       const aa = a0 + (ang - a0) * k / 6 + arm, ux = Math.cos(aa), uy = Math.sin(aa);
       alive().forEach(u => {
         const p = P[u]; if (p.j > 0) return;                    // en l'air : intouchable
         const s = Math.max(0, Math.min(L, (p.x - CX) * ux + (p.y - CY) * uy));
-        if (Math.hypot(p.x - CX - ux * s, p.y - CY - uy * s) < BR * .85 + HW) die(u);
+        if (Math.hypot(p.x - CX - ux * s, p.y - CY - uy * s) < BR * .85 + hw) die(u);
       });
     }
     // --- règle des 5 secondes
     const n = alive().length;
     if (n === 0) res = null;                                     // plus personne : la barre gagne
     else if (n === 1) {
-      if (solo < 0) { solo = SOLO; kf.push([`⏱️ ${P[alive()[0]].n} doit tenir ${SOLO} s !`, pubN + 40]); }
+      if (solo < 0) { solo = dif.solo; kf.push([`⏱️ ${P[alive()[0]].n} doit tenir ${dif.solo} s !`, pubN + 40]); }
       else if ((solo -= DT) <= 0) res = alive()[0];
     }
   };
@@ -129,8 +146,8 @@ export async function startBarre(env) {
     pubN++;
     evs = evs.filter(o => o.u >= pubN); kf = kf.filter(e => e[1] > pubN);
     const o = {
-      k: "barre", t: +t.toFixed(1), ab, at: ab >= 0 ? +abT.toFixed(1) : 0, a: +ang.toFixed(3), l: +len.toFixed(2), r: rad, s: solo >= 0 ? +Math.max(0, solo).toFixed(1) : -1,
-      p: ids.map(u => { const p = P[u]; return [+p.x.toFixed(1), +p.y.toFixed(1), p.a, Math.round(p.cd / JUMP_CD * 100), p.j > 0 ? 1 : 0]; }),
+      k: "barre", t: +t.toFixed(1), ab, at: ab >= 0 ? +abT.toFixed(1) : 0, a: +ang.toFixed(3), l: +len.toFixed(2), r: +rad.toFixed(1), w: hw, jd: JT, s: solo >= 0 ? +Math.max(0, solo).toFixed(1) : -1,
+      p: ids.map(u => { const p = P[u]; return [+p.x.toFixed(1), +p.y.toFixed(1), p.a, Math.round(p.cd / JCD * 100), p.j > 0 ? 1 : 0]; }),
       ev: evs.map(o2 => o2.e), kf: kf.map(e => e[0]), ...x
     };
     if (x.cd || x.o || pubN % 10 === 1) o.pl = ids.map(u => [u, P[u].n, P[u].c]);
@@ -149,6 +166,7 @@ export async function startBarre(env) {
     }, 6000);
   };
 
+  kf.push([`🎚️ Difficulté : ${dif.n}`, pubN + 70]);
   for (let n = 3; n > 0; n--) { await pub({ cd: n }); await new Promise(r => setTimeout(r, 1000)); if (getCode() !== c) { un(); return; } }
   ids.forEach(u => { I[u].want = 0; });
   let last = performance.now(), acc = 0;
@@ -395,10 +413,10 @@ export function createBarreClient(env) {
     x.globalAlpha = 1;
 
     if (pl) {
-      const shad = [], list = [], top = [], labels = [];
+      const shad = [], list = [], top = [], labels = [], hwv = last.w || HW;
       const addBar = (ba, L, al, tr) => {
         const ux = Math.cos(ba), uy = Math.sin(ba);
-        shad.push(() => { x.globalAlpha = al; x.fillStyle = "rgba(0,0,0,.34)"; poly(quad(CX, CY, CX + ux * L, CY + uy * L, HW), 0, 10, 5); x.fill(); x.globalAlpha = 1; });
+        shad.push(() => { x.globalAlpha = al; x.fillStyle = "rgba(0,0,0,.34)"; poly(quad(CX, CY, CX + ux * L, CY + uy * L, hwv), 0, 10, 5); x.fill(); x.globalAlpha = 1; });
         if (Math.abs(tr) > .015) shad.push(() => {
           const c0 = P(CX, CY);
           [[1, .08], [.6, .1], [.28, .13]].forEach(([m, aa]) => {
@@ -408,13 +426,13 @@ export function createBarreClient(env) {
           });
         });
         for (let k = 0, i = 0; k < L; k += 28, i++) {
-          const k2 = Math.min(L, k + 28), ax = CX + ux * k, ay = CY + uy * k, bx = CX + ux * k2, by = CY + uy * k2, c = quad(ax, ay, bx, by, HW), mid = [ax, ay, bx, by];
+          const k2 = Math.min(L, k + 28), ax = CX + ux * k, ay = CY + uy * k, bx = CX + ux * k2, by = CY + uy * k2, c = quad(ax, ay, bx, by, hwv), mid = [ax, ay, bx, by];
           list.push({ d: Vy((ax + bx) / 2, (ay + by) / 2), al, fn: () => i % 2 ? box(c, "#ffd23f", "#b8921a", mid) : box(c, "#ff3b5c", "#a01535", mid) });
         }
         list.push({ d: Vy(CX + ux * L, CY + uy * L) + 1, al, fn: () => {
           const q = P(CX + ux * L, CY + uy * L, BH + 3), rg = 30 * q[2];
           x.save(); x.globalCompositeOperation = "lighter"; const g = x.createRadialGradient(q[0], q[1], 2, q[0], q[1], rg); g.addColorStop(0, "rgba(255,80,110,.55)"); g.addColorStop(1, "rgba(255,80,110,0)"); x.fillStyle = g; x.fillRect(q[0] - rg, q[1] - rg, rg * 2, rg * 2); x.restore();   // halo du bout
-          cyl(CX + ux * L, CY + uy * L, HW + 3, BH + 3, "#ff3b5c", "#a01535", "#2b0016", 2);
+          cyl(CX + ux * L, CY + uy * L, hwv + 3, BH + 3, "#ff3b5c", "#a01535", "#2b0016", 2);
         } });
       };
       if (A === 2) addBar(Math.PI - barA, barL, .78, -tr);
@@ -428,7 +446,7 @@ export function createBarreClient(env) {
         const wx = qb && qb[2] ? qa[0] + (qb[0] - qa[0]) * f : qa[0], wy = qb && qb[2] ? qa[1] + (qb[1] - qa[1]) * f : qa[1];
         if (qb && Math.hypot(qb[0] - qa[0], qb[1] - qa[1]) > .6) ang[i] = Math.atan2(qb[1] - qa[1], qb[0] - qa[0]);
         if (qa[4] && !jt[i]) jt[i] = now; if (!qa[4] && jt[i]) { jt[i] = 0; rings.push({ x: wx, y: wy, col: pl[i][2], t: 0, s: .7 }); }
-        const u = jt[i] ? Math.min(1, (now - jt[i]) / 500) : 0, h = JH * Math.sin(Math.PI * u), st = jt[i] ? 1 + .13 * Math.abs(Math.cos(Math.PI * u)) : 1;
+        const u = jt[i] ? Math.min(1, (now - jt[i]) / ((last.jd || .5) * 1000)) : 0, h = JH * Math.sin(Math.PI * u), st = jt[i] ? 1 + .13 * Math.abs(Math.cos(Math.PI * u)) : 1;
         const col = pl[i][2], me = i === myIdx, [px, gy, sc] = P(wx, wy), sk = Math.max(.45, 1 - h / 100);
         shad.push(() => {
           x.save(); x.globalCompositeOperation = "lighter"; x.translate(px, gy); x.scale(1, K);                                  // halo coloré au sol

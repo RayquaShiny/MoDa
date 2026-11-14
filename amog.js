@@ -1,14 +1,16 @@
 /* MoDa : « Amog Us » 🚀 : trouve les imposteurs avant qu'ils éliminent tout l'équipage !
    - 4 joueurs minimum (bots 🤖 compris, jusqu'à 10). 4-7 joueurs : 1 imposteur · 8-10 joueurs : 2 imposteurs.
-   - Équipiers : font leurs 3 tâches (reste sur place ~1,6 s) · Imposteurs : éliminent en silence (cooldown 16 s).
+   - Équipiers : font leurs 5 tâches (reste sur place 1,5 à 3,6 s selon la tâche) · Imposteurs : éliminent en silence (cooldown 12 s).
    - Un corps trouvé (SIGNALER) ou le bouton d'urgence de la cafétéria (1 fois par joueur) lance une réunion : on vote
      pour éjecter quelqu'un (ou on passe). Les morts deviennent des fantômes : ils peuvent finir leurs tâches.
    - Victoire équipage : toutes les tâches faites OU tous les imposteurs éjectés. Victoire imposteurs : autant d'imposteurs que d'équipiers.
+   - Vision réelle : on ne voit pas à travers les murs (les fantômes voient tout). Les bots raisonnent : témoins, suspects près du corps,
+     faux alibis des imposteurs. Au résultat d'un vote, on voit qui a voté pour qui.
    - Même fonctionnement que Sumo Arena : l'hôte simule (30 pas/s) et publie games/<code>/state ; chaque joueur écrit
      « ax,ay,compteurUtiliser,compteurTuer,vote » dans games/<code>/inputs/<uid>. Aucun nouveau chemin Firebase. */
 
 const W = 800, H = 560, RAD = 11, BR = 15, SPD = 125, DT = 1 / 30;
-const KCD0 = 10, KCD = 16, KR = 52, TT = 1.6, MT = 40, RT = 5.5, VIS = 250;
+const KCD0 = 8, KCD = 12, KR = 52, TT = 1.6, MT = 40, RT = 5.5, VIS = 250;
 const TB = [400, 125];                                                   // table d'urgence (cafétéria)
 const ROOMS = [
   { n: "Moteurs", x: 30, y: 40, w: 200, h: 160 }, { n: "Cafétéria", x: 280, y: 40, w: 240, h: 160 }, { n: "Électricité", x: 570, y: 40, w: 200, h: 160 },
@@ -19,9 +21,12 @@ const FLOOR = [...ROOMS, { x: 30, y: 250, w: 740, h: 60 }];             // salle
 CXS.forEach(cx => { FLOOR.push({ x: cx - 35, y: 190, w: 70, h: 70 }, { x: cx - 35, y: 300, w: 70, h: 70 }); }); // portes
 const ST = [[80, 100, "Moteurs"], [720, 100, "Électricité"], [80, 470, "Réacteur"], [330, 480, "Stockage"], [720, 470, "Médbay"], [330, 75, "Cafétéria"], [210, 280, "Couloir G"], [590, 280, "Couloir D"]];
 
+const NT = 5;                                                             // tâches par équipier (sur 8 postes)
+const TTS = [2.7, 3.6, 3.0, 2.4, 3.3, 1.8, 1.5, 1.5];                    // durée de chaque tâche (même ordre que ST)
 const at = (px, py) => FLOOR.some(a => px >= a.x && px <= a.x + a.w && py >= a.y && py <= a.y + a.h);
 const ok = (px, py) => at(px - RAD, py - RAD) && at(px + RAD, py - RAD) && at(px - RAD, py + RAD) && at(px + RAD, py + RAD);
 const move = (q, dx, dy) => { if (ok(q.x + dx, q.y + dy)) { q.x += dx; q.y += dy; } else if (ok(q.x + dx, q.y)) q.x += dx; else if (ok(q.x, q.y + dy)) q.y += dy; };
+const los = (ax, ay, bx, by) => { const n = Math.ceil(Math.hypot(bx - ax, by - ay) / 8); for (let i = 1; i < n; i++) { const f = i / n; if (!at(ax + (bx - ax) * f, ay + (by - ay) * f)) return false; } return true; }; // ligne de vue : aucun mur entre les deux
 const zone = (px, py) => { const c = px < 255 ? 0 : px < 545 ? 1 : 2; return py <= 235 ? c : py >= 325 ? 3 + c : 6; };
 const DP = k => [CXS[k % 3], k < 3 ? 215 : 345], AP = k => [CXS[k % 3], 280];
 function route(px, py, tx, ty) {                                          // suite de points à suivre : porte → couloir → porte → cible
@@ -31,7 +36,7 @@ function route(px, py, tx, ty) {                                          // sui
   o.push([tx, ty]); return o;
 }
 const pc = m => { let n = 0; while (m) { n += m & 1; m >>= 1; } return n; };
-export const _t = { ok, move, route, ST, FLOOR, TB };
+export const _t = { ok, move, route, los, ST, FLOOR, TB };
 
 // ---------------------------------------------------------------- Hôte
 export async function startAmog(env) {
@@ -44,9 +49,10 @@ export async function startAmog(env) {
 
   const nImp = ids.length >= 8 ? 2 : 1, imps = new Set(ids.slice().sort(() => Math.random() - .5).slice(0, nImp));
   const P = {}, I = {}, seen = {}, bs = {};
-  let t = 0, ph = "c", mid = 0, mt = 0, rt = 0, mcaller = -1, mrep = 0, mkiller = null, bodies = [], evs = [], kf = [], pubN = 0, evId = 0, over = null, rs = null;
+  const gb = u => bs[u] || (bs[u] = { p: [], w: 0, k: 0, sus: {}, fl: 0 });   // mémoire d'un bot : sus = suspicion par joueur (≥ 10 : a vu le crime)
+  let t = 0, ph = "c", mid = 0, mt = 0, rt = 0, mcaller = -1, mrep = 0, near = new Set(), bodies = [], evs = [], kf = [], pubN = 0, evId = 0, over = null, rs = null;
   ids.forEach((u, i) => {
-    const a = i / ids.length * 6.283, s = [0, 1, 2, 3, 4, 5, 6, 7].sort(() => Math.random() - .5).slice(0, 3);
+    const a = i / ids.length * 6.283, s = [0, 1, 2, 3, 4, 5, 6, 7].sort(() => Math.random() - .5).slice(0, NT);
     P[u] = { n: players[u].name, c: players[u].color, x: TB[0] + Math.cos(a) * 58, y: TB[1] + Math.sin(a) * 58, a: 1, f: 1, imp: imps.has(u) ? 1 : 0, kcd: KCD0, ch: 0, chS: -1, asg: s.reduce((m, k) => m | 1 << k, 0), dn: 0, em: 0, gone: 0 };
     I[u] = { ax: 0, ay: 0, uc: 0, kc: 0, wu: 0, wk: 0, v: null };
   });
@@ -63,34 +69,43 @@ export async function startAmog(env) {
 
   const chk = () => {
     let ai = 0, ac = 0, tot = 0, dn = 0;
-    ids.forEach(u => { const q = P[u]; if (q.a && !q.gone) q.imp ? ai++ : ac++; if (!q.imp && !q.gone) { tot += 3; dn += pc(q.dn); } });
+    ids.forEach(u => { const q = P[u]; if (q.a && !q.gone) q.imp ? ai++ : ac++; if (!q.imp && !q.gone) { tot += NT; dn += pc(q.dn); } });
     return !ai ? "c" : ai >= ac ? "i" : tot && dn >= tot ? "c" : null;
   };
 
   const meet = (u, bd) => {
-    ph = "m"; mid++; mt = MT; mcaller = ids.indexOf(u); mrep = bd ? 1 : 0; mkiller = bd ? bd.k : null; bodies = [];
+    near = new Set(bd ? ids.filter(o => P[o].a && !P[o].gone && Math.hypot(P[o].x - bd.x, P[o].y - bd.y) < 190) : []);   // qui traînait près du corps
+    ph = "m"; mid++; mt = MT; mcaller = ids.indexOf(u); mrep = bd ? 1 : 0; bodies = [];
+    ids.forEach(o => { if (isBot(o) && !P[o].imp) near.forEach(k => { if (k !== o) { const sp = gb(o).sus; sp[k] = (sp[k] || 0) + (k === u ? 1 : 3); } }); });
     ev(P[u].x, P[u].y, 3, mcaller, mrep);
     const al = ids.filter(o => P[o].a && !P[o].gone); let n = 0;
     ids.forEach(o => {
       const q = P[o], i = I[o]; q.chS = -1; i.v = null; i.wu = i.wk = 0; i.ax = i.ay = 0;
       if (q.a) { const a = n++ / al.length * 6.283; q.x = TB[0] + Math.cos(a) * 58; q.y = TB[1] + Math.sin(a) * 58; }
-      if (isBot(o)) { const b = bs[o] || (bs[o] = { p: [], w: 0, k: 0 }); b.vt = 4 + Math.random() * (MT - 16); b.p = []; }
+      if (isBot(o)) { const b = gb(o); b.vt = 4 + Math.random() * (MT - 16); b.p = []; }
     });
   };
   const botVote = u => {
-    const q = P[u], al = ids.filter(o => o !== u && P[o].a && !P[o].gone);
-    if (q.imp) { const cr = al.filter(o => !P[o].imp); return cr.length && Math.random() < .55 ? ids.indexOf(rnd(cr)) : 99; }
-    if (mkiller && P[mkiller].a && Math.random() < .5) return ids.indexOf(mkiller);   // il a « vu » le coupable
-    return al.length && Math.random() < .2 ? ids.indexOf(rnd(al)) : 99;
+    const q = P[u], sp = gb(u).sus, al = ids.filter(o => o !== u && P[o].a && !P[o].gone);
+    if (q.imp) {                                                          // imposteur : accuse un équipier (de préférence près du corps)
+      const cr = al.filter(o => !P[o].imp), nb = cr.filter(o => near.has(o)), pool = nb.length && Math.random() < .6 ? nb : cr;
+      return pool.length && Math.random() < .6 ? ids.indexOf(rnd(pool)) : 99;
+    }
+    let best = null, bv = 0; al.forEach(o => { const v = sp[o] || 0; if (v > bv) { bv = v; best = o; } });
+    if (best && bv >= 10) return Math.random() < .9 ? ids.indexOf(best) : 99;   // il a vu le meurtre
+    if (best && bv >= 2 && Math.random() < .55) return ids.indexOf(best);        // il était près du corps
+    return al.length && Math.random() < .08 ? ids.indexOf(rnd(al)) : 99;
   };
   const endMeet = () => {
     const n = ids.length, cnt = Array(n + 1).fill(0);
+    const vt = ids.map(u => { const q = P[u], v = I[u].v; return !q.a || q.gone || v == null ? -1 : v >= 0 && v < n && P[ids[v]].a ? v : n; });   // qui a voté pour qui (n = passer)
     ids.forEach(u => { const q = P[u], v = I[u].v; if (!q.a || q.gone || v == null) return; if (v >= 0 && v < n && P[ids[v]].a) cnt[v]++; else cnt[n]++; });
     let top = -1, mx = 0, tie = false;
     for (let i = 0; i < n; i++) { if (cnt[i] > mx) { mx = cnt[i]; top = i; tie = false; } else if (cnt[i] === mx && mx > 0) tie = true; }
     const ej = top >= 0 && !tie && mx > cnt[n] ? top : -1;
     let ei = 0; if (ej >= 0) { const q = P[ids[ej]]; q.a = 0; q.chS = -1; ei = q.imp; }
-    rs = { ej, ei, vc: cnt, ir: ids.filter(u => P[u].a && P[u].imp && !P[u].gone).length };
+    rs = { ej, ei, vc: cnt, vt, ir: ids.filter(u => P[u].a && P[u].imp && !P[u].gone).length };
+    ids.forEach(o => { const sp = bs[o] && bs[o].sus; if (sp) for (const k in sp) if (sp[k] < 10) delete sp[k]; });   // les soupçons s'effacent, pas les témoignages
     ph = "r"; rt = RT;
   };
 
@@ -99,7 +114,10 @@ export async function startAmog(env) {
     ids.forEach(o => { const z = P[o]; if (z.a && !z.imp && !z.gone) { const d = Math.hypot(z.x - q.x, z.y - q.y); if (d < bd) { bd = d; v = o; } } });
     if (!v) return false;
     const z = P[v]; z.a = 0; z.chS = -1; bodies.push({ x: z.x, y: z.y, i: ids.indexOf(v), k: u });
-    q.x = z.x; q.y = z.y; q.kcd = KCD; ev(z.x, z.y, 1, ids.indexOf(v)); return true;
+    ids.forEach(o => { const w = P[o]; if (o !== v && o !== u && isBot(o) && w.a && !w.imp && !w.gone && Math.hypot(w.x - z.x, w.y - z.y) < 200 && los(w.x, w.y, z.x, z.y)) { const sp = gb(o).sus; sp[u] = (sp[u] || 0) + 10; } });   // un bot qui voit le meurtre n'oublie pas
+    q.x = z.x; q.y = z.y; q.kcd = KCD;
+    if (isBot(u)) { const b = gb(u), f = ST.slice().sort((p1, p2) => Math.hypot(p2[0] - z.x, p2[1] - z.y) - Math.hypot(p1[0] - z.x, p1[1] - z.y))[0]; b.p = route(z.x, z.y, f[0], f[1]); b.w = 0; b.idle = 0; b.fl = 4; }   // il s'enfuit loin du corps
+    ev(z.x, z.y, 1, ids.indexOf(v)); return true;
   };
   const use = u => {
     const q = P[u];
@@ -117,27 +135,27 @@ export async function startAmog(env) {
     if (b.p.length) { const dx = b.p[0][0] - q.x, dy = b.p[0][1] - q.y, d = Math.hypot(dx, dy) || 1; i.ax = dx / d; i.ay = dy / d; }
   };
   const bot = u => {
-    const q = P[u], i = I[u], b = bs[u] || (bs[u] = { p: [], w: 0, k: 0 });
+    const q = P[u], i = I[u], b = gb(u);
     i.ax = i.ay = 0;
     if (q.gone || (!q.a && q.imp) || q.chS >= 0) return;
+    if (b.fl > 0) { b.fl -= DT; if (b.p.length) { follow(q, i, b); return; } }
     if (b.w > 0) { b.w -= DT; return; }
     const go = (px, py) => { b.p = route(q.x, q.y, px, py); };
     if (q.a && !q.imp) {                                                  // corps en vue : on le signale (7 fois sur 10)
-      let bd = null, bdd = 150; bodies.forEach(o => { const d = Math.hypot(o.x - q.x, o.y - q.y); if (d < bdd) { bdd = d; bd = o; } });
+      let bd = null, bdd = 150; bodies.forEach(o => { const d = Math.hypot(o.x - q.x, o.y - q.y); if (d < bdd && los(q.x, q.y, o.x, o.y)) { bdd = d; bd = o; } });
       if (bd) { if (!b.rep) b.rep = Math.random() < .7 ? 1 : -1; if (b.rep > 0) { if (bdd < 60) { i.wu = .3; return; } if (!b.p.length || b.k++ % 20 === 0) go(bd.x, bd.y); follow(q, i, b); return; } } else b.rep = 0;
     }
-    if (q.imp) {
-      if (q.kcd <= 0) {
-        let v = null, vd = 300; ids.forEach(o => { const z = P[o]; if (z.a && !z.imp && !z.gone) { const d = Math.hypot(z.x - q.x, z.y - q.y); if (d < vd) { vd = d; v = o; } } });
-        if (v) {
-          const z = P[v], wit = ids.some(o => o !== v && P[o].a && !P[o].imp && !P[o].gone && Math.hypot(P[o].x - z.x, P[o].y - z.y) < 150);
-          if (vd < 44 && (!wit || Math.random() < .02)) { i.wk = .3; b.w = .6; return; }
-          if (!b.p.length || b.k++ % 10 === 0) go(z.x, z.y); follow(q, i, b); return;
-        }
+    if (q.imp && q.kcd <= 0) {                                            // chasse : seulement ceux qu'il voit vraiment
+      let v = null, vd = 300; ids.forEach(o => { const z = P[o]; if (z.a && !z.imp && !z.gone) { const d = Math.hypot(z.x - q.x, z.y - q.y); if (d < vd && los(q.x, q.y, z.x, z.y)) { vd = d; v = o; } } });
+      if (v) {
+        const z = P[v], wit = ids.some(o => o !== v && P[o].a && !P[o].imp && !P[o].gone && Math.hypot(P[o].x - z.x, P[o].y - z.y) < 150 && los(P[o].x, P[o].y, z.x, z.y)) || bodies.some(bd => Math.hypot(bd.x - z.x, bd.y - z.y) < 120);
+        if (vd < 44 && (!wit || Math.random() < .02)) { i.wk = .3; b.w = .6; return; }
+        if (!b.p.length || b.k++ % 10 === 0) go(z.x, z.y); follow(q, i, b); return;
       }
-    } else {
+    }
+    {                                                                     // tâches (les imposteurs font semblant, avec la barre de progression)
       let s = -1; for (let k = 0; k < ST.length; k++) if ((q.asg >> k & 1) && !(q.dn >> k & 1)) { s = k; break; }
-      if (s >= 0) { if (Math.hypot(q.x - ST[s][0], q.y - ST[s][1]) < 28) { i.wu = .3; return; } if (!b.p.length || b.k++ % 30 === 0) go(ST[s][0], ST[s][1]); follow(q, i, b); return; }
+      if (s >= 0 && !(q.imp && bodies.some(bd => Math.hypot(bd.x - q.x, bd.y - q.y) < 90))) { if (Math.hypot(q.x - ST[s][0], q.y - ST[s][1]) < 28) { i.wu = .3; return; } if (!b.p.length || b.k++ % 30 === 0) go(ST[s][0], ST[s][1]); follow(q, i, b); return; }
     }
     if (!b.p.length) { if (b.idle) { b.idle = 0; b.w = 1 + Math.random() * 3; return; } const s = rnd(ST); go(s[0], s[1]); b.idle = 1; }
     follow(q, i, b);
@@ -158,7 +176,7 @@ export async function startAmog(env) {
         if (q.chS >= 0) {                                                 // tâche en cours : on reste sur place
           const s = ST[q.chS];
           if ((mg > .5 && q.ch > .35) || Math.hypot(q.x - s[0], q.y - s[1]) > 48) q.chS = -1;
-          else if ((q.ch += DT) >= TT) { q.dn |= 1 << q.chS; q.chS = -1; if (!q.imp) ev(q.x, q.y, 2, ids.indexOf(u)); }
+          else if ((q.ch += DT) >= (TTS[q.chS] || TT)) { q.dn |= 1 << q.chS; q.chS = -1; if (!q.imp) ev(q.x, q.y, 2, ids.indexOf(u)); }
         }
         if (q.chS < 0 && mg > .02) { move(q, i.ax * SPD * DT, i.ay * SPD * DT); if (Math.abs(i.ax) > .1) q.f = i.ax > 0 ? 1 : -1; }
       });
@@ -175,10 +193,10 @@ export async function startAmog(env) {
 
   const pub = (x = {}) => {
     pubN++; evs = evs.filter(o => o.u >= pubN); kf = kf.filter(e => e[1] > pubN);
-    let tot = 0, dn = 0; ids.forEach(u => { const q = P[u]; if (!q.imp && !q.gone) { tot += 3; dn += pc(q.dn); } });
+    let tot = 0, dn = 0; ids.forEach(u => { const q = P[u]; if (!q.imp && !q.gone) { tot += NT; dn += pc(q.dn); } });
     const o = {
       k: "amog", t: +t.toFixed(1), ph,
-      p: ids.map(u => { const q = P[u]; return [+q.x.toFixed(1), +q.y.toFixed(1), q.a, q.f, Math.ceil(q.kcd), Math.round(q.chS >= 0 ? q.ch / TT * 100 : 0)]; }),
+      p: ids.map(u => { const q = P[u]; return [+q.x.toFixed(1), +q.y.toFixed(1), q.a, q.f, Math.ceil(q.kcd), Math.round(q.chS >= 0 ? q.ch / (TTS[q.chS] || TT) * 100 : 0)]; }),
       bd: bodies.map(b => [Math.round(b.x), Math.round(b.y), b.i]), ts: ids.map(u => [P[u].asg, P[u].dn]), tp: [dn, tot],
       ro: ids.map(u => P[u].imp ? 1 : 0).join(""), ev: evs.map(o2 => o2.e), kf: kf.map(e => e[0]), ...x
     };
@@ -373,12 +391,14 @@ export function createAmogClient(env) {
       txt(pl[i][1] + (i === myIdx ? " (toi)" : "") + (q[2] ? "" : " ✖"), rx + 54, ry + 24, "700 16px 'DM Sans',sans-serif", ls.ro[i] === "1" && isImp() ? "#ff6b81" : "#fff", "left");
       if (!res && m.v[i]) txt("✔ a voté", rx + 322, ry + 24, "600 13px 'DM Sans',sans-serif", "#3ee6c4", "right");
       if (res) txt(`🗳 ${rsl.vc[i]}`, rx + 322, ry + 24, "800 18px 'DM Sans',sans-serif", rsl.ej === i ? "#ff3b5c" : "#ffe9a8", "right");
+      if (res && rsl.vt) { let k = 0; rsl.vt.forEach((v, vi) => { if (v === i && pl[vi]) { x.fillStyle = pl[vi][2]; x.strokeStyle = "rgba(0,0,0,.6)"; x.lineWidth = 1.5; x.beginPath(); x.arc(rx + 262 - k++ * 14, ry + 24, 6, 0, 7); x.fill(); x.stroke(); } }); }
       x.globalAlpha = 1;
       if (!res && mine && q[2]) rects.push({ x: rx, y: ry, w: 330, h: 48, t: i });
     });
     const sk = vote === `${mid}_99`;
     x.fillStyle = sk ? "#4a3f95" : "#241f52"; rr(x, 270, 420, 260, 46, 14); x.fill(); x.lineWidth = sk ? 3 : 1.5; x.strokeStyle = sk ? "#ffd23f" : "#4b4590"; x.stroke();
     txt(res ? `⏭ Passer : ${rsl.vc[rsl.vc.length - 1]}` : "⏭ Passer (ne pas voter)", CX, 443, "700 16px 'DM Sans',sans-serif", "#fff");
+    if (res && rsl.vt) { let k = 0; rsl.vt.forEach((v, vi) => { if (v === rsl.vc.length - 1 && pl[vi]) { x.fillStyle = pl[vi][2]; x.strokeStyle = "rgba(0,0,0,.6)"; x.lineWidth = 1.5; x.beginPath(); x.arc(518 - k++ * 12, 443, 5, 0, 7); x.fill(); x.stroke(); } }); }
     if (!res && mine) rects.push({ x: 270, y: 420, w: 260, h: 46, t: 99 });
   }
   const CX = 400;
@@ -397,15 +417,10 @@ export function createAmogClient(env) {
     if (ls.mt) mid = ls.mt.id;
     const me = sa.p[myIdx], ghost = !!me && !me[2], imp = isImp();
     const pos = sa.p.map((qa, i) => { const qb = sb.p[i]; return qb && qa[2] && qb[2] ? [qa[0] + (qb[0] - qa[0]) * f, qa[1] + (qb[1] - qa[1]) * f] : [qa[0], qa[1]]; });
-    const mp = pos[myIdx] || [CX, 285], vis = (px, py) => ghost || Math.hypot(px - mp[0], py - mp[1]) < VIS;
+    const mp = pos[myIdx] || [CX, 285], vis = (px, py) => ghost || (Math.hypot(px - mp[0], py - mp[1]) < VIS && los(mp[0], mp[1], px, py));   // pas de vision à travers les murs
 
     // tâches à faire (les miennes) : « ! » jaune qui rebondit
     const tk = ls.ts[myIdx] || [0, 0];
-    ST.forEach((s, k) => {
-      if (!(tk[0] >> k & 1) || (tk[1] >> k & 1)) return;
-      const by = Math.sin(now / 250 + k) * 3; x.fillStyle = imp ? "#ffb3c0" : "#ffd23f"; x.shadowColor = x.fillStyle; x.shadowBlur = 10;
-      txt("!", s[0], s[1] - 24 + by, "800 22px 'Bricolage Grotesque',sans-serif", x.fillStyle); x.shadowBlur = 0;
-    });
     (ls.bd || []).forEach(bd => { if (vis(bd[0], bd[1]) && pl[bd[2]]) corpse(bd[0], bd[1], pl[bd[2]][2]); });
 
     // joueurs : les vivants ne voient que ce qui est proche ; les fantômes voient tout (et les autres fantômes)
@@ -428,6 +443,19 @@ export function createAmogClient(env) {
     parts = parts.filter(q => (q.l -= dt * 2.2) > 0);
     parts.forEach(q => { q.x += q.vx * dt; q.y += q.vy * dt; x.globalAlpha = Math.max(0, q.l); x.fillStyle = q.c; x.beginPath(); x.arc(q.x, q.y, q.s * q.l, 0, 7); x.fill(); });
     x.globalAlpha = 1;
+    if (ls.ph === "p") {                                                  // « ! » des tâches (visibles même dans le noir) + flèche vers la plus proche
+      let nt = null, nd = 1e9;
+      ST.forEach((s, k) => {
+        if (!(tk[0] >> k & 1) || (tk[1] >> k & 1)) return;
+        const by = Math.sin(now / 250 + k) * 3, d = Math.hypot(s[0] - mp[0], s[1] - mp[1]); if (d < nd) { nd = d; nt = s; }
+        x.shadowColor = x.fillStyle = imp ? "#ffb3c0" : "#ffd23f"; x.shadowBlur = 10;
+        txt("!", s[0], s[1] - 24 + by, "800 22px 'Bricolage Grotesque',sans-serif", x.fillStyle); x.shadowBlur = 0;
+      });
+      if (nt && nd > 80) {
+        const an = Math.atan2(nt[1] - mp[1], nt[0] - mp[0]); x.save(); x.translate(mp[0] + Math.cos(an) * 44, mp[1] + Math.sin(an) * 44); x.rotate(an);
+        x.globalAlpha = .85; x.fillStyle = imp ? "#ff8fa3" : "#ffd23f"; x.beginPath(); x.moveTo(9, 0); x.lineTo(-5, -6); x.lineTo(-5, 6); x.closePath(); x.fill(); x.restore(); x.globalAlpha = 1;
+      }
+    }
 
     // HUD : barre de tâches, liste, rôle, boutons
     const [dn, tot] = ls.tp;

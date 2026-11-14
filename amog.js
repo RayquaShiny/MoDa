@@ -35,6 +35,9 @@ function route(px, py, tx, ty) {                                          // sui
   if (a < 6) o.push(DP(a), AP(a)); if (b < 6) o.push(AP(b), DP(b));
   o.push([tx, ty]); return o;
 }
+const VENTS = [[50, 180], [300, 180], [750, 180], [50, 375], [300, 375], [750, 375]], VN = [1, 2, 0, 4, 5, 3];   // conduits : deux circuits de 3 (haut / bas)
+const LP = [610, 170], RP = [[200, 90], [200, 490]], CAMP = [490, 170];                                       // panneau électrique, 2 panneaux du réacteur, caméras
+const CAMZ = FLOOR.slice(6), inCam = (px, py) => CAMZ.some(a => px >= a.x && px <= a.x + a.w && py >= a.y && py <= a.y + a.h);   // les caméras couvrent le couloir et les portes
 const pc = m => { let n = 0; while (m) { n += m & 1; m >>= 1; } return n; };
 export const _t = { ok, move, route, los, ST, FLOOR, TB };
 
@@ -42,19 +45,20 @@ export const _t = { ok, move, route, los, ST, FLOOR, TB };
 export async function startAmog(env) {
   const { R: RF, update, remove, set, onValue, increment, getCode, getLobby, getMe, toast } = env;
   const c = getCode(), lob = getLobby() || {}, players = env.bots ? env.bots(lob) : lob.players || {}, ids = Object.keys(players).slice(0, 10);
+  const op = lob.opts || {}, SPD = [100, 125, 160][op.as === 0 || op.as === 2 ? op.as : 1], MT = [20, 40, 60][op.av === 0 || op.av === 2 ? op.av : 1];   // réglages de l'hôte : vitesse, durée du vote
   const isBot = u => u.indexOf("bot_") === 0, rnd = a => a[Math.floor(Math.random() * a.length)];
   if (ids.length < 4) return toast("Il faut au moins 4 joueurs pour lancer Amog Us (ajoute des bots 🤖 dans le lobby)");
   await remove(RF(`games/${c}`));
   await update(RF(`lobbies/${c}`), { status: "playing" });
 
-  const nImp = ids.length >= 8 ? 2 : 1, imps = new Set(ids.slice().sort(() => Math.random() - .5).slice(0, nImp));
+  const nImp = op.ai >= 1 ? Math.max(1, Math.min(op.ai | 0, Math.floor((ids.length - 1) / 2))) : ids.length >= 8 ? 2 : 1, imps = new Set(ids.slice().sort(() => Math.random() - .5).slice(0, nImp));
   const P = {}, I = {}, seen = {}, bs = {};
   const gb = u => bs[u] || (bs[u] = { p: [], w: 0, k: 0, sus: {}, fl: 0 });   // mémoire d'un bot : sus = suspicion par joueur (≥ 10 : a vu le crime)
-  let t = 0, ph = "c", mid = 0, mt = 0, rt = 0, mcaller = -1, mrep = 0, near = new Set(), bodies = [], evs = [], kf = [], pubN = 0, evId = 0, over = null, rs = null;
+  let sab = null, sbcd = 20, t = 0, ph = "c", mid = 0, mt = 0, rt = 0, mcaller = -1, mrep = 0, near = new Set(), bodies = [], evs = [], kf = [], pubN = 0, evId = 0, over = null, rs = null;
   ids.forEach((u, i) => {
     const a = i / ids.length * 6.283, s = [0, 1, 2, 3, 4, 5, 6, 7].sort(() => Math.random() - .5).slice(0, NT);
-    P[u] = { n: players[u].name, c: players[u].color, x: TB[0] + Math.cos(a) * 58, y: TB[1] + Math.sin(a) * 58, a: 1, f: 1, imp: imps.has(u) ? 1 : 0, kcd: KCD0, ch: 0, chS: -1, asg: s.reduce((m, k) => m | 1 << k, 0), dn: 0, em: 0, gone: 0 };
-    I[u] = { ax: 0, ay: 0, uc: 0, kc: 0, wu: 0, wk: 0, v: null };
+    P[u] = { n: players[u].name, c: players[u].color, x: TB[0] + Math.cos(a) * 58, y: TB[1] + Math.sin(a) * 58, a: 1, f: 1, imp: imps.has(u) ? 1 : 0, kcd: KCD0, ch: 0, chS: -1, asg: s.reduce((m, k) => m | 1 << k, 0), dn: 0, em: 0, gone: 0, iv: -1, cm: 0 };
+    I[u] = { ax: 0, ay: 0, uc: 0, kc: 0, wu: 0, wk: 0, v: null, vc: 0, sc: 0, wv: 0, ws: 0, sty: 0 };
   });
   const ev = (px, py, ty, ...r) => evs.push({ e: [Math.round(px), Math.round(py), ty, ++evId, ...r], u: pubN + 4 });
 
@@ -64,6 +68,11 @@ export async function startAmog(env) {
     if (ax === ax && ay === ay) { const m = Math.hypot(ax, ay), k = m > 1 ? 1 / m : 1; q.ax = ax * k; q.ay = ay * k; }
     if (uc === uc && uc !== q.uc) { q.uc = uc; q.wu = .3; }               // action demandée un peu trop tôt : gardée 0,3 s
     if (kc === kc && kc !== q.kc) { q.kc = kc; q.wk = .3; }
+    if (a[5] !== undefined) {                                             // conduit (V) et sabotage (1 / 2)
+      const vc = +a[5], sc = +a[6], sty = +a[7];
+      if (vc === vc && vc !== q.vc) { q.vc = vc; q.wv = .3; }
+      if (sc === sc && sc !== q.sc) { q.sc = sc; q.sty = sty === 1 ? 1 : 0; q.ws = .3; }
+    }
     if (a[4]) { const [m, tg] = a[4].split("_"); if (+m === mid && ph === "m") q.v = +tg; }
   }));
 
@@ -75,6 +84,7 @@ export async function startAmog(env) {
 
   const meet = (u, bd) => {
     near = new Set(bd ? ids.filter(o => P[o].a && !P[o].gone && Math.hypot(P[o].x - bd.x, P[o].y - bd.y) < 190) : []);   // qui traînait près du corps
+    sab = null; ids.forEach(o => { P[o].iv = -1; P[o].cm = 0; });          // une réunion annule le sabotage et ferme les conduits / caméras
     ph = "m"; mid++; mt = MT; mcaller = ids.indexOf(u); mrep = bd ? 1 : 0; bodies = [];
     ids.forEach(o => { if (isBot(o) && !P[o].imp) near.forEach(k => { if (k !== o) { const sp = gb(o).sus; sp[k] = (sp[k] || 0) + (k === u ? 1 : 3); } }); });
     ev(P[u].x, P[u].y, 3, mcaller, mrep);
@@ -120,13 +130,30 @@ export async function startAmog(env) {
     ev(z.x, z.y, 1, ids.indexOf(v)); return true;
   };
   const use = u => {
-    const q = P[u];
+    const q = P[u]; if (q.iv >= 0) return false;
     if (q.a) {
       const bd = bodies.find(b => Math.hypot(b.x - q.x, b.y - q.y) < 72); if (bd) { meet(u, bd); return true; }
       if (q.em < 1 && Math.hypot(q.x - TB[0], q.y - TB[1]) < 50) { q.em++; meet(u, null); return true; }
+      if (!q.imp && sab) {                                                // réparer un sabotage
+        if (sab.t === "l" && Math.hypot(q.x - LP[0], q.y - LP[1]) < 44) { sab = null; ev(LP[0], LP[1], 2, ids.indexOf(u)); return true; }
+        if (sab.t === "r") for (let k = 0; k < 2; k++) if (!(sab.f >> k & 1) && Math.hypot(q.x - RP[k][0], q.y - RP[k][1]) < 44) { sab.f |= 1 << k; ev(RP[k][0], RP[k][1], 2, ids.indexOf(u)); if (sab.f === 3) sab = null; return true; }
+      }
+      if (Math.hypot(q.x - CAMP[0], q.y - CAMP[1]) < 44) { q.cm = q.cm ? 0 : 1; q.chS = -1; return true; }   // caméras : on les regarde tant qu'on ne bouge pas
     }
     if (q.chS < 0) for (let s = 0; s < ST.length; s++) if ((q.asg >> s & 1) && !(q.dn >> s & 1) && Math.hypot(q.x - ST[s][0], q.y - ST[s][1]) < 42) { q.chS = s; q.ch = 0; return true; }
     return false;
+  };
+
+  const witness = (u, q) => ids.forEach(o => { const w = P[o]; if (o !== u && isBot(o) && w.a && !w.imp && !w.gone && Math.hypot(w.x - q.x, w.y - q.y) < 220 && los(w.x, w.y, q.x, q.y)) { const sp = gb(o).sus; sp[u] = (sp[u] || 0) + 10; } });   // un bot qui voit quelqu'un entrer dans un conduit s'en souvient
+  const vent = u => {                                                     // imposteur : entre dans un conduit proche, ou saute au conduit suivant
+    const q = P[u]; if (!q.imp || !q.a || q.gone) return false;
+    if (q.iv >= 0) { q.iv = VN[q.iv]; q.x = VENTS[q.iv][0]; q.y = VENTS[q.iv][1]; return true; }
+    for (let k = 0; k < VENTS.length; k++) if (Math.hypot(q.x - VENTS[k][0], q.y - VENTS[k][1]) < 36) { q.iv = k; q.chS = -1; q.cm = 0; ev(q.x, q.y, 4, ids.indexOf(u)); witness(u, q); return true; }
+    return false;
+  };
+  const sabotage = (u, ty) => {                                           // 0 = lumières (25 s), 1 = réacteur (35 s, 2 panneaux à réparer)
+    const q = P[u]; if (!q.imp || !q.a || q.gone || sab || sbcd > 0 || ph !== "p") return false;
+    sab = ty === 1 ? { t: "r", r: 35, f: 0 } : { t: "l", r: 25, f: 0 }; sbcd = 30; ev(0, 0, 5, ty); return true;
   };
 
   // bots : les équipiers font leurs tâches et signalent les corps ; les imposteurs chassent un équipier isolé
@@ -138,6 +165,7 @@ export async function startAmog(env) {
     const q = P[u], i = I[u], b = gb(u);
     i.ax = i.ay = 0;
     if (q.gone || (!q.a && q.imp) || q.chS >= 0) return;
+    if (q.imp && q.iv >= 0) { b.vw = (b.vw || 0) - DT; if (b.vw <= 0) { if (b.vh > 0) { b.vh--; i.wv = .3; b.vw = .7; } else i.ax = 1; } return; }   // dans un conduit : saute puis ressort
     if (b.fl > 0) { b.fl -= DT; if (b.p.length) { follow(q, i, b); return; } }
     if (b.w > 0) { b.w -= DT; return; }
     const go = (px, py) => { b.p = route(q.x, q.y, px, py); };
@@ -145,6 +173,12 @@ export async function startAmog(env) {
       let bd = null, bdd = 150; bodies.forEach(o => { const d = Math.hypot(o.x - q.x, o.y - q.y); if (d < bdd && los(q.x, q.y, o.x, o.y)) { bdd = d; bd = o; } });
       if (bd) { if (!b.rep) b.rep = Math.random() < .7 ? 1 : -1; if (b.rep > 0) { if (bdd < 60) { i.wu = .3; return; } if (!b.p.length || b.k++ % 20 === 0) go(bd.x, bd.y); follow(q, i, b); return; } } else b.rep = 0;
     }
+    if (q.a && !q.imp && sab) {                                           // sabotage : les équipiers (bots) courent réparer
+      const k0 = ids.indexOf(u);
+      if (sab.t === "r") { let k = k0 % 2; if (sab.f >> k & 1) k ^= 1; if (!(sab.f >> k & 1)) { const p = RP[k]; if (Math.hypot(q.x - p[0], q.y - p[1]) < 28) { i.wu = .3; return; } if (!b.p.length || b.k++ % 20 === 0) go(p[0], p[1]); follow(q, i, b); return; } }
+      else if (k0 % 3 === 0) { if (Math.hypot(q.x - LP[0], q.y - LP[1]) < 28) { i.wu = .3; return; } if (!b.p.length || b.k++ % 20 === 0) go(LP[0], LP[1]); follow(q, i, b); return; }
+    }
+    if (q.imp && q.a && !sab && sbcd <= 0 && Math.random() < .004) { i.ws = .3; i.sty = Math.random() < .35 ? 1 : 0; }   // l'imposteur (bot) sabote de temps en temps
     if (q.imp && q.kcd <= 0) {                                            // chasse : seulement ceux qu'il voit vraiment
       let v = null, vd = 300; ids.forEach(o => { const z = P[o]; if (z.a && !z.imp && !z.gone) { const d = Math.hypot(z.x - q.x, z.y - q.y); if (d < vd && los(q.x, q.y, z.x, z.y)) { vd = d; v = o; } } });
       if (v) {
@@ -157,13 +191,22 @@ export async function startAmog(env) {
       let s = -1; for (let k = 0; k < ST.length; k++) if ((q.asg >> k & 1) && !(q.dn >> k & 1)) { s = k; break; }
       if (s >= 0 && !(q.imp && bodies.some(bd => Math.hypot(bd.x - q.x, bd.y - q.y) < 90))) { if (Math.hypot(q.x - ST[s][0], q.y - ST[s][1]) < 28) { i.wu = .3; return; } if (!b.p.length || b.k++ % 30 === 0) go(ST[s][0], ST[s][1]); follow(q, i, b); return; }
     }
-    if (!b.p.length) { if (b.idle) { b.idle = 0; b.w = 1 + Math.random() * 3; return; } const s = rnd(ST); go(s[0], s[1]); b.idle = 1; }
+    if (!b.p.length) {
+      if (b.idle) {
+        b.idle = 0;
+        if (q.imp && q.a && VENTS.some(v => Math.hypot(v[0] - q.x, v[1] - q.y) < 32) && !ids.some(o => o !== u && P[o].a && !P[o].imp && !P[o].gone && Math.hypot(P[o].x - q.x, P[o].y - q.y) < 230 && los(P[o].x, P[o].y, q.x, q.y))) { i.wv = .3; b.vh = 1 + Math.floor(Math.random() * 2); b.vw = .7; return; }   // personne ne regarde : il se glisse dans le conduit
+        b.w = 1 + Math.random() * 3; return;
+      }
+      const s = q.imp && Math.random() < .3 ? rnd(VENTS) : rnd(ST); go(s[0], s[1]); b.idle = 1;
+    }
     follow(q, i, b);
   };
 
   const step = () => {
     if (ph === "p") {
       t += DT;
+      if (sbcd > 0) sbcd = Math.max(0, sbcd - DT);
+      if (sab && (sab.r -= DT) <= 0) { if (sab.t === "r") over = "i"; sab = null; }   // réacteur non réparé : les imposteurs gagnent
       ids.forEach(u => { if (isBot(u)) bot(u); });
       ids.forEach(u => {
         if (ph !== "p") return;
@@ -171,8 +214,12 @@ export async function startAmog(env) {
         if (q.kcd > 0) q.kcd = Math.max(0, q.kcd - DT);
         if (i.wu > 0) { i.wu -= DT; if (use(u)) i.wu = 0; }
         if (ph !== "p") return;
-        if (i.wk > 0) { i.wk -= DT; if (q.imp && q.a && q.kcd <= 0 && kill(u)) i.wk = 0; }
+        if (i.wk > 0) { i.wk -= DT; if (q.imp && q.a && q.kcd <= 0 && q.iv < 0 && kill(u)) i.wk = 0; }
+        if (i.wv > 0) { i.wv -= DT; if (vent(u)) i.wv = 0; }
+        if (i.ws > 0) { i.ws -= DT; if (sabotage(u, i.sty)) i.ws = 0; }
         const mg = Math.hypot(i.ax, i.ay);
+        if (q.cm && (mg > .3 || Math.hypot(q.x - CAMP[0], q.y - CAMP[1]) > 60)) q.cm = 0;
+        if (q.iv >= 0) { if (mg > .5) { q.iv = -1; ev(q.x, q.y, 4, ids.indexOf(u)); witness(u, q); } else return; }   // bouger fait sortir du conduit
         if (q.chS >= 0) {                                                 // tâche en cours : on reste sur place
           const s = ST[q.chS];
           if ((mg > .5 && q.ch > .35) || Math.hypot(q.x - s[0], q.y - s[1]) > 48) q.chS = -1;
@@ -180,7 +227,7 @@ export async function startAmog(env) {
         }
         if (q.chS < 0 && mg > .02) { move(q, i.ax * SPD * DT, i.ay * SPD * DT); if (Math.abs(i.ax) > .1) q.f = i.ax > 0 ? 1 : -1; }
       });
-      over = chk();
+      over = over || chk();
     } else if (ph === "m") {
       mt -= DT;
       ids.forEach(u => { const b = bs[u]; if (isBot(u) && P[u].a && b && b.vt != null && MT - mt >= b.vt) { I[u].v = botVote(u); b.vt = null; } });
@@ -196,9 +243,9 @@ export async function startAmog(env) {
     let tot = 0, dn = 0; ids.forEach(u => { const q = P[u]; if (!q.imp && !q.gone) { tot += NT; dn += pc(q.dn); } });
     const o = {
       k: "amog", t: +t.toFixed(1), ph,
-      p: ids.map(u => { const q = P[u]; return [+q.x.toFixed(1), +q.y.toFixed(1), q.a, q.f, Math.ceil(q.kcd), Math.round(q.chS >= 0 ? q.ch / (TTS[q.chS] || TT) * 100 : 0)]; }),
+      p: ids.map(u => { const q = P[u]; return [+q.x.toFixed(1), +q.y.toFixed(1), q.a, q.f, Math.ceil(q.kcd), Math.round(q.chS >= 0 ? q.ch / (TTS[q.chS] || TT) * 100 : 0), q.iv >= 0 ? 1 : 0]; }),
       bd: bodies.map(b => [Math.round(b.x), Math.round(b.y), b.i]), ts: ids.map(u => [P[u].asg, P[u].dn]), tp: [dn, tot],
-      ro: ids.map(u => P[u].imp ? 1 : 0).join(""), ev: evs.map(o2 => o2.e), kf: kf.map(e => e[0]), ...x
+      ro: ids.map(u => P[u].imp ? 1 : 0).join(""), ev: evs.map(o2 => o2.e), kf: kf.map(e => e[0]), cm: ids.map((u, i) => P[u].cm ? i : -1).filter(i => i >= 0), sb: sab ? [sab.t === "r" ? 1 : 0, Math.ceil(sab.r), sab.f] : 0, sc: Math.ceil(sbcd), ...x
     };
     if (ph === "m") o.mt = { r: Math.ceil(mt), id: mid, c: mcaller, b: mrep, v: ids.map(u => I[u].v != null ? 1 : 0) };
     if (ph === "r") o.rs = rs;
@@ -240,7 +287,8 @@ const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) || 0);
 const mixC = {};
 const mix = (h, k) => { const key = h + k; if (mixC[key]) return mixC[key]; const m = hex(h).map(v => Math.round(k > 0 ? v * (1 - k) : v + (255 - v) * -k)); return mixC[key] = `rgb(${m[0]},${m[1]},${m[2]})`; };
 const rr = (g, px, py, w, h, r) => { g.beginPath(); g.moveTo(px + r, py); g.arcTo(px + w, py, px + w, py + h, r); g.arcTo(px + w, py + h, px, py + h, r); g.arcTo(px, py + h, px, py, r); g.arcTo(px, py, px + w, py, r); g.closePath(); };
-const USEB = { x: 730, y: 488, r: 48 }, KILLB = { x: 622, y: 500, r: 38 };
+const USEB = { x: 730, y: 488, r: 48 }, KILLB = { x: 622, y: 500, r: 38 }, VENTB = { x: 622, y: 436, r: 26 }, S1B = { x: 548, y: 508, r: 26 }, S2B = { x: 548, y: 446, r: 26 };
+let mpL = [400, 285], ghL = false;   // ma position et mon état au dernier dessin (pour les effets visibles seulement de près)
 
 export function createAmogClient(env) {
   const { R: RF, set, onValue, $, beep, getMe, getCode } = env;
@@ -248,12 +296,13 @@ export function createAmogClient(env) {
   let active = false, raf = 0, snaps = [], pl = null, lastEv = 0, parts = [], useSeq = 0, killSeq = 0, vote = "", sentStr = "", sentAt = 0;
   let stick = null, tPrev = 0, myIdx = -1, ovT = "", bg = null, mid = 0, rects = [], ls = null;
   const keys = new Set();
+  let ventSeq = 0, sabSeq = 0, sabTy = 0;
 
   const sendInput = (now, force) => {
     let ix = 0, iy = 0;
     if (stick) { const m = Math.hypot(stick.dx, stick.dy); if (m > .18) { const k = Math.min(1, (m - .18) / .7) / m; ix = stick.dx * k; iy = stick.dy * k; } }
     else { ix = (keys.has("R") ? 1 : 0) - (keys.has("L") ? 1 : 0); iy = (keys.has("D") ? 1 : 0) - (keys.has("U") ? 1 : 0); if (ix && iy) { ix *= .7071; iy *= .7071; } }
-    const str = `${ix.toFixed(2)},${iy.toFixed(2)},${useSeq},${killSeq},${vote}`;
+    const str = `${ix.toFixed(2)},${iy.toFixed(2)},${useSeq},${killSeq},${vote},${ventSeq},${sabSeq},${sabTy}`;
     if (str === sentStr || (!force && now - sentAt < 55)) return;
     sentStr = str; sentAt = now;
     set(RF(`games/${getCode()}/inputs/${getMe().uid}`), str).catch(() => { });
@@ -261,12 +310,16 @@ export function createAmogClient(env) {
   const isImp = () => !!ls && myIdx >= 0 && ls.ro[myIdx] === "1";
   const doUse = () => { if (!active || !ls || ls.ph !== "p") return; useSeq++; sendInput(performance.now(), true); };
   const doKill = () => { if (!active || !ls || ls.ph !== "p" || !isImp()) return; killSeq++; sendInput(performance.now(), true); };
+  const doVent = () => { if (!active || !ls || ls.ph !== "p" || !isImp()) return; ventSeq++; sendInput(performance.now(), true); };
+  const doSab = t => { if (!active || !ls || ls.ph !== "p" || !isImp() || ls.sb || ls.sc > 0) return; sabSeq++; sabTy = t; sendInput(performance.now(), true); };
   const hit = (p, b) => Math.hypot(p.x - b.x, p.y - b.y) < b.r + 8;
 
   addEventListener("keydown", e => {
     if (!active || /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
     if (e.key === " " || e.key === "e" || e.key === "E") { e.preventDefault(); if (!e.repeat) doUse(); return; }
     if (e.key === "k" || e.key === "K" || e.key === "Shift") { e.preventDefault(); if (!e.repeat) doKill(); return; }
+    if (e.key === "v" || e.key === "V") { e.preventDefault(); if (!e.repeat) doVent(); return; }
+    if (e.key === "1" || e.key === "2") { if (!e.repeat) doSab(+e.key - 1); return; }
     const k = KEYS[e.key.length > 1 ? e.key : e.key.toLowerCase()]; if (k) { e.preventDefault(); keys.add(k); }
   });
   addEventListener("keyup", e => { const k = KEYS[e.key.length > 1 ? e.key : e.key.toLowerCase()]; if (k) keys.delete(k); });
@@ -283,6 +336,9 @@ export function createAmogClient(env) {
     if (e.button === 2) return doUse();
     if (hit(p, USEB)) return doUse();
     if (isImp() && hit(p, KILLB)) return doKill();
+    if (isImp() && hit(p, VENTB)) return doVent();
+    if (isImp() && hit(p, S1B)) return doSab(0);
+    if (isImp() && hit(p, S2B)) return doSab(1);
     if (stick) return;
     try { cv.setPointerCapture(e.pointerId); } catch { }
     stick = { id: e.pointerId, ox: p.x, oy: p.y, dx: 0, dy: 0 };
@@ -305,6 +361,8 @@ export function createAmogClient(env) {
     if (ty === 1) { spark(ex, ey, 14, "#ff3b5c", 160); beep(90, .3, "sawtooth", .06, 40); if (e[4] === myIdx) vib(200); }
     else if (ty === 2) { spark(ex, ey, 6, "#3ee6c4", 90); if (e[4] === myIdx) beep(660, .12, "sine", .05, 990); }
     else if (ty === 3) { beep(300, .6, "sawtooth", .06, 700); vib(150); }
+    else if (ty === 4) { if (ghL || (Math.hypot(ex - mpL[0], ey - mpL[1]) < VIS && los(mpL[0], mpL[1], ex, ey))) { spark(ex, ey, 10, "#8a85b8", 70); beep(140, .18, "triangle", .05, 70); } }   // quelqu'un entre ou sort d'un conduit
+    else if (ty === 5) { beep(220, .7, "square", .07, 120); vib(120); }                                    // sabotage !
   };
 
   function sample(rt) {
@@ -332,6 +390,11 @@ export function createAmogClient(env) {
     g.fillStyle = "#3b3570"; g.beginPath(); g.arc(TB[0], TB[1], 26, 0, 7); g.fill(); g.strokeStyle = "#9b8cff"; g.lineWidth = 3; g.stroke();
     g.fillStyle = "#ff3b5c"; g.beginPath(); g.arc(TB[0], TB[1], 9, 0, 7); g.fill();
     ST.forEach(s => { g.fillStyle = "#2d2a5c"; rr(g, s[0] - 13, s[1] - 13, 26, 26, 6); g.fill(); g.strokeStyle = "#6a62c9"; g.lineWidth = 2; g.stroke(); });
+    VENTS.forEach(v => { g.fillStyle = "#0b0a1d"; rr(g, v[0] - 16, v[1] - 10, 32, 20, 4); g.fill(); g.strokeStyle = "#6a62c9"; g.lineWidth = 2; g.stroke(); g.strokeStyle = "#3b3570"; for (let k = -9; k <= 9; k += 6) { g.beginPath(); g.moveTo(v[0] + k, v[1] - 7); g.lineTo(v[0] + k, v[1] + 7); g.stroke(); } });
+    g.textAlign = "center"; g.lineWidth = 2;
+    g.fillStyle = "#16143a"; rr(g, CAMP[0] - 18, CAMP[1] - 12, 36, 24, 5); g.fill(); g.strokeStyle = "#6a62c9"; g.stroke(); g.fillStyle = "#3ee6c4"; g.fillRect(CAMP[0] - 12, CAMP[1] - 7, 24, 14); g.fillStyle = "#07061a"; g.font = "700 9px sans-serif"; g.fillText("CAM", CAMP[0], CAMP[1] + 3);
+    g.fillStyle = "#2d2a5c"; rr(g, LP[0] - 13, LP[1] - 13, 26, 26, 6); g.fill(); g.strokeStyle = "#ffd23f"; g.stroke(); g.fillStyle = "#ffd23f"; g.font = "16px sans-serif"; g.fillText("⚡", LP[0], LP[1] + 6);
+    RP.forEach(p => { g.fillStyle = "#2d2a5c"; rr(g, p[0] - 13, p[1] - 13, 26, 26, 6); g.fill(); g.strokeStyle = "#ff6b81"; g.stroke(); g.fillStyle = "#ff6b81"; g.font = "16px sans-serif"; g.fillText("☢", p[0], p[1] + 6); });
     return bg;
   }
   function bean(px, py, col, f, al) {
@@ -363,7 +426,10 @@ export function createAmogClient(env) {
 
   function useInfo(s) {
     const q = s.p[myIdx]; if (!q) return ["UTILISER", 1];
-    if (q[2]) { if (s.bd.some(b => Math.hypot(b[0] - q[0], b[1] - q[1]) < 72)) return ["SIGNALER", 0]; if (Math.hypot(q[0] - TB[0], q[1] - TB[1]) < 50) return ["URGENCE", 0]; }
+    if (q[6]) return ["EN CONDUIT", 1];
+    if (q[2]) { if (s.bd.some(b => Math.hypot(b[0] - q[0], b[1] - q[1]) < 72)) return ["SIGNALER", 0]; if (Math.hypot(q[0] - TB[0], q[1] - TB[1]) < 50) return ["URGENCE", 0];
+      if (!isImp() && s.sb) { if (s.sb[0] === 0 && Math.hypot(q[0] - LP[0], q[1] - LP[1]) < 44) return ["RÉPARER", 0]; if (s.sb[0] === 1) for (let k = 0; k < 2; k++) if (!(s.sb[2] >> k & 1) && Math.hypot(q[0] - RP[k][0], q[1] - RP[k][1]) < 44) return ["RÉPARER", 0]; }
+      if (Math.hypot(q[0] - CAMP[0], q[1] - CAMP[1]) < 44) return [s.cm && s.cm.includes(myIdx) ? "QUITTER" : "CAMÉRAS", 0]; }
     const tk = s.ts[myIdx] || [0, 0];
     for (let k = 0; k < ST.length; k++) if ((tk[0] >> k & 1) && !(tk[1] >> k & 1) && Math.hypot(q[0] - ST[k][0], q[1] - ST[k][1]) < 42) return ["TÂCHE", 0];
     return ["UTILISER", 1];
@@ -417,7 +483,9 @@ export function createAmogClient(env) {
     if (ls.mt) mid = ls.mt.id;
     const me = sa.p[myIdx], ghost = !!me && !me[2], imp = isImp();
     const pos = sa.p.map((qa, i) => { const qb = sb.p[i]; return qb && qa[2] && qb[2] ? [qa[0] + (qb[0] - qa[0]) * f, qa[1] + (qb[1] - qa[1]) * f] : [qa[0], qa[1]]; });
-    const mp = pos[myIdx] || [CX, 285], vis = (px, py) => ghost || (Math.hypot(px - mp[0], py - mp[1]) < VIS && los(mp[0], mp[1], px, py));   // pas de vision à travers les murs
+    const mp = pos[myIdx] || [CX, 285], cam = !!ls.cm && ls.cm.includes(myIdx), dark = !!ls.sb && ls.sb[0] === 0 && !imp, VV = dark ? 85 : VIS;
+    mpL = mp; ghL = ghost;
+    const vis = (px, py) => ghost || (cam && inCam(px, py)) || (Math.hypot(px - mp[0], py - mp[1]) < VV && los(mp[0], mp[1], px, py));   // pas de vision à travers les murs
 
     // tâches à faire (les miennes) : « ! » jaune qui rebondit
     const tk = ls.ts[myIdx] || [0, 0];
@@ -428,18 +496,19 @@ export function createAmogClient(env) {
     if (imp && !ghost && ls.ph === "p") ls.p.forEach((q, i) => { if (i !== myIdx && q[2] && ls.ro[i] !== "1") { const d = Math.hypot(pos[i][0] - mp[0], pos[i][1] - mp[1]); if (d < td) { td = d; tgt = i; } } });
     const order = pos.map((p, i) => i).filter(i => sa.p[i][2] || ghost).sort((i, j) => pos[i][1] - pos[j][1]);
     order.forEach(i => {
-      const qa = sa.p[i], p = pos[i]; if (!pl[i] || (i !== myIdx && !vis(p[0], p[1]))) return;
+      const qa = sa.p[i], p = pos[i]; if (!pl[i] || (i !== myIdx && (!vis(p[0], p[1]) || (qa[6] && !imp && !ghost)))) return;   // un imposteur en conduit est invisible
       if (i === tgt) { x.strokeStyle = "#ff3b5c"; x.lineWidth = 3; x.beginPath(); x.arc(p[0], p[1], BR + 8, 0, 7); x.stroke(); }
-      bean(p[0], p[1], pl[i][2], qa[3] || 1, qa[2] ? 1 : .4);
+      bean(p[0], p[1], pl[i][2], qa[3] || 1, qa[2] ? (qa[6] ? .45 : 1) : .4);
       const me2 = i === myIdx, red = ls.ro[i] === "1" && (imp || ls.o);
       x.font = "700 13px 'DM Sans',sans-serif"; x.textAlign = "center"; x.textBaseline = "alphabetic"; x.lineWidth = 3; x.strokeStyle = "rgba(0,0,0,.7)"; x.fillStyle = red ? "#ff4d6d" : me2 ? "#ffd23f" : "#fff";
       x.strokeText(pl[i][1], p[0], p[1] - BR * 1.2 - 6); x.fillText(pl[i][1], p[0], p[1] - BR * 1.2 - 6);
       if (qa[5] > 0) { x.lineWidth = 4; x.strokeStyle = "#3ee6c4"; x.beginPath(); x.arc(p[0], p[1] - BR * 1.2 - 24, 8, -Math.PI / 2, -Math.PI / 2 + 6.283 * qa[5] / 100); x.stroke(); }
     });
-    if (!ghost && ls.ph === "p") {                                          // vignette : on ne voit pas toute la carte
-      const g = x.createRadialGradient(mp[0], mp[1], 120, mp[0], mp[1], VIS + 90); g.addColorStop(0, "rgba(4,3,14,0)"); g.addColorStop(1, "rgba(4,3,14,.93)");
+    if (!ghost && ls.ph === "p" && !cam) {                                          // vignette : on ne voit pas toute la carte
+      const g = x.createRadialGradient(mp[0], mp[1], Math.min(120, VV * .5), mp[0], mp[1], VV + 90); g.addColorStop(0, "rgba(4,3,14,0)"); g.addColorStop(1, "rgba(4,3,14,.93)");
       x.fillStyle = g; x.fillRect(0, 0, W, H);
     }
+    if (cam && ls.ph === "p") { x.beginPath(); x.rect(0, 0, W, H); CAMZ.forEach(a => x.rect(a.x, a.y, a.w, a.h)); x.fillStyle = "rgba(4,3,14,.9)"; x.fill("evenodd"); x.strokeStyle = "#3ee6c4"; x.lineWidth = 3; CAMZ.forEach(a => x.strokeRect(a.x, a.y, a.w, a.h)); }   // caméras : seuls le couloir et les portes sont visibles
     parts = parts.filter(q => (q.l -= dt * 2.2) > 0);
     parts.forEach(q => { q.x += q.vx * dt; q.y += q.vy * dt; x.globalAlpha = Math.max(0, q.l); x.fillStyle = q.c; x.beginPath(); x.arc(q.x, q.y, q.s * q.l, 0, 7); x.fill(); });
     x.globalAlpha = 1;
@@ -457,6 +526,12 @@ export function createAmogClient(env) {
       }
     }
 
+    if (ls.ph === "p" && ls.sb) {                                           // sabotage en cours : panneaux à réparer qui clignotent
+      const pu = .6 + .4 * Math.sin(now / 160);
+      const mark = (p, lab) => { x.globalAlpha = pu; x.fillStyle = "#ff3b5c"; x.beginPath(); x.arc(p[0], p[1], 20, 0, 7); x.fill(); x.globalAlpha = 1; txt(lab, p[0], p[1] + 1, "800 18px sans-serif", "#fff"); };
+      if (ls.sb[0] === 0) mark(LP, "⚡"); else { RP.forEach((p, k) => { if (!(ls.sb[2] >> k & 1)) mark(p, "☢"); }); x.fillStyle = `rgba(255,30,60,${.08 + .07 * Math.sin(now / 120)})`; x.fillRect(0, 0, W, H); }
+    }
+    if (ls.ph === "p" && ls.cm && ls.cm.length && !cam && Math.floor(now / 400) % 2 && vis(CAMP[0], CAMP[1])) { x.fillStyle = "#ff3b5c"; x.beginPath(); x.arc(CAMP[0] + 16, CAMP[1] - 14, 5, 0, 7); x.fill(); }   // voyant rouge : quelqu'un regarde les caméras
     // HUD : barre de tâches, liste, rôle, boutons
     const [dn, tot] = ls.tp;
     x.fillStyle = "rgba(0,0,0,.55)"; rr(x, 10, 10, 210, 22, 11); x.fill();
@@ -466,6 +541,8 @@ export function createAmogClient(env) {
     ST.forEach((s, k) => { if (!(tk[0] >> k & 1)) return; ly += 16; txt(`${tk[1] >> k & 1 ? "✔" : "▫"} ${s[2]}`, 12, ly, "600 12px 'DM Sans',sans-serif", tk[1] >> k & 1 ? "#6b9" : "#fff", "left"); });
     x.textAlign = "right"; x.font = "600 13px 'DM Sans',sans-serif"; x.fillStyle = "#ffe9a8"; x.textBaseline = "middle";
     (ls.kf || []).slice(-4).forEach((t2, i) => x.fillText(t2, W - 12, 18 + i * 18));
+    if (ls.ph === "p" && ls.sb) txt(ls.sb[0] ? `☢️ RÉACTEUR : ${ls.sb[1]} s : répare les 2 panneaux !` : `💡 Lumières coupées : répare le panneau ⚡ (${ls.sb[1]} s)`, CX, 56, "800 16px 'Bricolage Grotesque',sans-serif", "#ff6b81");
+    if (cam && ls.ph === "p") txt("📹 CAMÉRAS : bouge pour quitter", CX, 540, "700 15px 'DM Sans',sans-serif", "#3ee6c4");
     if (ghost) txt("👻 Tu es un fantôme : finis tes tâches !", CX, 20, "700 15px 'DM Sans',sans-serif", "#b9b2ff");
     if (ls.ph === "p" && ls.t < 5 && myIdx >= 0) {                          // annonce du rôle au début
       txt(imp ? "🔪 Tu es IMPOSTEUR" : "🧑‍🚀 Tu es ÉQUIPIER", CX, 90, "800 30px 'Bricolage Grotesque',sans-serif", imp ? "#ff3b5c" : "#3ee6c4");
@@ -473,7 +550,12 @@ export function createAmogClient(env) {
     }
     if (ls.ph === "p" && !ghost) {
       const [lb, dim] = useInfo(ls); btn(USEB, lb, "#2e7dff", dim, lb);
-      if (imp) { const kc = me ? me[4] : 0; btn(KILLB, "TUER", "#e0243f", kc > 0 || tgt < 0, kc > 0 ? String(kc) : "TUER"); }
+      if (imp) {
+        const kc = me ? me[4] : 0, inV = !!(me && me[6]), nv = !!me && VENTS.some(v => Math.hypot(me[0] - v[0], me[1] - v[1]) < 36), sd = ls.sc > 0 || !!ls.sb;
+        btn(KILLB, "TUER", "#e0243f", kc > 0 || tgt < 0 || inV, kc > 0 ? String(kc) : "TUER");
+        btn(VENTB, "🕳️", "#6a4fd8", !inV && !nv, inV ? "↻" : "🕳️");
+        btn(S1B, "💡", "#c98a00", sd, ls.sc > 0 && !ls.sb ? String(ls.sc) : "💡"); btn(S2B, "☢️", "#b3261e", sd, ls.sc > 0 && !ls.sb ? String(ls.sc) : "☢️");
+      }
     }
     if (stick && ls.ph === "p") {
       x.fillStyle = "rgba(255,255,255,.08)"; x.strokeStyle = "rgba(255,255,255,.28)"; x.lineWidth = 2; x.beginPath(); x.arc(stick.ox, stick.oy, 55, 0, 7); x.fill(); x.stroke();
@@ -486,8 +568,8 @@ export function createAmogClient(env) {
 
   return {
     enter(c) {
-      active = true; snaps = []; pl = null; lastEv = 0; parts = []; useSeq = killSeq = 0; vote = ""; sentStr = ""; sentAt = 0; stick = null; keys.clear(); tPrev = 0; myIdx = -1; ovT = "\u0000"; mid = 0; rects = []; ls = null;
-      $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : utiliser / signaler · K ou Maj : tuer (imposteur) · glisse sur mobile";
+      active = true; snaps = []; pl = null; lastEv = 0; parts = []; useSeq = killSeq = ventSeq = sabSeq = sabTy = 0; vote = ""; sentStr = ""; sentAt = 0; stick = null; keys.clear(); tPrev = 0; myIdx = -1; ovT = "\u0000"; mid = 0; rects = []; ls = null;
+      $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : utiliser / signaler · K ou Maj : tuer · V : conduit · 1 / 2 : saboter (imposteur) · glisse sur mobile";
       const myUid = getMe().uid;
       set(RF(`games/${c}/inputs/${myUid}`), "0,0,0,0,").catch(() => { });
       const un = onValue(RF(`games/${c}/state`), snap => {
@@ -496,13 +578,6 @@ export function createAmogClient(env) {
         if (s.pl) { pl = s.pl; myIdx = pl.findIndex(p => p[0] === myUid); }
         const at = Math.max(performance.now(), snaps.length ? snaps[snaps.length - 1].at + 1 : 0);
         snaps.push({ at, s, done: false }); if (snaps.length > 14) snaps.shift();
-        if (env.vpos && pl && s.p) { // chat vocal : en réunion tout le monde s'entend (sauf les fantômes, que seuls les fantômes entendent) ; sinon, selon la distance
-          const meDead = myIdx >= 0 && s.p[myIdx] && !s.p[myIdx][2], o = {};
-          pl.forEach((q, i) => { const p = s.p[i]; if (p && (p[2] || meDead)) o[q[0]] = { x: p[0], y: p[1] }; });
-          const m = o[myUid] || null;
-          if (s.ph === "m") { const all = {}; pl.forEach((q, i) => { const p = s.p[i]; if (p && (p[2] || meDead)) all[q[0]] = { x: 0, y: 0 }; }); env.vpos({ x: 0, y: 0 }, all, 450); }
-          else env.vpos(m, o, 260);
-        }
       });
       raf = requestAnimationFrame(frame);
       return () => {

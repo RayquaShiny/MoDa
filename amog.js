@@ -24,7 +24,11 @@ const ST = [[80, 100, "Moteurs"], [720, 100, "Électricité"], [80, 470, "Réact
 
 const NT = 5;                                                             // tâches par équipier (sur 8 postes)
 const TTS = [2.7, 3.6, 3.0, 2.4, 3.3, 1.8, 1.5, 1.5];                    // durée de chaque tâche (même ordre que ST)
-const at = (px, py) => FLOOR.some(a => px >= a.x && px <= a.x + a.w && py >= a.y && py <= a.y + a.h);
+let GRID = null;                                                          // grille 1 px : 1 = sol (rend at/ok/los beaucoup plus rapides)
+const at = (px, py) => {
+  if (!GRID) { GRID = new Uint8Array(WW * WH); FLOOR.forEach(a => { for (let j = a.y; j <= a.y + a.h && j < WH; j++) GRID.fill(1, j * WW + a.x, j * WW + Math.min(WW - 1, a.x + a.w) + 1); }); }
+  return px >= 0 && py >= 0 && px < WW && py < WH && GRID[(py | 0) * WW + (px | 0)] === 1;
+};
 const ok = (px, py) => at(px - RAD, py - RAD) && at(px + RAD, py - RAD) && at(px - RAD, py + RAD) && at(px + RAD, py + RAD);
 const move = (q, dx, dy) => {
   if (!q.a) { q.x = Math.max(RAD, Math.min(WW - RAD, q.x + dx)); q.y = Math.max(RAD, Math.min(WH - RAD, q.y + dy)); return; }   // fantôme : traverse les murs (reste dans la carte)
@@ -247,7 +251,7 @@ export async function startAmog(env) {
     let tot = 0, dn = 0; ids.forEach(u => { const q = P[u]; if (!q.imp && !q.gone) { tot += NT; dn += pc(q.dn); } });
     const o = {
       k: "amog", t: +t.toFixed(1), ph,
-      p: ids.map(u => { const q = P[u]; return [+q.x.toFixed(1), +q.y.toFixed(1), q.a, q.f, Math.ceil(q.kcd), Math.round(q.chS >= 0 ? q.ch / (TTS[q.chS] || TT) * 100 : 0), q.iv >= 0 ? 1 : 0]; }),
+      p: ids.map(u => { const q = P[u]; return [Math.round(q.x), Math.round(q.y), q.a, q.f, Math.ceil(q.kcd), Math.round(q.chS >= 0 ? q.ch / (TTS[q.chS] || TT) * 100 : 0), q.iv >= 0 ? 1 : 0]; }),
       bd: bodies.map(b => [Math.round(b.x), Math.round(b.y), b.i]), ts: ids.map(u => [P[u].asg, P[u].dn]), tp: [dn, tot],
       ro: ids.map(u => P[u].imp ? 1 : 0).join(""), ev: evs.map(o2 => o2.e), kf: kf.map(e => e[0]), cm: ids.map((u, i) => P[u].cm ? i : -1).filter(i => i >= 0), sb: sab ? [sab.t === "r" ? 1 : 0, Math.ceil(sab.r), sab.f] : 0, sc: Math.ceil(sbcd), ...x
     };
@@ -300,7 +304,7 @@ export function createAmogClient(env) {
   let active = false, raf = 0, snaps = [], pl = null, lastEv = 0, parts = [], useSeq = 0, killSeq = 0, vote = "", sentStr = "", sentAt = 0;
   let stick = null, tPrev = 0, myIdx = -1, ovT = "", bg = null, mid = 0, rects = [], ls = null;
   const keys = new Set();
-  let ventSeq = 0, sabSeq = 0, sabTy = 0, camCX = 0, camCY = 0, camOn = false, zm = 1, tNow = 0, camM = null;
+  let ventSeq = 0, sabSeq = 0, sabTy = 0, camCX = 0, camCY = 0, camOn = false, zm = 1, tNow = 0, camM = null, visG = null, mmBase = null, ghostTint = null; const gradC = new Map(), vigC = new Map();
 
   const sendInput = (now, force) => {
     let ix = 0, iy = 0;
@@ -446,7 +450,7 @@ export function createAmogClient(env) {
     const hw = BR * .85, tp = -BR * 1.2, bt = BR;
     if (gh) {
       x.globalAlpha *= .6; x.shadowColor = col; x.shadowBlur = 16;
-      const g2 = x.createLinearGradient(0, tp, 0, bt + 6); g2.addColorStop(0, mix(col, -.35)); g2.addColorStop(1, mix(col, .1));
+      const gk = "g" + col; let g2 = gradC.get(gk); if (!g2) { g2 = x.createLinearGradient(0, tp, 0, bt + 6); g2.addColorStop(0, mix(col, -.35)); g2.addColorStop(1, mix(col, .1)); gradC.set(gk, g2); }
       x.fillStyle = g2; x.beginPath(); x.arc(0, tp + hw, hw, Math.PI, 0); x.lineTo(hw, bt - 3);
       x.quadraticCurveTo(hw * .67, bt + 7, hw * .33, bt - 3); x.quadraticCurveTo(0, bt + 7, -hw * .33, bt - 3); x.quadraticCurveTo(-hw * .67, bt + 7, -hw, bt - 3); x.closePath(); x.fill(); x.shadowBlur = 0;
       x.fillStyle = "rgba(255,255,255,.9)"; x.beginPath(); x.ellipse(BR * .25, -BR * .5, BR * .55, BR * .32, 0, 0, 7); x.fill();
@@ -458,11 +462,11 @@ export function createAmogClient(env) {
     x.fillStyle = mix(col, .45); x.strokeStyle = dk; x.lineWidth = 1.5;
     rr(x, -hw * .8, bt - 6 + ph * 2.5, hw * .66, 9, 3); x.fill(); x.stroke(); rr(x, hw * .14, bt - 6 - ph * 2.5, hw * .66, 9, 3); x.fill(); x.stroke();   // jambes
     x.fillStyle = mix(col, .4); rr(x, -hw - 8, -3, 11, 19, 4); x.fill(); x.stroke();                                                                      // sac à dos
-    const g = x.createLinearGradient(-hw, 0, hw, 0); g.addColorStop(0, mix(col, -.25)); g.addColorStop(.6, col); g.addColorStop(1, mix(col, .4));
+    let g = gradC.get(col); if (!g) { g = x.createLinearGradient(-hw, 0, hw, 0); g.addColorStop(0, mix(col, -.25)); g.addColorStop(.6, col); g.addColorStop(1, mix(col, .4)); gradC.set(col, g); }
     x.fillStyle = g; rr(x, -hw, tp, hw * 2, BR * 2.2, BR * .8); x.fill(); x.lineWidth = 2; x.strokeStyle = dk; x.stroke();
     x.fillStyle = "rgba(255,255,255,.2)"; x.beginPath(); x.ellipse(-hw * .5, tp + 9, 2.6, 7, -.25, 0, 7); x.fill();
-    const vg = x.createLinearGradient(0, -BR * .85, 0, -BR * .1); vg.addColorStop(0, "#d4f6ff"); vg.addColorStop(1, "#58b4e6");
-    x.fillStyle = vg; x.beginPath(); x.ellipse(BR * .25, -BR * .45, BR * .62, BR * .38, 0, 0, 7); x.fill(); x.lineWidth = 1.5; x.strokeStyle = "#12304a"; x.stroke();
+    if (!visG) { visG = x.createLinearGradient(0, -BR * .85, 0, -BR * .1); visG.addColorStop(0, "#d4f6ff"); visG.addColorStop(1, "#58b4e6"); }
+    x.fillStyle = visG; x.beginPath(); x.ellipse(BR * .25, -BR * .45, BR * .62, BR * .38, 0, 0, 7); x.fill(); x.lineWidth = 1.5; x.strokeStyle = "#12304a"; x.stroke();
     x.fillStyle = "rgba(255,255,255,.8)"; x.beginPath(); x.ellipse(BR * .45, -BR * .6, BR * .2, BR * .1, 0, 0, 7); x.fill();
     x.restore();
   }
@@ -486,8 +490,12 @@ export function createAmogClient(env) {
   }
   function minimap(tk, mp, ghost, imp, now, camX, camY, vw, vh) {        // mini-carte : plan, mes tâches restantes, ma position
     const mw = 150, mh = 105, mx = 12, my = H - mh - 12, k = mw / WW;
-    x.fillStyle = "rgba(6,5,20,.72)"; rr(x, mx - 5, my - 5, mw + 10, mh + 10, 9); x.fill(); x.strokeStyle = "rgba(160,150,255,.5)"; x.lineWidth = 1.5; x.stroke();
-    x.fillStyle = "#4b4596"; FLOOR.forEach(a => x.fillRect(mx + a.x * k, my + a.y * k, Math.max(1, a.w * k), Math.max(1, a.h * k)));
+    if (!mmBase) {
+      mmBase = document.createElement("canvas"); mmBase.width = mw + 10; mmBase.height = mh + 10; const mg = mmBase.getContext("2d");
+      mg.fillStyle = "rgba(6,5,20,.72)"; rr(mg, 0, 0, mw + 10, mh + 10, 9); mg.fill(); mg.strokeStyle = "rgba(160,150,255,.5)"; mg.lineWidth = 1.5; mg.stroke();
+      mg.fillStyle = "#4b4596"; FLOOR.forEach(a => mg.fillRect(5 + a.x * k, 5 + a.y * k, Math.max(1, a.w * k), Math.max(1, a.h * k)));
+    }
+    x.drawImage(mmBase, mx - 5, my - 5);
     ST.forEach((t, i) => { if (!(tk[0] >> i & 1) || (tk[1] >> i & 1)) return; x.fillStyle = imp ? "#ff8fa3" : "#ffd23f"; x.beginPath(); x.arc(mx + t[0] * k, my + t[1] * k, 3, 0, 7); x.fill(); });
     if (ls.sb && Math.floor(now / 300) % 2) { x.fillStyle = "#ff3b5c"; (ls.sb[0] === 0 ? [LP] : RP.filter((p, i) => !(ls.sb[2] >> i & 1))).forEach(p => { x.beginPath(); x.arc(mx + p[0] * k, my + p[1] * k, 4, 0, 7); x.fill(); }); }
     x.strokeStyle = "rgba(255,255,255,.55)"; x.lineWidth = 1; x.strokeRect(mx + camX * k, my + camY * k, vw * k, vh * k);
@@ -591,8 +599,14 @@ export function createAmogClient(env) {
       if (qa[5] > 0) { x.lineWidth = 4; x.strokeStyle = "#3ee6c4"; x.beginPath(); x.arc(p[0], p[1] - BR * 1.2 - 24, 8, -Math.PI / 2, -Math.PI / 2 + 6.283 * qa[5] / 100); x.stroke(); }
     });
     if (!ghost && ls.ph === "p" && !cam) {                                          // vignette : on ne voit pas toute la carte
-      const g = x.createRadialGradient(mp[0], mp[1], Math.min(120, VV * .5), mp[0], mp[1], VV + 90); g.addColorStop(0, "rgba(4,3,14,0)"); g.addColorStop(1, "rgba(4,3,14,.93)");
-      x.fillStyle = g; x.fillRect(camX - 2, camY - 2, vw + 4, vh + 4);
+      const R = VV + 90; let vs = vigC.get(VV);
+      if (!vs) { vs = document.createElement("canvas"); vs.width = vs.height = R * 2; const vg = vs.getContext("2d"), gr = vg.createRadialGradient(R, R, Math.min(120, VV * .5), R, R, R); gr.addColorStop(0, "rgba(4,3,14,0)"); gr.addColorStop(1, "rgba(4,3,14,.93)"); vg.fillStyle = gr; vg.fillRect(0, 0, R * 2, R * 2); vigC.set(VV, vs); }
+      const L = Math.round(mp[0] - R), T = Math.round(mp[1] - R), Rg = L + R * 2, B = T + R * 2, X0 = camX - 2, Y0 = camY - 2, X1 = camX + vw + 2, Y1 = camY + vh + 2;
+      x.drawImage(vs, L, T); x.fillStyle = "rgba(4,3,14,.93)";
+      if (T > Y0) x.fillRect(X0, Y0, X1 - X0, T - Y0);
+      if (B < Y1) x.fillRect(X0, B, X1 - X0, Y1 - B);
+      const ya = Math.max(T, Y0), yb = Math.min(B, Y1);
+      if (yb > ya) { if (L > X0) x.fillRect(X0, ya, L - X0, yb - ya); if (Rg < X1) x.fillRect(Rg, ya, X1 - Rg, yb - ya); }
     }
     if (cam && ls.ph === "p") x.drawImage(camMask(), 0, 0);                         // caméras : seuls le couloir et les portes sont visibles
     parts = parts.filter(q => (q.l -= dt * 2.2) > 0);
@@ -622,7 +636,10 @@ export function createAmogClient(env) {
 
     // ----- par-dessus la carte (écran) -----
     if (cam && ls.ph === "p") { x.fillStyle = "rgba(62,230,196,.05)"; for (let yy = 0; yy < H; yy += 4) x.fillRect(0, yy, W, 1); }
-    if (ghost && ls.ph === "p") { const gg = x.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, W * .62); gg.addColorStop(0, "rgba(120,100,255,0)"); gg.addColorStop(1, "rgba(120,100,255,.22)"); x.fillStyle = gg; x.fillRect(0, 0, W, H); }
+    if (ghost && ls.ph === "p") {
+      if (!ghostTint) { ghostTint = document.createElement("canvas"); ghostTint.width = W; ghostTint.height = H; const tg2 = ghostTint.getContext("2d"), gg = tg2.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, W * .62); gg.addColorStop(0, "rgba(120,100,255,0)"); gg.addColorStop(1, "rgba(120,100,255,.22)"); tg2.fillStyle = gg; tg2.fillRect(0, 0, W, H); }
+      x.drawImage(ghostTint, 0, 0);
+    }
     const [dn, tot] = ls.tp;
     x.fillStyle = "rgba(0,0,0,.55)"; rr(x, 10, 10, 210, 22, 11); x.fill();
     if (tot && dn) { const tg = x.createLinearGradient(10, 0, 220, 0); tg.addColorStop(0, "#2bd9b3"); tg.addColorStop(1, "#7dffd9"); x.fillStyle = tg; rr(x, 10, 10, Math.max(22, 210 * dn / tot), 22, 11); x.fill(); }
@@ -672,7 +689,7 @@ export function createAmogClient(env) {
       });
       raf = requestAnimationFrame(frame);
       return () => {
-        active = false; un(); if (raf) cancelAnimationFrame(raf); raf = 0; keys.clear(); stick = null; ov.textContent = ""; ovT = "";
+        active = false; un(); if (raf) cancelAnimationFrame(raf); raf = 0; keys.clear(); stick = null; ov.textContent = ""; ovT = ""; bg = camM = visG = mmBase = ghostTint = null; gradC.clear(); vigC.clear();   // libère la mémoire des images
         x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.setLineDash([]); x.textBaseline = "alphabetic"; x.textAlign = "start"; x.shadowBlur = 0;
       };
     }

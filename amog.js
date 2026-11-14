@@ -496,6 +496,13 @@ export function createAmogClient(env) {
         if (s.pl) { pl = s.pl; myIdx = pl.findIndex(p => p[0] === myUid); }
         const at = Math.max(performance.now(), snaps.length ? snaps[snaps.length - 1].at + 1 : 0);
         snaps.push({ at, s, done: false }); if (snaps.length > 14) snaps.shift();
+        if (env.vpos && pl && s.p) { // chat vocal : en réunion tout le monde s'entend (sauf les fantômes, que seuls les fantômes entendent) ; sinon, selon la distance
+          const meDead = myIdx >= 0 && s.p[myIdx] && !s.p[myIdx][2], o = {};
+          pl.forEach((q, i) => { const p = s.p[i]; if (p && (p[2] || meDead)) o[q[0]] = { x: p[0], y: p[1] }; });
+          const m = o[myUid] || null;
+          if (s.ph === "m") { const all = {}; pl.forEach((q, i) => { const p = s.p[i]; if (p && (p[2] || meDead)) all[q[0]] = { x: 0, y: 0 }; }); env.vpos({ x: 0, y: 0 }, all, 450); }
+          else env.vpos(m, o, 260);
+        }
       });
       raf = requestAnimationFrame(frame);
       return () => {

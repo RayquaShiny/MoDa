@@ -323,6 +323,7 @@ export function createFruitClient(env) {
 
   // ---------- simulation (locale) ----------
   function update(dt, now) {
+    if (env.vpos && now - (update.v || 0) > 200) { update.v = now; env.vpos({ x: px, y: py }, Object.fromEntries(Object.entries(others).map(([u, o]) => [u, { x: o.x, y: o.y }])), 550); } // chat vocal de proximité
     let ax = (keys.has("R") ? 1 : 0) - (keys.has("L") ? 1 : 0), ay = (keys.has("D") ? 1 : 0) - (keys.has("U") ? 1 : 0);
     if (stick && !ax && !ay) { ax = Math.abs(stick.dx) > .15 ? stick.dx : 0; ay = Math.abs(stick.dy) > .15 ? stick.dy : 0; }
     const m = Math.hypot(ax, ay); if (m > 1) { ax /= m; ay /= m; }

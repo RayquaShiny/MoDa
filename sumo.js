@@ -352,6 +352,7 @@ export function createSumoClient(env) {
         if (s.pl) { pl = s.pl; myIdx = pl.findIndex(p => p[0] === myUid); }
         const at = Math.max(performance.now(), snaps.length ? snaps[snaps.length - 1].at + 1 : 0);
         snaps.push({ at, s, done: false }); if (snaps.length > 14) snaps.shift();
+        if (env.vpos && pl && s.p) { const o = {}; pl.forEach((q, i) => { if (s.p[i]) o[q[0]] = { x: s.p[i][0], y: s.p[i][1] }; }); env.vpos(o[myUid] || null, o, 450); } // chat vocal de proximité
       });
       raf = requestAnimationFrame(frame);
       return () => {

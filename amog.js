@@ -513,13 +513,48 @@ export function createAmogClient(env) {
     g.fillStyle = "#6e66c8"; hull(2, 15);
     const fl = g.createLinearGradient(0, 0, WW, WH); fl.addColorStop(0, "#221f4a"); fl.addColorStop(1, "#191638");
     g.fillStyle = fl; hull(0, 13);
-    // Contour extérieur retracé sur le plan de référence InnerSloth (GamesRadar).
-    // L'image de référence fait 1000 × 563 ; conversion vers le monde 1400 × 800.
-    const skeldEdge = [[412,20],[590,20],[610,39],[652,39],[697,78],[796,78],[832,114],[832,183],[849,205],[923,205],[958,237],[958,278],[931,309],[866,309],[866,381],[803,381],[803,457],[779,488],[687,488],[687,540],[577,540],[577,506],[435,506],[435,490],[273,490],[273,468],[233,468],[233,445],[126,445],[126,421],[104,421],[104,360],[42,360],[42,209],[68,185],[127,185],[127,85],[152,85],[232,85],[232,116],[407,116],[407,38]];
+    // Coque unifiée : une seule silhouette de sol, sans contours superposés.
+    const hullCanvas = document.createElement("canvas");
+    hullCanvas.width = WW; hullCanvas.height = WH;
+    const hg = hullCanvas.getContext("2d");
+    hg.fillStyle = "#fff";
+    ROOMS.forEach(a => { rr(hg, a.x - 13, a.y - 13, a.w + 26, a.h + 26, 22); hg.fill(); });
+    CORR.forEach(a => { rr(hg, a.x - 13, a.y - 13, a.w + 26, a.h + 26, 12); hg.fill(); });
+    g.save();
+    g.shadowColor = "rgba(0,0,0,.78)"; g.shadowBlur = 34;
+    g.drawImage(hullCanvas, 0, 0);
+    g.shadowBlur = 0;
+    g.globalCompositeOperation = "source-in";
+    const wallGrad = g.createLinearGradient(0, 0, WW, WH);
+    wallGrad.addColorStop(0, "#7771c9"); wallGrad.addColorStop(.5, "#39356f"); wallGrad.addColorStop(1, "#6560ad");
+    g.fillStyle = wallGrad; g.fillRect(0, 0, WW, WH);
+    g.globalCompositeOperation = "source-over";
+    g.drawImage(hullCanvas, 0, 0);
+    g.restore();
     g.save(); g.beginPath();
-    skeldEdge.forEach(([px,py],i)=>{ const x=px*1.4, y=py*(800/563); if(!i) g.moveTo(x,y); else g.lineTo(x,y); });
-    g.closePath(); g.strokeStyle="rgba(226,235,255,.96)"; g.lineWidth=7; g.lineJoin="round"; g.shadowColor="rgba(8,10,30,.9)"; g.shadowBlur=13; g.stroke();
-    g.strokeStyle="rgba(112,139,255,.55)"; g.lineWidth=2; g.shadowBlur=0; g.stroke(); g.restore();
+    ROOMS.forEach(a => rr(g, a.x, a.y, a.w, a.h, 13));
+    CORR.forEach(a => rr(g, a.x, a.y, a.w, a.h, 8));
+    g.clip();
+    const fl = g.createLinearGradient(0, 0, WW, WH);
+    fl.addColorStop(0, "#28264e"); fl.addColorStop(1, "#17172f");
+    g.fillStyle = fl; g.fillRect(0, 0, WW, WH);
+    // Quadrillage discret commun à toutes les pièces : aucune texture de pièce ne se répète par-dessus une autre.
+    g.strokeStyle = "rgba(174,181,255,.055)"; g.lineWidth = 1;
+    for (let xx = 0; xx < WW; xx += 40) { g.beginPath(); g.moveTo(xx + .5, 0); g.lineTo(xx + .5, WH); g.stroke(); }
+    for (let yy = 0; yy < WH; yy += 40) { g.beginPath(); g.moveTo(0, yy + .5); g.lineTo(WW, yy + .5); g.stroke(); }
+    g.restore();
+    // Liseré des salles : un seul trait par salle, sans accumulation de couches.
+    ROOMS.forEach((r, i) => {
+      g.strokeStyle = "rgba(151,158,235,.48)"; g.lineWidth = 3;
+      rr(g, r.x + 2, r.y + 2, r.w - 4, r.h - 4, 12); g.stroke();
+      g.fillStyle = RTINT[i]; g.globalAlpha = .75;
+      const ledCount = Math.max(1, Math.floor(r.w / 70));
+      for (let k = 0; k < ledCount; k++) {
+        const px = r.x + (k + .5) * r.w / ledCount;
+        g.fillRect(px - 5, r.y + 5, 10, 3);
+      }
+      g.globalAlpha = 1;
+    });
     g.save(); g.beginPath();
     ROOMS.forEach(a => rr(g, a.x, a.y, a.w, a.h, 13));
     CORR.forEach(a => g.rect(a.x, a.y, a.w, a.h));
@@ -530,46 +565,35 @@ export function createAmogClient(env) {
     for (let j = 0; j < WH; j += 50) { g.beginPath(); g.moveTo(0, j + .5); g.lineTo(WW, j + .5); g.stroke(); }
     g.fillStyle = "rgba(255,255,255,.025)"; for (let i = 0; i < WW; i += 100) for (let j = 0; j < WH; j += 100) g.fillRect(i, j, 50, 50);   // damier discret
     CORR.forEach(cr => { g.strokeStyle = "rgba(62,230,196,.28)"; g.lineWidth = 3; g.setLineDash([18, 14]); g.beginPath(); if (cr.w >= cr.h) { g.moveTo(cr.x + 10, cr.y + cr.h / 2); g.lineTo(cr.x + cr.w - 10, cr.y + cr.h / 2); } else { g.moveTo(cr.x + cr.w / 2, cr.y + 10); g.lineTo(cr.x + cr.w / 2, cr.y + cr.h - 10); } g.stroke(); g.setLineDash([]); });
-    const ringAt = (cx, cy, r, col, lw, al) => { g.globalAlpha = al; g.strokeStyle = col; g.lineWidth = lw; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.stroke(); g.globalAlpha = 1; };
+    // Mobilier épuré : éléments courts, centrés et contenus dans chaque salle.
     const rc = n => ROOMS.find(r => r.n === n);
-    { const r = rc("Moteur haut"), r2 = rc("Moteur bas"); [r, r2].forEach(rm => [[.3, .6], [.72, .6]].forEach(([fx, fy]) => { const cx = rm.x + rm.w * fx, cy = rm.y + rm.h * fy; ringAt(cx, cy, 44, "#ff8a3d", 4, .35); ringAt(cx, cy, 28, "#ff8a3d", 2, .3); ringAt(cx, cy, 12, "#ffd23f", 3, .4); g.strokeStyle = "#ff8a3d"; g.lineWidth = 3; g.globalAlpha = .3; for (let k = 0; k < 6; k++) { const an = k * 1.047; g.beginPath(); g.moveTo(cx + Math.cos(an) * 14, cy + Math.sin(an) * 14); g.lineTo(cx + Math.cos(an) * 28, cy + Math.sin(an) * 28); g.stroke(); } g.globalAlpha = 1; })); }   // Moteurs : turbines peintes
-    ringAt(TB[0], TB[1], 118, "#4c8dff", 5, .25); ringAt(TB[0], TB[1], 92, "#4c8dff", 2, .3); ringAt(TB[0], TB[1], 62, "#9bb8ff", 2, .25);   // Cafétéria : tapis rond
-    { const r = rc("Électricité"); g.strokeStyle = "rgba(255,210,63,.3)"; g.lineWidth = 4; g.beginPath(); g.moveTo(r.x, r.y + r.h - 50); g.lineTo(LP[0], r.y + r.h - 50); g.lineTo(LP[0], LP[1] + 18); g.moveTo(r.x + r.w, r.y + 40); g.lineTo(LP[0] + 50, r.y + 40); g.lineTo(LP[0] + 50, LP[1]); g.lineTo(LP[0] + 20, LP[1]); g.stroke(); }   // Électricité : conduits
-    { const r = rc("Réacteur"), cx = r.x + r.w * .62, cy = r.y + r.h * .5, cg = g.createRadialGradient(cx, cy, 5, cx, cy, 90); cg.addColorStop(0, "rgba(255,59,92,.45)"); cg.addColorStop(1, "rgba(255,59,92,0)"); g.fillStyle = cg; g.fillRect(cx - 90, cy - 90, 180, 180); ringAt(cx, cy, 50, "#ff3b5c", 4, .4); ringAt(cx, cy, 32, "#ff3b5c", 2, .4); rad(g, cx, cy, 22, "rgba(255,80,110,.5)"); }   // Réacteur : cœur
-    { const r = rc("Stockage"); g.strokeStyle = "rgba(232,185,35,.45)"; g.lineWidth = 3;[[.08, .08, .38, .22], [.54, .08, .38, .22], [.08, .72, .38, .2], [.54, .72, .38, .2]].forEach(([fx, fy, fw, fh]) => { const bx = r.x + r.w * fx, by = r.y + r.h * fy, bw = r.w * fw, bh = r.h * fh; g.strokeRect(bx, by, bw, bh); g.globalAlpha = .5; g.beginPath(); g.moveTo(bx, by); g.lineTo(bx + bw, by + bh); g.moveTo(bx + bw, by); g.lineTo(bx, by + bh); g.stroke(); g.globalAlpha = 1; }); }   // Stockage : zones de caisses peintes
-    { const r = rc("Médbay"), cx = r.x + r.w * .62, cy = r.y + r.h * .5; ringAt(cx, cy, 36, "#3ee6c4", 3, .35); g.fillStyle = "rgba(62,230,196,.3)"; g.fillRect(cx - 5, cy - 16, 10, 32); g.fillRect(cx - 16, cy - 5, 32, 10); }   // Médbay : croix et scanner
-    { const r = rc("Armes"), cx = r.x + r.w / 2, cy = r.y + r.h * .45; ringAt(cx, cy, 34, "#ff6b81", 3, .4); ringAt(cx, cy, 20, "#ff6b81", 2, .4); ringAt(cx, cy, 6, "#ff6b81", 3, .5); }   // Armes : cible
-    { const r = rc("O2"), cx = r.x + r.w / 2, cy = r.y + r.h / 2; ringAt(cx - 22, cy, 14, "#7ae582", 3, .4); ringAt(cx + 22, cy, 14, "#7ae582", 3, .4); }   // O2 : deux réservoirs
-    { const r = rc("Navigation"), cx = r.x + r.w / 2, cy = r.y + r.h / 2; ringAt(cx, cy, 36, "#4cc9f0", 3, .4); g.strokeStyle = "#4cc9f0"; g.globalAlpha = .35; g.lineWidth = 2; g.beginPath(); g.moveTo(cx - 36, cy); g.lineTo(cx + 36, cy); g.moveTo(cx, cy - 36); g.lineTo(cx, cy + 36); g.stroke(); g.globalAlpha = 1; }   // Navigation : cadran
-    { const r = rc("Admin"), cx = r.x + r.w / 2, cy = r.y + r.h / 2; ringAt(cx, cy, 34, "#ffd23f", 3, .35); ringAt(cx, cy, 20, "#ffd23f", 2, .35); }   // Admin : table holographique
-    { const r = rc("Boucliers"), cx = r.x + r.w / 2, cy = r.y + r.h / 2; g.strokeStyle = "#4cc9f0"; g.globalAlpha = .4; g.lineWidth = 3; g.beginPath(); for (let k = 0; k < 6; k++) { const an = k * 1.0472 - 1.5708; g.lineTo(cx + Math.cos(an) * 44, cy + Math.sin(an) * 44); } g.closePath(); g.stroke(); g.globalAlpha = 1; }   // Boucliers : hexagone
-    { const r = rc("Comms"), cx = r.x + r.w / 2, cy = r.y + r.h * .55; ringAt(cx, cy, 30, "#b79bff", 3, .35); ringAt(cx, cy, 18, "#b79bff", 2, .35); }   // Communications : antenne
-    { const r = rc("Sécurité"); g.fillStyle = "rgba(62,230,196,.2)"; for (let k = 0; k < 3; k++) g.fillRect(r.x + 14 + k * 44, r.y + r.h - 42, 36, 22); }   // Sécurité : rangée d'écrans
-    // Mobilier intérieur : silhouettes de consoles, tables et équipements propres à chaque salle.
-    const panel = (px, py, w, h, col = "#8279c9") => {
-      g.fillStyle = "rgba(3,3,18,.48)"; rr(g, px + 3, py + 4, w, h, 6); g.fill();
-      g.fillStyle = "#17162f"; rr(g, px, py, w, h, 6); g.fill();
-      g.strokeStyle = col; g.lineWidth = 2; g.stroke();
-      g.fillStyle = col + "66"; rr(g, px + 5, py + 5, w - 10, Math.max(5, h * .32), 3); g.fill();
-      g.fillStyle = "#d8d5ff"; for (let k = 0; k < Math.max(2, Math.floor(w / 18)); k++) g.fillRect(px + 6 + k * ((w - 14) / Math.max(2, Math.floor(w / 18))), py + h - 8, 4, 3);
+    const detail = (name, color, count = 2) => {
+      const r = rc(name); if (!r) return;
+      const maxW = Math.max(18, Math.min(r.w * .48, 62));
+      const maxH = Math.max(12, Math.min(r.h * .18, 24));
+      for (let k = 0; k < count; k++) {
+        const px = r.x + r.w * ((k + 1) / (count + 1));
+        const py = r.y + r.h * .56;
+        g.fillStyle = "rgba(4,7,20,.72)"; rr(g, px - maxW/2 + 2, py - maxH/2 + 3, maxW, maxH, 5); g.fill();
+        g.fillStyle = "#24294a"; rr(g, px - maxW/2, py - maxH/2, maxW, maxH, 5); g.fill();
+        g.strokeStyle = color; g.lineWidth = 2; g.stroke();
+        g.fillStyle = color; g.globalAlpha = .6; rr(g, px - maxW*.34, py - maxH*.28, maxW*.68, maxH*.28, 2); g.fill(); g.globalAlpha = 1;
+      }
     };
-    const table = (px, py, r, col = "#8b83d0") => {
-      g.fillStyle = "rgba(0,0,0,.3)"; g.beginPath(); g.ellipse(px + 3, py + 5, r * 1.08, r * .86, 0, 0, 7); g.fill();
-      g.fillStyle = "#24234c"; g.beginPath(); g.ellipse(px, py, r * 1.08, r * .86, 0, 0, 7); g.fill();
-      g.strokeStyle = col; g.lineWidth = 3; g.stroke();
-      g.fillStyle = "#4b477e"; g.beginPath(); g.ellipse(px, py - 2, r * .76, r * .58, 0, 0, 7); g.fill();
-      g.fillStyle = col; g.beginPath(); g.arc(px, py, 4, 0, 7); g.fill();
-    };
-    { const r = rc("Cafétéria"); [[.23,.25,25],[.77,.25,25],[.23,.76,25],[.77,.76,25]].forEach(([fx,fy,rrr]) => table(r.x+r.w*fx,r.y+r.h*fy,sc(rrr),"#7771b8")); table(TB[0],TB[1],sc(24),"#ff7d91"); }
-    { const r = rc("Médbay"); panel(r.x+sc(12),r.y+sc(18),sc(35),sc(22),"#3ee6c4"); panel(r.x+sc(68),r.y+sc(18),sc(35),sc(22),"#3ee6c4"); g.fillStyle="#c5fff3"; rr(g,r.x+sc(18),r.y+sc(66),sc(82),sc(20),8); g.fill(); g.strokeStyle="#3ee6c4"; g.stroke(); }
-    { const r = rc("Armes"); panel(r.x+sc(14),r.y+sc(16),sc(45),sc(24),"#ff6b81"); panel(r.x+sc(86),r.y+sc(16),sc(45),sc(24),"#ff6b81"); for(let k=0;k<3;k++){g.strokeStyle="#ff9aaa";g.lineWidth=3;g.beginPath();g.moveTo(r.x+sc(28+k*34),r.y+sc(75));g.lineTo(r.x+sc(28+k*34),r.y+sc(96));g.stroke();} }
-    { const r = rc("Navigation"); panel(r.x+sc(15),r.y+sc(18),sc(65),sc(30),"#4cc9f0"); panel(r.x+sc(22),r.y+sc(78),sc(50),sc(24),"#4cc9f0"); }
-    { const r = rc("Admin"); table(r.x+r.w*.52,r.y+r.h*.48,sc(32),"#ffd23f"); panel(r.x+sc(12),r.y+sc(12),sc(38),sc(24),"#ffd23f"); panel(r.x+r.w-sc(50),r.y+r.h-sc(38),sc(38),sc(24),"#ffd23f"); }
-    { const r = rc("Boucliers"); for(let k=0;k<3;k++)panel(r.x+sc(12+k*38),r.y+sc(72),sc(28),sc(22),"#4cc9f0"); }
-    { const r = rc("Comms"); panel(r.x+sc(18),r.y+sc(14),sc(78),sc(28),"#b79bff"); g.strokeStyle="#b79bff";g.lineWidth=3;g.beginPath();g.moveTo(r.x+r.w*.5,r.y+sc(12));g.lineTo(r.x+r.w*.5,r.y-sc(2));g.stroke(); }
-    { const r = rc("Électricité"); for(let k=0;k<3;k++)panel(r.x+sc(12+k*34),r.y+sc(18),sc(26),sc(42),"#ffd23f"); panel(r.x+sc(25),r.y+sc(78),sc(68),sc(25),"#ffd23f"); }
-    { const r = rc("Stockage"); [[.08,.3],[.54,.3],[.08,.53],[.54,.53]].forEach(([fx,fy],k)=>{const px=r.x+r.w*fx,py=r.y+r.h*fy;g.fillStyle="#39334f";rr(g,px,py,sc(48),sc(26),4);g.fill();g.strokeStyle="#d4a83b";g.lineWidth=2;g.stroke();g.strokeStyle="#8f6d2c";g.beginPath();g.moveTo(px,py);g.lineTo(px+sc(48),py+sc(26));g.moveTo(px+sc(48),py);g.lineTo(px,py+sc(26));g.stroke();}); }
-    { const r = rc("O2"); for(let k=0;k<2;k++){const px=r.x+sc(25+k*38),py=r.y+sc(18);g.fillStyle="#1c3d38";rr(g,px,py,sc(18),sc(48),8);g.fill();g.strokeStyle="#7ae582";g.lineWidth=2;g.stroke();g.fillStyle="#7ae582";g.fillRect(px+sc(5),py+sc(8),sc(8),sc(4));} }
+    detail("Réacteur", "#ff6b81", 1); detail("Moteur haut", "#ff9f43", 1);
+    detail("Moteur bas", "#ff9f43", 1); detail("Sécurité", "#3ee6c4", 2);
+    detail("Médbay", "#3ee6c4", 2); detail("Armes", "#ff6b81", 1);
+    detail("O2", "#7ae582", 1); detail("Navigation", "#4cc9f0", 2);
+    detail("Admin", "#ffd23f", 1); detail("Électricité", "#ffd23f", 2);
+    detail("Stockage", "#d4a83b", 2); detail("Comms", "#b79bff", 1);
+    detail("Boucliers", "#4cc9f0", 2);
+    // Table centrale et bouton d'urgence de la Cafétéria.
+    { const r = rc("Cafétéria"), cx = r.x + r.w/2, cy = r.y + r.h/2;
+      g.fillStyle = "#222348"; g.beginPath(); g.ellipse(cx, cy, Math.min(r.w*.16, 58), Math.min(r.h*.16, 42), 0, 0, 7); g.fill();
+      g.strokeStyle = "#8b83d0"; g.lineWidth = 4; g.stroke();
+      g.fillStyle = "#ff667f"; g.beginPath(); g.arc(TB[0], TB[1], 13, 0, 7); g.fill();
+      g.strokeStyle = "#ffc0cb"; g.lineWidth = 3; g.stroke();
+    }
     const m = document.createElement("canvas"); m.width = WW; m.height = WH; const mg = m.getContext("2d");                      // ombre portée des murs sur le sol
     mg.fillStyle = "#000"; mg.fillRect(0, 0, WW, WH); mg.globalCompositeOperation = "destination-out"; FLOOR.forEach(a => mg.fillRect(a.x, a.y, a.w, a.h));
     g.shadowColor = "rgba(0,0,0,.75)"; g.shadowBlur = 26; g.drawImage(m, 0, 0); g.shadowBlur = 0;

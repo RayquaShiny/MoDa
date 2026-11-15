@@ -24,12 +24,12 @@ const CORR = [[170, 90, 50, 350], [110, 245, 60, 50], [170, 60, 180, 50], [320, 
 const FLOOR = [...ROOMS, ...CORR];                                       // salles + couloirs
 // Portes automatiques du Skeld : sas fermés pendant le sabotage dédié.
 const DOORS = [
-  { id: 0, n: "Cafétéria Ouest", x: sc(320), y: sc(126), w: sc(30), h: sc(9) },
+  { id: 0, n: "Cafétéria Ouest", x: sc(335), y: sc(125), w: sc(9), h: sc(40) },
   { id: 1, n: "Cafétéria Sud", x: sc(410), y: sc(198), w: sc(40), h: sc(9) },
-  { id: 2, n: "Armes", x: sc(545), y: sc(91), w: sc(55), h: sc(9) },
-  { id: 3, n: "Navigation", x: sc(655), y: sc(218), w: sc(9), h: sc(38) },
-  { id: 4, n: "Électricité", x: sc(300), y: sc(440), w: sc(9), h: sc(40) },
-  { id: 5, n: "Stockage", x: sc(430), y: sc(335), w: sc(40), h: sc(9) }
+  { id: 2, n: "Armes", x: sc(560), y: sc(70), w: sc(9), h: sc(50) },
+  { id: 3, n: "Navigation", x: sc(620), y: sc(210), w: sc(70), h: sc(9) },
+  { id: 4, n: "Électricité", x: sc(310), y: sc(420), w: sc(9), h: sc(40) },
+  { id: 5, n: "Stockage", x: sc(410), y: sc(365), w: sc(50), h: sc(9) }
 ];
 let CLOSED_DOORS = new Set();
 const doorBlocked = (px, py) => DOORS.some(d => CLOSED_DOORS.has(d.id) && px + RAD > d.x && px - RAD < d.x + d.w && py + RAD > d.y && py - RAD < d.y + d.h);

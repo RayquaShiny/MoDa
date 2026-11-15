@@ -493,6 +493,34 @@ export function createAmogClient(env) {
       g.globalAlpha = 1;
     });
     g.font = "800 22px 'Bricolage Grotesque',sans-serif"; g.textAlign = "center"; g.fillStyle = "rgba(255,255,255,.14)"; ROOMS.forEach(r => g.fillText(r.n.toUpperCase(), r.x + r.w / 2, r.y + r.h - 18));
+    // Seuils et cadres de portes : la géométrie reste alignée sur les ouvertures des couloirs.
+    DOORS.forEach(d => {
+      const horizontal = d.w >= d.h, cx = d.x + d.w / 2, cy = d.y + d.h / 2;
+      g.save();
+      g.lineCap = "round";
+      g.strokeStyle = "rgba(8,7,28,.95)"; g.lineWidth = 9;
+      g.beginPath();
+      if (horizontal) { g.moveTo(d.x - 5, cy); g.lineTo(d.x + d.w + 5, cy); }
+      else { g.moveTo(cx, d.y - 5); g.lineTo(cx, d.y + d.h + 5); }
+      g.stroke();
+      g.strokeStyle = "rgba(167,157,255,.9)"; g.lineWidth = 3;
+      g.beginPath();
+      if (horizontal) { g.moveTo(d.x - 5, cy - 5); g.lineTo(d.x + d.w + 5, cy - 5); g.moveTo(d.x - 5, cy + 5); g.lineTo(d.x + d.w + 5, cy + 5); }
+      else { g.moveTo(cx - 5, d.y - 5); g.lineTo(cx - 5, d.y + d.h + 5); g.moveTo(cx + 5, d.y - 5); g.lineTo(cx + 5, d.y + d.h + 5); }
+      g.stroke();
+      const led = g.createRadialGradient(cx, cy, 1, cx, cy, 15);
+      led.addColorStop(0, "rgba(62,230,196,.5)"); led.addColorStop(1, "rgba(62,230,196,0)");
+      g.fillStyle = led; g.beginPath(); g.arc(cx, cy, 15, 0, 7); g.fill();
+      g.fillStyle = "#7af0d1"; g.beginPath(); g.arc(cx, cy, 3.5, 0, 7); g.fill();
+      g.restore();
+    });
+    // Repères lumineux aux carrefours pour rendre les changements de couloir lisibles.
+    [[170, 90], [170, 245], [410, 150], [510, 285], [630, 320], [410, 405]].forEach(([px, py]) => {
+      const cx = sc(px), cy = sc(py);
+      g.fillStyle = "rgba(10,9,35,.9)"; g.beginPath(); g.arc(cx, cy, 9, 0, 7); g.fill();
+      g.strokeStyle = "rgba(123,240,215,.55)"; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, 6, 0, 7); g.stroke();
+      g.fillStyle = "#7af0d1"; g.globalAlpha = .7; g.beginPath(); g.arc(cx, cy, 2, 0, 7); g.fill(); g.globalAlpha = 1;
+    });
     g.save(); g.shadowColor = "#ff3b5c"; g.shadowBlur = 22; g.fillStyle = "#2a2670"; g.beginPath(); g.arc(TB[0], TB[1], 30, 0, 7); g.fill(); g.restore();   // bouton d'urgence
     g.strokeStyle = "#a99bff"; g.lineWidth = 4; g.beginPath(); g.arc(TB[0], TB[1], 30, 0, 7); g.stroke();
     const bgr = g.createRadialGradient(TB[0] - 3, TB[1] - 3, 2, TB[0], TB[1], 14); bgr.addColorStop(0, "#ff8fa3"); bgr.addColorStop(1, "#d81b3d"); g.fillStyle = bgr; g.beginPath(); g.arc(TB[0], TB[1], 14, 0, 7); g.fill();

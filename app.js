@@ -11,7 +11,7 @@ import {createVoice} from "./voice.js";
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="72";
+const VER="73";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -242,17 +242,19 @@ const played=(g,open)=>{const sec=open?0:Math.max(1,Math.round((Date.now()-gStar
 const rcode=()=>Array.from({length:5},()=>"ABCDEFGHJKLMNPQRSTUVWXYZ"[Math.floor(Math.random()*24)]).join("");
 const firstColor=pl=>COLORS.find(c=>!Object.values(pl||{}).some(p=>p.color===c))||COLORS[0];
 const mkLobby=game=>async()=>{
+  if(game==="amog")return toast("Amog Us est actuellement en maintenance.");
   const c=rcode();
   await set(R(`lobbies/${c}`),{host:me.uid,game,status:"lobby",opts:{sp:1,wr:0,bo:1},players:{[me.uid]:{name:me.name,color:COLORS[0],ready:true,...ownTag()}}});
   onDisconnect(R(`lobbies/${c}`)).remove();enter(c);
 };
-$("tsnake").onclick=mkLobby("snake");$("tsurv").onclick=mkLobby("surv");$("tbr").onclick=mkLobby("br");$("ttk").onclick=mkLobby("tk");$("tlab").onclick=mkLobby("lab");$("tsim").onclick=mkLobby("sim");$("tsumo").onclick=mkLobby("sumo");$("tbarre").onclick=mkLobby("barre");$("tfruit").onclick=mkLobby("fruit");$("tamog").onclick=mkLobby("amog");
+$("tsnake").onclick=mkLobby("snake");$("tsurv").onclick=mkLobby("surv");$("tbr").onclick=mkLobby("br");$("ttk").onclick=mkLobby("tk");$("tlab").onclick=mkLobby("lab");$("tsim").onclick=mkLobby("sim");$("tsumo").onclick=mkLobby("sumo");$("tbarre").onclick=mkLobby("barre");$("tfruit").onclick=mkLobby("fruit");$("tamog").onclick=()=>toast("Amog Us est actuellement en maintenance.");
 $("join").onclick=()=>joinLobby($("joincode").value.trim().toUpperCase());
 $("joincode").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();$("join").click()}});
 async function joinLobby(c){
   if(code)await leaveLobby();
   const l=(await get(R(`lobbies/${c}`))).val();
   if(!l)return toast("Lobby introuvable");
+  if(l.game==="amog")return toast("Amog Us est actuellement en maintenance.");
   if(l.kick&&l.kick[me.uid])return toast("Tu as été retiré de ce lobby par un admin");
   if(l.status!=="lobby"&&l.game!=="sim"&&l.game!=="fruit")return toast("Partie déjà en cours");
   const pl=l.players||{};const mxP=l.game==="fruit"?5:l.game==="amog"?10:8;if(Object.keys(pl).length>=mxP&&!pl[me.uid])return toast(`Lobby plein (${mxP} max)`);
@@ -265,6 +267,7 @@ function enter(c){
     const l=s.val();if(!l){if(code){local();toast("Le lobby a été fermé")}return}
     if(l.kick&&l.kick[me.uid]){if(code){local();toast("Un admin t'a retiré du lobby")}return}
     lobby=l;
+    if(l.game==="amog"){if(l.status==="playing"){show("lobby");toast("Amog Us est actuellement en maintenance.");}renderLobby();return}
     if((l.status==="lobby"||l.game==="sim"||l.game==="fruit")&&l.host!==me.uid&&!(l.players&&l.players[me.uid])){ // coupure puis retour : on se réinscrit
       set(R(`lobbies/${c}/players/${me.uid}`),{name:me.name,color:firstColor(l.players),ready:false,...ownTag()});onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();return}
     renderLobby();
@@ -291,7 +294,8 @@ function renderLobby(){
   $("oVc").textContent=op.vc===0?"🎙️ Chat vocal : non":"🎙️ Chat vocal : oui";$("oVc").disabled=!host;
   $("oTm").textContent=op.tm?"👥 Équipes : oui":"👥 Équipes : non";$("oTm").disabled=!host;
   const tmBad=lobby.game==="barre"&&!!op.tm&&cnt%2===1; // mode équipes : nombre de joueurs pair obligatoire (bots inclus)
-  $("start").hidden=!host;$("start").disabled=!all||cnt<need||tmBad;
+  $("start").hidden=!host;$("start").disabled=lobby.game==="amog"||!all||cnt<need||tmBad;
+  if(lobby.game==="amog")$("lneed").textContent="🛠️ Amog Us est actuellement en maintenance.";
   $("lneed").textContent=cnt<need?`⏳ Il faut au moins ${need} joueurs pour lancer la partie (${cnt}/${need}) : invite un pote${botGame(lobby)?" ou ajoute un bot 🤖":""} !`:tmBad?`👥 Le mode équipes demande un nombre pair de joueurs, bots inclus (${cnt} actuellement) : ajoute ou retire un bot 🤖 ou un joueur.`:!all?"En attente que tout le monde soit prêt…":"";
 }
 const setOpt=(k,f)=>()=>{if(lobby&&lobby.host===me.uid)update(R(`lobbies/${code}/opts`),{[k]:f(lobby.opts||{})}).catch(err)};
@@ -985,6 +989,7 @@ addEventListener("keyup",e=>{if(e.key===" "&&isAim()&&cur==="game"){spDown=0;set
 
 // ---------- Jeu : boucle de l'hôte ----------
 $("start").onclick=async()=>{
+  if(!lobby||lobby.game==="amog")return toast("Amog Us est actuellement en maintenance.");
   gStart=Date.now();
   if(lobby.game==="sim")return startSim(simEnv());
   if(lobby.game==="amog")return startAmog(simEnv());

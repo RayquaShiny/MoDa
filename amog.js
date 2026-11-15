@@ -501,6 +501,13 @@ export function createAmogClient(env) {
     g.fillStyle = "#6e66c8"; hull(2, 15);
     const fl = g.createLinearGradient(0, 0, WW, WH); fl.addColorStop(0, "#221f4a"); fl.addColorStop(1, "#191638");
     g.fillStyle = fl; hull(0, 13);
+    // Contour extérieur retracé sur le plan de référence InnerSloth (GamesRadar).
+    // L'image de référence fait 1000 × 563 ; conversion vers le monde 1400 × 800.
+    const skeldEdge = [[412,20],[590,20],[610,39],[652,39],[697,78],[796,78],[832,114],[832,183],[849,205],[923,205],[958,237],[958,278],[931,309],[866,309],[866,381],[803,381],[803,457],[779,488],[687,488],[687,540],[577,540],[577,506],[435,506],[435,490],[273,490],[273,468],[233,468],[233,445],[126,445],[126,421],[104,421],[104,360],[42,360],[42,209],[68,185],[127,185],[127,85],[152,85],[232,85],[232,116],[407,116],[407,38]];
+    g.save(); g.beginPath();
+    skeldEdge.forEach(([px,py],i)=>{ const x=px*1.4, y=py*(800/563); if(!i) g.moveTo(x,y); else g.lineTo(x,y); });
+    g.closePath(); g.strokeStyle="rgba(226,235,255,.96)"; g.lineWidth=7; g.lineJoin="round"; g.shadowColor="rgba(8,10,30,.9)"; g.shadowBlur=13; g.stroke();
+    g.strokeStyle="rgba(112,139,255,.55)"; g.lineWidth=2; g.shadowBlur=0; g.stroke(); g.restore();
     g.save(); g.beginPath();
     ROOMS.forEach(a => rr(g, a.x, a.y, a.w, a.h, 13));
     CORR.forEach(a => g.rect(a.x, a.y, a.w, a.h));

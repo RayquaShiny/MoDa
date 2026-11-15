@@ -11,34 +11,48 @@
 
 const W = 800, H = 560, RAD = 11, BR = 15, SPD = 125, DT = 1 / 30;
 const KCD0 = 8, KCD = 12, KR = 52, TT = 1.6, MT = 40, RT = 8, VIS = 290;
-const K = 1.75, WW = 1400, WH = 800, sc = v => Math.round(v * K), scp = a => a.map(sc);
-// Reconstitution à l'échelle du plan officiel du Skeld (référence GamesRadar / InnerSloth).
-const TB = scp([424, 112]);
-// Coordonnées relevées sur le plan de référence 1000×563, converties dans l'échelle du monde.
-const ROOMS = [
-  {n:"Réacteur",x:33.6,y:148,w:99.2,h:140},
-  {n:"Moteur haut",x:100.8,y:68,w:84.8,h:86.4},
-  {n:"Moteur bas",x:100.8,y:282.4,w:86.4,h:93.6},
-  {n:"Sécurité",x:169.6,y:164,w:67.2,h:96.8},
-  {n:"Médbay",x:243.2,y:123.2,w:108,h:111.2},
-  {n:"Cafétéria",x:328.8,y:16,w:204,h:195.2},
-  {n:"Armes",x:555.2,y:56.8,w:84,h:96},
-  {n:"O2",x:506.4,y:161.6,w:68.8,h:62.4},
-  {n:"Navigation",x:680,y:165.6,w:86.4,h:80},
-  {n:"Admin",x:438.4,y:229.6,w:123.2,h:94.4},
-  {n:"Électricité",x:256,y:248.8,w:96,h:100.8},
-  {n:"Stockage",x:348,y:304,w:114.4,h:130.4},
-  {n:"Comms",x:460.8,y:356.8,w:92.8,h:76.8},
-  {n:"Boucliers",x:553.6,y:305.6,w:86.4,h:86.4}
-].map(r=>({n:r.n,x:sc(r.x),y:sc(r.y),w:sc(r.w),h:sc(r.h)}));
-const CORR = [
- [148,105,230,35],[190,142,78,24],[235,185,52,25],[205,225,78,25],
- [145,185,55,24],[145,315,55,24],[185,333,60,24],[230,260,30,55],
- [340,205,38,36],[380,250,38,42],[425,205,38,55],[520,125,38,48],
- [630,130,38,60],[700,185,55,24],[790,225,55,24],[720,275,34,100],
- [555,255,36,52],[455,320,75,24],[535,360,60,24],[625,390,36,55],
- [535,420,36,42],[430,430,100,24],[295,380,55,24],[220,385,70,24]
-].map(r=>({x:sc(r[0]*.8),y:sc(r[1]*.8),w:sc(r[2]*.8),h:sc(r[3]*.8)}));
+const K=1.75,WW=1400,WH=800,sc=v=>Math.round(v*K),scp=a=>a.map(sc);
+const TB=[700,203];
+// Polygones relevés sur le plan de référence du Skeld (1000 × 563 px).
+const ROOM_POLYS = [
+{n:"Réacteur",p:[[60,294],[178,259],[192,277],[192,456],[161,503],[60,461]]},
+{n:"Moteur haut",p:[[179,123],[323,123],[323,220],[287,220],[287,258],[179,258]]},
+{n:"Moteur bas",p:[[179,493],[322,493],[322,540],[428,540],[428,655],[378,655],[378,626],[179,626],[179,601],[175,601]]},
+{n:"Sécurité",p:[[286,287],[410,287],[410,454],[323,454],[323,414],[286,414]]},
+{n:"Médbay",p:[[424,224],[567,224],[567,412],[456,412],[424,350]]},
+{n:"Cafétéria",p:[[577,29],[826,29],[931,134],[931,217],[871,217],[871,367],[641,367],[577,305]]},
+{n:"Armes",p:[[976,101],[1091,101],[1117,155],[1117,263],[1039,263],[976,221]]},
+{n:"O2",p:[[888,283],[1002,283],[1002,385],[888,385]]},
+{n:"Navigation",p:[[1225,291],[1324,291],[1378,339],[1378,400],[1323,433],[1225,399]]},
+{n:"Admin",p:[[773,409],[977,409],[977,545],[951,571],[812,571],[773,538]]},
+{n:"Électricité",p:[[456,438],[613,438],[613,609],[560,633],[456,609]]},
+{n:"Stockage",p:[[617,531],[806,531],[806,757],[700,757],[617,672]]},
+{n:"Comms",p:[[811,624],[966,624],[966,756],[811,756]]},
+{n:"Boucliers",p:[[976,547],[1119,547],[1119,669],[1050,683],[976,657]]}
+];
+const CORR_POLYS = [
+[[322,158],[577,158],[577,220],[322,220]],
+[[190,323],[286,323],[286,414],[190,414]],
+[[410,287],[456,287],[456,412],[410,412]],
+[[567,252],[641,252],[641,367],[567,367]],
+[[931,158],[976,158],[976,221],[931,221]],
+[[700,367],[773,367],[773,412],[700,412]],
+[[871,280],[889,280],[889,385],[871,385]],
+[[1002,308],[1225,308],[1225,386],[1002,386]],
+[[613,531],[773,531],[773,571],[613,571]],
+[[806,624],[811,624],[811,672],[806,672]],
+[[560,609],[700,609],[700,672],[560,672]],
+[[428,626],[617,626],[617,686],[428,686]],
+[[966,657],[1050,657],[1050,686],[966,686]],
+[[1039,263],[1071,263],[1071,283],[1002,283],[1002,308],[976,308],[976,263]],
+[[641,367],[700,367],[700,531],[641,531]],
+[[567,412],[613,412],[613,531],[567,531]],
+[[322,454],[456,454],[456,493],[322,493]]
+];
+const MAP_POLYS = [...ROOM_POLYS.map(r=>r.p),...CORR_POLYS];
+const polygonPath=(ctx,p)=>{ctx.moveTo(p[0][0],p[0][1]);for(let i=1;i<p.length;i++)ctx.lineTo(p[i][0],p[i][1]);ctx.closePath();};
+const ROOMS=ROOM_POLYS.map(r=>({n:r.n,...bbox(r.p)}));
+const CORR=CORR_POLYS.map(p=>bbox(p));
 const FLOOR=[...ROOMS,...CORR];
 const DOORS=[
  {id:0,n:"Médbay",x:sc(330*.8),y:sc(274*.8),w:sc(10*.8),h:sc(24*.8)},
@@ -60,9 +74,19 @@ const ST=[
 const NT = 6;                                                             // tâches par équipier (sur 14 postes)
 const TTS = [2.7, 3.6, 3.0, 2.4, 3.3, 1.8, 1.5, 1.5, 2.1, 2.4, 3.0, 2.7, 3.6, 2.1];                    // durée de chaque tâche (même ordre que ST)
 let GRID = null;                                                          // grille 1 px : 1 = sol (rend at/ok/los beaucoup plus rapides)
-const at = (px, py) => {
-  if (!GRID) { GRID = new Uint8Array(WW * WH); FLOOR.forEach(a => { for (let j = a.y; j <= a.y + a.h && j < WH; j++) GRID.fill(1, j * WW + a.x, j * WW + Math.min(WW - 1, a.x + a.w) + 1); }); }
-  return px >= 0 && py >= 0 && px < WW && py < WH && GRID[(py | 0) * WW + (px | 0)] === 1;
+const at=(px,py)=>{
+ if(!GRID){
+  GRID=new Uint8Array(WW*WH);
+  for(const poly of MAP_POLYS){
+   let minY=WH-1,maxY=0;for(const p of poly){minY=Math.min(minY,p[1]);maxY=Math.max(maxY,p[1]);}
+   for(let y=Math.max(0,minY);y<=Math.min(WH-1,maxY);y++){
+    const scan=y+.5,xs=[];
+    for(let i=0,j=poly.length-1;i<poly.length;j=i++){const A=poly[i],B=poly[j];if((A[1]>scan)!==(B[1]>scan))xs.push(A[0]+(scan-A[1])*(B[0]-A[0])/(B[1]-A[1]));}
+    xs.sort((u,v)=>u-v);for(let k=0;k+1<xs.length;k+=2){const x0=Math.max(0,Math.ceil(xs[k])),x1=Math.min(WW-1,Math.floor(xs[k+1]));if(x1>=x0)GRID.fill(1,y*WW+x0,y*WW+x1+1);}
+   }
+  }
+ }
+ return px>=0&&py>=0&&px<WW&&py<WH&&GRID[(py|0)*WW+(px|0)]===1;
 };
 const ok = (px, py) => !doorBlocked(px, py) && at(px - RAD, py - RAD) && at(px + RAD, py - RAD) && at(px - RAD, py + RAD) && at(px + RAD, py + RAD);
 const move = (q, dx, dy) => {
@@ -502,51 +526,21 @@ export function createAmogClient(env) {
     const sp = g.createRadialGradient(WW / 2, WH / 2, 100, WW / 2, WH / 2, WW * .7); sp.addColorStop(0, "#14103a"); sp.addColorStop(1, "#04030d"); g.fillStyle = sp; g.fillRect(0, 0, WW, WH);
     for (let i = 0; i < 320; i++) { const r = rnd() < .08 ? 1.7 : .6 + rnd() * .8; g.globalAlpha = .25 + rnd() * .6; g.fillStyle = rnd() < .2 ? "#ffd9a8" : "#cfd6ff"; g.beginPath(); g.arc(rnd() * WW, rnd() * WH, r, 0, 7); g.fill(); }   // espace étoilé autour du vaisseau
     g.globalAlpha = 1;
-    // Coque unifiée : une seule silhouette de sol, sans contours superposés.
-    const hullCanvas = document.createElement("canvas");
-    hullCanvas.width = WW; hullCanvas.height = WH;
-    const hg = hullCanvas.getContext("2d");
-    hg.fillStyle = "#fff";
-    ROOMS.forEach(a => { rr(hg, a.x - 13, a.y - 13, a.w + 26, a.h + 26, 22); hg.fill(); });
-    CORR.forEach(a => { rr(hg, a.x - 13, a.y - 13, a.w + 26, a.h + 26, 12); hg.fill(); });
-    const wallCanvas = document.createElement("canvas");
-    wallCanvas.width = WW; wallCanvas.height = WH;
-    const wg = wallCanvas.getContext("2d");
-    wg.drawImage(hullCanvas, 0, 0);
-    wg.globalCompositeOperation = "source-in";
-    const wallGrad = wg.createLinearGradient(0, 0, WW, WH);
-    wallGrad.addColorStop(0, "#7771c9"); wallGrad.addColorStop(.5, "#39356f"); wallGrad.addColorStop(1, "#6560ad");
-    wg.fillStyle = wallGrad; wg.fillRect(0, 0, WW, WH);
-    g.save();
-    g.shadowColor = "rgba(0,0,0,.78)"; g.shadowBlur = 28;
-    g.drawImage(wallCanvas, 0, 0);
-    g.shadowBlur = 0;
-    g.drawImage(wallCanvas, 0, 0);
-    g.restore();
-    g.save(); g.beginPath();
-    ROOMS.forEach(a => rr(g, a.x, a.y, a.w, a.h, 13));
-    CORR.forEach(a => rr(g, a.x, a.y, a.w, a.h, 8));
-    g.clip();
-    const floorGrad = g.createLinearGradient(0, 0, WW, WH);
-    floorGrad.addColorStop(0, "#28264e"); floorGrad.addColorStop(1, "#17172f");
-    g.fillStyle = floorGrad; g.fillRect(0, 0, WW, WH);
-    // Quadrillage discret commun à toutes les pièces : aucune texture de pièce ne se répète par-dessus une autre.
-    g.strokeStyle = "rgba(174,181,255,.055)"; g.lineWidth = 1;
-    for (let xx = 0; xx < WW; xx += 40) { g.beginPath(); g.moveTo(xx + .5, 0); g.lineTo(xx + .5, WH); g.stroke(); }
-    for (let yy = 0; yy < WH; yy += 40) { g.beginPath(); g.moveTo(0, yy + .5); g.lineTo(WW, yy + .5); g.stroke(); }
-    g.restore();
-    // Liseré des salles : un seul trait par salle, sans accumulation de couches.
-    ROOMS.forEach((r, i) => {
-      g.strokeStyle = "rgba(151,158,235,.48)"; g.lineWidth = 3;
-      rr(g, r.x + 2, r.y + 2, r.w - 4, r.h - 4, 12); g.stroke();
-      g.fillStyle = RTINT[i]; g.globalAlpha = .75;
-      const ledCount = Math.max(1, Math.floor(r.w / 70));
-      for (let k = 0; k < ledCount; k++) {
-        const px = r.x + (k + .5) * r.w / ledCount;
-        g.fillRect(px - 5, r.y + 5, 10, 3);
-      }
-      g.globalAlpha = 1;
-    });
+    // Coque et sol calculés depuis les mêmes contours polygonaux.
+    const hullCanvas=document.createElement("canvas");hullCanvas.width=WW;hullCanvas.height=WH;
+    const hg=hullCanvas.getContext("2d");hg.beginPath();MAP_POLYS.forEach(p=>polygonPath(hg,p));
+    hg.fillStyle="#fff";hg.fill("nonzero");hg.lineJoin="round";hg.lineCap="round";hg.lineWidth=24;hg.strokeStyle="#fff";hg.stroke();
+    const wallCanvas=document.createElement("canvas");wallCanvas.width=WW;wallCanvas.height=WH;
+    const wg=wallCanvas.getContext("2d");wg.drawImage(hullCanvas,0,0);wg.globalCompositeOperation="source-in";
+    const wallGrad=wg.createLinearGradient(0,0,WW,WH);wallGrad.addColorStop(0,"#7771c9");wallGrad.addColorStop(.5,"#39356f");wallGrad.addColorStop(1,"#6560ad");
+    wg.fillStyle=wallGrad;wg.fillRect(0,0,WW,WH);
+    g.save();g.shadowColor="rgba(0,0,0,.78)";g.shadowBlur=24;g.drawImage(wallCanvas,0,0);g.shadowBlur=0;g.drawImage(wallCanvas,0,0);g.restore();
+    g.save();g.beginPath();MAP_POLYS.forEach(p=>polygonPath(g,p));g.clip();
+    const floorGrad=g.createLinearGradient(0,0,WW,WH);floorGrad.addColorStop(0,"#28264e");floorGrad.addColorStop(1,"#17172f");
+    g.fillStyle=floorGrad;g.fillRect(0,0,WW,WH);g.strokeStyle="rgba(174,181,255,.055)";g.lineWidth=1;
+    for(let xx=0;xx<WW;xx+=40){g.beginPath();g.moveTo(xx+.5,0);g.lineTo(xx+.5,WH);g.stroke();}
+    for(let yy=0;yy<WH;yy+=40){g.beginPath();g.moveTo(0,yy+.5);g.lineTo(WW,yy+.5);g.stroke();}g.restore();
+    ROOM_POLYS.forEach((r,i)=>{g.beginPath();polygonPath(g,r.p);g.strokeStyle="rgba(151,158,235,.62)";g.lineWidth=3;g.stroke();const b=bbox(r.p);g.fillStyle=RTINT[i];g.globalAlpha=.75;const count=Math.max(1,Math.floor(b.w/70));for(let k=0;k<count;k++)g.fillRect(b.x+(k+.5)*b.w/count-5,b.y+5,10,3);g.globalAlpha=1;});
     // Mobilier épuré : éléments courts, centrés et contenus dans chaque salle.
     const rc = n => ROOMS.find(r => r.n === n);
     const detail = (name, color, count = 2) => {
@@ -577,7 +571,7 @@ export function createAmogClient(env) {
       g.strokeStyle = "#ffc0cb"; g.lineWidth = 3; g.stroke();
     }
     const m = document.createElement("canvas"); m.width = WW; m.height = WH; const mg = m.getContext("2d");                      // ombre portée des murs sur le sol
-    mg.fillStyle = "#000"; mg.fillRect(0, 0, WW, WH); mg.globalCompositeOperation = "destination-out"; FLOOR.forEach(a => mg.fillRect(a.x, a.y, a.w, a.h));
+    mg.fillStyle="#000";mg.fillRect(0,0,WW,WH);mg.globalCompositeOperation="destination-out";mg.beginPath();MAP_POLYS.forEach(p=>polygonPath(mg,p));mg.fill("nonzero");
     g.shadowColor = "rgba(0,0,0,.75)"; g.shadowBlur = 26; g.drawImage(m, 0, 0); g.shadowBlur = 0;
     ROOMS.forEach((r, i) => {                                             // voyants lumineux le long des murs
       g.fillStyle = RTINT[i]; g.globalAlpha = .85;

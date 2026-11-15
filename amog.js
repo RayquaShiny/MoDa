@@ -48,6 +48,8 @@ const DOORS = [
   { id: 4, n: "Électricité", x: sc(265), y: sc(405), w: sc(9), h: sc(32) },
   { id: 5, n: "Stockage", x: sc(400), y: sc(475), w: sc(32), h: sc(9) }
 ];
+let CLOSED_DOORS = new Set();
+const doorBlocked = (px, py) => DOORS.some(d => CLOSED_DOORS.has(d.id) && px + RAD > d.x && px - RAD < d.x + d.w && py + RAD > d.y && py - RAD < d.y + d.h);
 const ST = [[85, 125, "Aligner les moteurs"], [205, 425, "Brancher les câbles"], [45, 300, "Refroidir le réacteur"], [365, 425, "Trier les caisses"], [195, 215, "Scanner médical"], [405, 65, "Télécharger les plans"], [650, 120, "Calibrer le détecteur"], [580, 260, "Purger le circuit"],
   [85, 505, "Faire le plein"], [545, 510, "Vider les déchets"], [720, 475, "Activer le bouclier"], [485, 365, "Envoyer les données"], [95, 415, "Analyser un échantillon"], [750, 315, "Orienter l'antenne"]].map(t => [sc(t[0]), sc(t[1]), t[2]]);   // 14 postes de tâche
 

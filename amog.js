@@ -67,21 +67,45 @@ const move = (q, dx, dy) => {
   if (ok(q.x + dx, q.y + dy)) { q.x += dx; q.y += dy; } else if (ok(q.x + dx, q.y)) q.x += dx; else if (ok(q.x, q.y + dy)) q.y += dy;
 };
 const los = (ax, ay, bx, by) => { const n = Math.ceil(Math.hypot(bx - ax, by - ay) / 8); for (let i = 1; i < n; i++) { const f = i / n; if (!at(ax + (bx - ax) * f, ay + (by - ay) * f)) return false; } return true; }; // ligne de vue : aucun mur entre les deux
-const CS = 20, GW = Math.ceil(WW / CS), GH = Math.ceil(WH / CS);
-const clr = (ax, ay, bx, by) => { const n = Math.ceil(Math.hypot(bx - ax, by - ay) / 6); for (let i = 1; i <= n; i++) { const f = i / n; if (!ok(ax + (bx - ax) * f, ay + (by - ay) * f)) return false; } return true; };
-function route(px, py, tx, ty) {                                          // chemin le plus court dans les couloirs (recherche en largeur sur une grille de 20 px, puis lissage)
-  if (clr(px, py, tx, ty)) return [[tx, ty]];
-  const cell = (a, b) => Math.min(GH - 1, b / CS | 0) * GW + Math.min(GW - 1, a / CS | 0), cx = i => (i % GW) * CS + CS / 2, cy = i => ((i / GW) | 0) * CS + CS / 2;
-  const s = cell(px, py), t = cell(tx, ty), prev = new Int32Array(GW * GH).fill(-2), q = [s]; prev[s] = -1;
-  for (let h = 0; h < q.length && prev[t] === -2; h++) {
-    const i = q[h], x0 = i % GW, y0 = (i / GW) | 0;
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x0 + dx, ny = y0 + dy; if (nx < 0 || ny < 0 || nx >= GW || ny >= GH) continue; const n = ny * GW + nx; if (prev[n] !== -2) continue; if (n !== t && !ok(cx(n), cy(n))) continue; prev[n] = i; q.push(n); }
+const CS = 10, GW = Math.ceil(WW / CS), GH = Math.ceil(WH / CS);
+const clr = (ax, ay, bx, by) => { const n = Math.ceil(Math.hypot(bx - ax, by - ay) / 5); for (let i = 1; i <= n; i++) { const f = i / n; if (!ok(ax + (bx - ax) * f, ay + (by - ay) * f)) return false; } return true; };
+const cell = (x, y) => (Math.floor(y / CS) * GW + Math.floor(x / CS));
+const cx = i => (i % GW) * CS + CS / 2, cy = i => ((i / GW) | 0) * CS + CS / 2;
+const nearestWalkable = (x, y) => {
+  const sx = Math.max(0, Math.min(GW - 1, Math.floor(x / CS))), sy = Math.max(0, Math.min(GH - 1, Math.floor(y / CS)));
+  let best = -1, bd = Infinity;
+  for (let r = 0; r <= 8 && best < 0; r++) for (let yy = Math.max(0, sy-r); yy <= Math.min(GH-1, sy+r); yy++) for (let xx = Math.max(0, sx-r); xx <= Math.min(GW-1, sx+r); xx++) {
+    if (Math.max(Math.abs(xx-sx),Math.abs(yy-sy)) !== r) continue;
+    const id = yy * GW + xx, px = cx(id), py = cy(id), d = (px-x)**2+(py-y)**2;
+    if (d < bd && ok(px,py)) { best=id; bd=d; }
   }
-  if (prev[t] === -2) return [[tx, ty]];
-  const pts = []; for (let i = t; i !== -1; i = prev[i]) pts.push([cx(i), cy(i)]); pts.reverse(); pts.push([tx, ty]);
-  const o = []; let ax = px, ay = py, i = 0;
-  while (i < pts.length) { let j = pts.length - 1; while (j > i && !clr(ax, ay, pts[j][0], pts[j][1])) j--; o.push(pts[j]); ax = pts[j][0]; ay = pts[j][1]; i = j + 1; }
-  return o;
+  return best;
+};
+function route(px, py, tx, ty) {
+  if (!at(px,py) || !at(tx,ty)) return [];
+  if (clr(px,py,tx,ty)) return [[tx,ty]];
+  const si=nearestWalkable(px,py), ti=nearestWalkable(tx,ty);
+  if (si<0 || ti<0) return [];
+  const total=GW*GH, prev=new Int32Array(total).fill(-2), q=new Int32Array(total); let head=0,tail=0;
+  q[tail++]=si; prev[si]=-1;
+  const dirs=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+  while(head<tail && prev[ti]===-2) {
+    const id=q[head++], x=id%GW, y=(id/GW)|0;
+    for(const [dx,dy] of dirs) {
+      const nx=x+dx,ny=y+dy;
+      if(nx<0||ny<0||nx>=GW||ny>=GH) continue;
+      const ni=ny*GW+nx;if(prev[ni]!==-2)continue;
+      const ax=cx(id),ay=cy(id),bx=cx(ni),by=cy(ni);
+      if(!ok(bx,by) || (dx&&dy&&(!ok(cx(y*GW+nx),cy(y*GW+nx))||!ok(cx(ny*GW+x),cy(ny*GW+x)))))continue;
+      prev[ni]=id;q[tail++]=ni;
+    }
+  }
+  if(prev[ti]===-2)return [];
+  const pts=[];for(let id=ti;id!==-1;id=prev[id])pts.push([cx(id),cy(id)]);pts.reverse();
+  const out=[];let ax=px,ay=py,i=0;
+  while(i<pts.length){let j=pts.length-1;while(j>i&&!clr(ax,ay,pts[j][0],pts[j][1]))j--;out.push(pts[j]);ax=pts[j][0];ay=pts[j][1];i=j+1;}
+  if(clr(ax,ay,tx,ty))out.push([tx,ty]);
+  return out;
 }
 const VENTS = [[110, 125], [35, 285], [85, 505], [95, 415], [195, 215], [215, 425], [405, 65], [485, 190], [485, 375], [720, 315], [650, 120], [745, 285], [745, 475], [555, 510]].map(scp), VN = [1, 2, 0, 5, 3, 4, 8, 10, 6, 11, 7, 9, 13, 12];   // conduits : trois circuits de 3
 const LP = scp([215, 420]), RP = [[35, 285], [75, 325]].map(scp), CAMP = scp([95, 415]);                              // panneau électrique (Électricité), 2 panneaux du réacteur, caméras (Sécurité)

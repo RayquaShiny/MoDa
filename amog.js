@@ -39,7 +39,7 @@ const CORR = [
  [555,255,36,52],[455,320,75,24],[535,360,60,24],[625,390,36,55],
  [535,420,36,42],[430,430,100,24],[295,380,55,24],[220,385,70,24]
 ].map(r=>({x:sc(r[0]*.8),y:sc(r[1]*.8),w:sc(r[2]*.8),h:sc(r[3]*.8)}));
-const FLOOR=[...ROOMS,...CORR];const FLOOR=[...ROOMS,...CORR];
+const FLOOR=[...ROOMS,...CORR];
 const DOORS=[
  {id:0,n:"Médbay",x:sc(335),y:sc(165),w:sc(9),h:sc(28)},
  {id:1,n:"Cafétéria / Admin",x:sc(420),y:sc(207),w:sc(32),h:sc(9)},
@@ -57,7 +57,7 @@ const ST=[
  [493,405,"Vider les déchets"],[600,343,"Activer le bouclier"],[497,286,"Envoyer les données"],
  [210,230,"Analyser un échantillon"],[725,215,"Orienter l'antenne"]
 ].map(t=>[sc(t[0]*.8),sc(t[1]*.8),t[2]]);
-const NT = 6;const NT = 6;                                                             // tâches par équipier (sur 14 postes)
+const NT = 6;                                                             // tâches par équipier (sur 14 postes)
 const TTS = [2.7, 3.6, 3.0, 2.4, 3.3, 1.8, 1.5, 1.5, 2.1, 2.4, 3.0, 2.7, 3.6, 2.1];                    // durée de chaque tâche (même ordre que ST)
 let GRID = null;                                                          // grille 1 px : 1 = sol (rend at/ok/los beaucoup plus rapides)
 const at = (px, py) => {

@@ -502,17 +502,6 @@ export function createAmogClient(env) {
     const sp = g.createRadialGradient(WW / 2, WH / 2, 100, WW / 2, WH / 2, WW * .7); sp.addColorStop(0, "#14103a"); sp.addColorStop(1, "#04030d"); g.fillStyle = sp; g.fillRect(0, 0, WW, WH);
     for (let i = 0; i < 320; i++) { const r = rnd() < .08 ? 1.7 : .6 + rnd() * .8; g.globalAlpha = .25 + rnd() * .6; g.fillStyle = rnd() < .2 ? "#ffd9a8" : "#cfd6ff"; g.beginPath(); g.arc(rnd() * WW, rnd() * WH, r, 0, 7); g.fill(); }   // espace étoilé autour du vaisseau
     g.globalAlpha = 1;
-    // Coque du Skeld : salles aux angles adoucis, couloirs étroits et contour en plusieurs couches.
-    const hull = (pad, radius) => {
-      ROOMS.forEach(a => { rr(g, a.x - pad, a.y - pad, a.w + pad * 2, a.h + pad * 2, Math.min(radius, a.w / 4, a.h / 4)); g.fill(); });
-      CORR.forEach(a => g.fillRect(a.x - pad, a.y - pad, a.w + pad * 2, a.h + pad * 2));
-    };
-    g.save(); g.shadowColor = "rgba(0,0,0,.7)"; g.shadowBlur = 30; g.fillStyle = "#26225a"; hull(16, 25); g.restore();
-    g.fillStyle = "#4a4496"; hull(11, 22);
-    g.fillStyle = "#2f2b6e"; hull(6, 18);
-    g.fillStyle = "#6e66c8"; hull(2, 15);
-    const fl = g.createLinearGradient(0, 0, WW, WH); fl.addColorStop(0, "#221f4a"); fl.addColorStop(1, "#191638");
-    g.fillStyle = fl; hull(0, 13);
     // Coque unifiée : une seule silhouette de sol, sans contours superposés.
     const hullCanvas = document.createElement("canvas");
     hullCanvas.width = WW; hullCanvas.height = WH;
@@ -538,9 +527,9 @@ export function createAmogClient(env) {
     ROOMS.forEach(a => rr(g, a.x, a.y, a.w, a.h, 13));
     CORR.forEach(a => rr(g, a.x, a.y, a.w, a.h, 8));
     g.clip();
-    const fl = g.createLinearGradient(0, 0, WW, WH);
-    fl.addColorStop(0, "#28264e"); fl.addColorStop(1, "#17172f");
-    g.fillStyle = fl; g.fillRect(0, 0, WW, WH);
+    const floorGrad = g.createLinearGradient(0, 0, WW, WH);
+    floorGrad.addColorStop(0, "#28264e"); floorGrad.addColorStop(1, "#17172f");
+    g.fillStyle = floorGrad; g.fillRect(0, 0, WW, WH);
     // Quadrillage discret commun à toutes les pièces : aucune texture de pièce ne se répète par-dessus une autre.
     g.strokeStyle = "rgba(174,181,255,.055)"; g.lineWidth = 1;
     for (let xx = 0; xx < WW; xx += 40) { g.beginPath(); g.moveTo(xx + .5, 0); g.lineTo(xx + .5, WH); g.stroke(); }

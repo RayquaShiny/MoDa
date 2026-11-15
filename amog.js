@@ -44,7 +44,7 @@ const DOORS = [
   { id: 0, n: "Médbay", x: sc(265), y: sc(190), w: sc(9), h: sc(28) },
   { id: 1, n: "Cafétéria / Admin", x: sc(430), y: sc(245), w: sc(32), h: sc(9) },
   { id: 2, n: "Armes", x: sc(590), y: sc(110), w: sc(9), h: sc(32) },
-  { id: 3, n: "Navigation", x: sc(700), y: sc(285), w: sc(9), h: sc(32) },
+  { id: 3, n: "Navigation", x: sc(708), y: sc(285), w: sc(9), h: sc(32) },
   { id: 4, n: "Électricité", x: sc(265), y: sc(405), w: sc(9), h: sc(32) },
   { id: 5, n: "Stockage", x: sc(400), y: sc(475), w: sc(32), h: sc(9) }
 ];
@@ -472,13 +472,21 @@ export function createAmogClient(env) {
     const sp = g.createRadialGradient(WW / 2, WH / 2, 100, WW / 2, WH / 2, WW * .7); sp.addColorStop(0, "#14103a"); sp.addColorStop(1, "#04030d"); g.fillStyle = sp; g.fillRect(0, 0, WW, WH);
     for (let i = 0; i < 320; i++) { const r = rnd() < .08 ? 1.7 : .6 + rnd() * .8; g.globalAlpha = .25 + rnd() * .6; g.fillStyle = rnd() < .2 ? "#ffd9a8" : "#cfd6ff"; g.beginPath(); g.arc(rnd() * WW, rnd() * WH, r, 0, 7); g.fill(); }   // espace étoilé autour du vaisseau
     g.globalAlpha = 1;
-    g.save(); g.shadowColor = "rgba(0,0,0,.7)"; g.shadowBlur = 30; g.fillStyle = "#26225a"; FLOOR.forEach(a => g.fillRect(a.x - 16, a.y - 16, a.w + 32, a.h + 32)); g.restore();   // coque : plusieurs couches pour le relief
-    g.fillStyle = "#4a4496"; FLOOR.forEach(a => g.fillRect(a.x - 11, a.y - 11, a.w + 22, a.h + 22));
-    g.fillStyle = "#2f2b6e"; FLOOR.forEach(a => g.fillRect(a.x - 6, a.y - 6, a.w + 12, a.h + 12));
-    g.fillStyle = "#6e66c8"; FLOOR.forEach(a => g.fillRect(a.x - 2, a.y - 2, a.w + 4, a.h + 4));
+    // Coque du Skeld : salles aux angles adoucis, couloirs étroits et contour en plusieurs couches.
+    const hull = (pad, radius) => {
+      ROOMS.forEach(a => { rr(g, a.x - pad, a.y - pad, a.w + pad * 2, a.h + pad * 2, Math.min(radius, a.w / 4, a.h / 4)); g.fill(); });
+      CORR.forEach(a => g.fillRect(a.x - pad, a.y - pad, a.w + pad * 2, a.h + pad * 2));
+    };
+    g.save(); g.shadowColor = "rgba(0,0,0,.7)"; g.shadowBlur = 30; g.fillStyle = "#26225a"; hull(16, 25); g.restore();
+    g.fillStyle = "#4a4496"; hull(11, 22);
+    g.fillStyle = "#2f2b6e"; hull(6, 18);
+    g.fillStyle = "#6e66c8"; hull(2, 15);
     const fl = g.createLinearGradient(0, 0, WW, WH); fl.addColorStop(0, "#221f4a"); fl.addColorStop(1, "#191638");
-    g.fillStyle = fl; FLOOR.forEach(a => g.fillRect(a.x, a.y, a.w, a.h));
-    g.save(); g.beginPath(); FLOOR.forEach(a => g.rect(a.x, a.y, a.w, a.h)); g.clip();
+    g.fillStyle = fl; hull(0, 13);
+    g.save(); g.beginPath();
+    ROOMS.forEach(a => rr(g, a.x, a.y, a.w, a.h, 13));
+    CORR.forEach(a => g.rect(a.x, a.y, a.w, a.h));
+    g.clip();
     ROOMS.forEach((r, i) => { const rg = g.createRadialGradient(r.x + r.w / 2, r.y + r.h / 2, 10, r.x + r.w / 2, r.y + r.h / 2, r.w * .75); rg.addColorStop(0, RTINT[i] + "33"); rg.addColorStop(1, RTINT[i] + "00"); g.fillStyle = rg; g.fillRect(r.x, r.y, r.w, r.h); });
     g.strokeStyle = "rgba(160,150,255,.07)"; g.lineWidth = 1;
     for (let i = 0; i < WW; i += 50) { g.beginPath(); g.moveTo(i + .5, 0); g.lineTo(i + .5, WH); g.stroke(); }

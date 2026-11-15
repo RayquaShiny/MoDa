@@ -12,16 +12,19 @@
 const W = 800, H = 560, RAD = 11, BR = 15, SPD = 125, DT = 1 / 30;   // W × H = fenêtre de vue (le canvas) ; la carte fait WW × WH et la caméra suit le joueur
 const KCD0 = 8, KCD = 12, KR = 52, TT = 1.6, MT = 40, RT = 8, VIS = 290;
 const K = 1.75, WW = 1400, WH = 980, sc = v => Math.round(v * K), scp = a => a.map(sc);   // la carte est 1,75 fois plus grande que l'ancienne (même plan)
-const TB = scp([400, 125]);                                              // table d'urgence (cafétéria)
+const TB = scp([440, 95]);                                               // table d'urgence (cafétéria)
+// Plan inspiré du vaisseau « Skeld » d'Among Us : 14 salles reliées par des couloirs
 const ROOMS = [
-  { n: "Moteurs", x: 30, y: 40, w: 200, h: 160 }, { n: "Cafétéria", x: 280, y: 40, w: 240, h: 160 }, { n: "Électricité", x: 570, y: 40, w: 200, h: 160 },
-  { n: "Réacteur", x: 30, y: 360, w: 200, h: 160 }, { n: "Stockage", x: 280, y: 360, w: 240, h: 160 }, { n: "Médbay", x: 570, y: 360, w: 200, h: 160 }
+  { n: "Moteur haut", x: 40, y: 40, w: 140, h: 110 }, { n: "Réacteur", x: 10, y: 200, w: 110, h: 140 }, { n: "Sécurité", x: 160, y: 215, w: 80, h: 90 }, { n: "Moteur bas", x: 40, y: 390, w: 140, h: 110 },
+  { n: "Médbay", x: 215, y: 110, w: 110, h: 100 }, { n: "Cafétéria", x: 340, y: 25, w: 200, h: 140 }, { n: "Armes", x: 590, y: 40, w: 120, h: 100 }, { n: "O2", x: 545, y: 175, w: 70, h: 60 },
+  { n: "Navigation", x: 695, y: 195, w: 95, h: 130 }, { n: "Admin", x: 410, y: 250, w: 110, h: 90 }, { n: "Boucliers", x: 610, y: 370, w: 120, h: 100 }, { n: "Comms", x: 470, y: 445, w: 100, h: 70 },
+  { n: "Stockage", x: 330, y: 400, w: 120, h: 120 }, { n: "Électricité", x: 210, y: 370, w: 100, h: 90 }
 ].map(r => ({ n: r.n, x: sc(r.x), y: sc(r.y), w: sc(r.w), h: sc(r.h) }));
-const CXS = [130, 400, 670].map(sc);
-const FLOOR = [...ROOMS, { x: sc(30), y: sc(250), w: sc(740), h: sc(60) }];             // salles + couloir central
-CXS.forEach(cx => { FLOOR.push({ x: cx - sc(35), y: sc(190), w: sc(70), h: sc(70) }, { x: cx - sc(35), y: sc(300), w: sc(70), h: sc(70) }); }); // portes
-const ST = [[80, 100, "Aligner les moteurs"], [720, 100, "Brancher les câbles"], [80, 470, "Refroidir le réacteur"], [330, 480, "Trier les caisses"], [720, 470, "Scanner médical"], [330, 75, "Télécharger les plans"], [210, 280, "Calibrer le détecteur"], [590, 280, "Purger le circuit"],
-  [130, 62, "Faire le plein"], [470, 480, "Vider les déchets"], [60, 395, "Activer le bouclier"], [680, 170, "Envoyer les données"], [615, 415, "Analyser un échantillon"], [400, 282, "Orienter l'antenne"]].map(t => [sc(t[0]), sc(t[1]), t[2]]);   // 14 postes de tâche
+const CORR = [[170, 90, 50, 350], [110, 245, 60, 50], [170, 60, 180, 50], [320, 125, 30, 40], [410, 150, 40, 110], [530, 70, 70, 50], [520, 150, 50, 40], [610, 195, 90, 40], [655, 135, 40, 70], [510, 285, 190, 40], [630, 320, 40, 60], [560, 455, 60, 40], [410, 335, 50, 70], [300, 420, 40, 40], [440, 455, 40, 40]].map(r => ({ x: sc(r[0]), y: sc(r[1]), w: sc(r[2]), h: sc(r[3]) }));   // couloirs
+const FLOOR = [...ROOMS, ...CORR];                                       // salles + couloirs
+const ST = [[75, 105, "Aligner les moteurs"], [250, 395, "Brancher les câbles"], [92, 270, "Refroidir le réacteur"], [365, 440, "Trier les caisses"], [255, 150, "Scanner médical"], [480, 55, "Télécharger les plans"], [650, 90, "Calibrer le détecteur"], [580, 210, "Purger le circuit"],
+  [80, 445, "Faire le plein"], [415, 485, "Vider les déchets"], [670, 430, "Activer le bouclier"], [480, 295, "Envoyer les données"], [300, 188, "Analyser un échantillon"], [745, 265, "Orienter l'antenne"]].map(t => [sc(t[0]), sc(t[1]), t[2]]);   // 14 postes de tâche
+
 
 const NT = 6;                                                             // tâches par équipier (sur 14 postes)
 const TTS = [2.7, 3.6, 3.0, 2.4, 3.3, 1.8, 1.5, 1.5, 2.1, 2.4, 3.0, 2.7, 3.6, 2.1];                    // durée de chaque tâche (même ordre que ST)
@@ -36,17 +39,25 @@ const move = (q, dx, dy) => {
   if (ok(q.x + dx, q.y + dy)) { q.x += dx; q.y += dy; } else if (ok(q.x + dx, q.y)) q.x += dx; else if (ok(q.x, q.y + dy)) q.y += dy;
 };
 const los = (ax, ay, bx, by) => { const n = Math.ceil(Math.hypot(bx - ax, by - ay) / 8); for (let i = 1; i < n; i++) { const f = i / n; if (!at(ax + (bx - ax) * f, ay + (by - ay) * f)) return false; } return true; }; // ligne de vue : aucun mur entre les deux
-const zone = (px, py) => { const c = px < sc(255) ? 0 : px < sc(545) ? 1 : 2; return py <= sc(235) ? c : py >= sc(325) ? 3 + c : 6; };
-const DP = k => [CXS[k % 3], k < 3 ? sc(215) : sc(345)], AP = k => [CXS[k % 3], sc(280)];
-function route(px, py, tx, ty) {                                          // suite de points à suivre : porte → couloir → porte → cible
-  const a = zone(px, py), b = zone(tx, ty), o = [];
-  if (a === b) return [[tx, ty]];
-  if (a < 6) o.push(DP(a), AP(a)); if (b < 6) o.push(AP(b), DP(b));
-  o.push([tx, ty]); return o;
+const CS = 20, GW = Math.ceil(WW / CS), GH = Math.ceil(WH / CS);
+const clr = (ax, ay, bx, by) => { const n = Math.ceil(Math.hypot(bx - ax, by - ay) / 6); for (let i = 1; i <= n; i++) { const f = i / n; if (!ok(ax + (bx - ax) * f, ay + (by - ay) * f)) return false; } return true; };
+function route(px, py, tx, ty) {                                          // chemin le plus court dans les couloirs (recherche en largeur sur une grille de 20 px, puis lissage)
+  if (clr(px, py, tx, ty)) return [[tx, ty]];
+  const cell = (a, b) => Math.min(GH - 1, b / CS | 0) * GW + Math.min(GW - 1, a / CS | 0), cx = i => (i % GW) * CS + CS / 2, cy = i => ((i / GW) | 0) * CS + CS / 2;
+  const s = cell(px, py), t = cell(tx, ty), prev = new Int32Array(GW * GH).fill(-2), q = [s]; prev[s] = -1;
+  for (let h = 0; h < q.length && prev[t] === -2; h++) {
+    const i = q[h], x0 = i % GW, y0 = (i / GW) | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x0 + dx, ny = y0 + dy; if (nx < 0 || ny < 0 || nx >= GW || ny >= GH) continue; const n = ny * GW + nx; if (prev[n] !== -2) continue; if (n !== t && !ok(cx(n), cy(n))) continue; prev[n] = i; q.push(n); }
+  }
+  if (prev[t] === -2) return [[tx, ty]];
+  const pts = []; for (let i = t; i !== -1; i = prev[i]) pts.push([cx(i), cy(i)]); pts.reverse(); pts.push([tx, ty]);
+  const o = []; let ax = px, ay = py, i = 0;
+  while (i < pts.length) { let j = pts.length - 1; while (j > i && !clr(ax, ay, pts[j][0], pts[j][1])) j--; o.push(pts[j]); ax = pts[j][0]; ay = pts[j][1]; i = j + 1; }
+  return o;
 }
-const VENTS = [[50, 180], [300, 180], [750, 180], [50, 375], [300, 375], [750, 375]].map(scp), VN = [1, 2, 0, 4, 5, 3];   // conduits : deux circuits de 3 (haut / bas)
-const LP = scp([610, 170]), RP = [[200, 90], [200, 490]].map(scp), CAMP = scp([490, 170]);                              // panneau électrique, 2 panneaux du réacteur, caméras
-const CAMZ = FLOOR.slice(6), inCam = (px, py) => CAMZ.some(a => px >= a.x && px <= a.x + a.w && py >= a.y && py <= a.y + a.h);   // les caméras couvrent le couloir et les portes
+const VENTS = [[150, 135], [175, 295], [35, 300], [500, 325], [360, 150], [235, 125], [600, 130], [770, 310], [625, 455]].map(scp), VN = [1, 2, 0, 4, 5, 3, 7, 8, 6];   // conduits : trois circuits de 3
+const LP = scp([290, 435]), RP = [[55, 222], [55, 318]].map(scp), CAMP = scp([200, 232]);                              // panneau électrique (Électricité), 2 panneaux du réacteur, caméras (Sécurité)
+const CAMZ = CORR, inCam = (px, py) => CAMZ.some(a => px >= a.x && px <= a.x + a.w && py >= a.y && py <= a.y + a.h);   // les caméras couvrent les couloirs
 const pc = m => { let n = 0; while (m) { n += m & 1; m >>= 1; } return n; };
 export const _t = { ok, move, route, los, ST, FLOOR, TB };
 
@@ -407,7 +418,7 @@ export function createAmogClient(env) {
   // ----- dessin -----
   const KIND = ["align", "wires", "cool", "crate", "scan", "dl", "calib", "purge", "fuel", "trash", "shield", "up", "sample", "ant"];   // type d'animation de chaque poste
   const TCOL = ["#ff9f43", "#ffd23f", "#ff6b81", "#b79bff", "#3ee6c4", "#4cc9f0", "#7ae582", "#4cc9f0", "#ff9f43", "#ffd23f", "#b79bff", "#7ae582", "#ff6b81", "#3ee6c4"];   // couleur de chaque poste de tâche
-  const RTINT = ["#ff8a3d", "#4c8dff", "#ffd23f", "#ff3b5c", "#c79a52", "#3ee6c4"];                         // ambiance de chaque salle
+  const RTINT = ["#ff8a3d", "#ff3b5c", "#3ee6c4", "#ff8a3d", "#3ee6c4", "#4c8dff", "#ff6b81", "#7ae582", "#4cc9f0", "#ffd23f", "#4cc9f0", "#b79bff", "#c79a52", "#ffd23f"];                         // ambiance de chaque salle
   function bolt(g, cx, cy, s2, col) { g.fillStyle = col; g.beginPath(); [[.25, -1], [-.55, .1], [-.08, .1], [-.28, 1], [.55, -.2], [.08, -.2]].forEach((p, i) => g[i ? "lineTo" : "moveTo"](cx + p[0] * s2, cy + p[1] * s2)); g.closePath(); g.fill(); }
   function rad(g, cx, cy, r, col) { g.fillStyle = col; for (let k = 0; k < 3; k++) { const an = k * 2.0944 - 1.5708; g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, r, an - .5, an + .5); g.closePath(); g.fill(); } g.beginPath(); g.arc(cx, cy, r * .22, 0, 7); g.fill(); }
   function hazard(g, rx, ry, w, h) { g.save(); g.beginPath(); g.rect(rx, ry, w, h); g.clip(); g.fillStyle = "#e8b923"; g.fillRect(rx, ry, w, h); g.fillStyle = "#16132e"; for (let i = -h; i < w + h; i += 16) { g.beginPath(); g.moveTo(rx + i, ry + h); g.lineTo(rx + i + 8, ry + h); g.lineTo(rx + i + 8 + h, ry); g.lineTo(rx + i + h, ry); g.closePath(); g.fill(); } g.restore(); }
@@ -438,15 +449,22 @@ export function createAmogClient(env) {
     for (let i = 0; i < WW; i += 50) { g.beginPath(); g.moveTo(i + .5, 0); g.lineTo(i + .5, WH); g.stroke(); }
     for (let j = 0; j < WH; j += 50) { g.beginPath(); g.moveTo(0, j + .5); g.lineTo(WW, j + .5); g.stroke(); }
     g.fillStyle = "rgba(255,255,255,.025)"; for (let i = 0; i < WW; i += 100) for (let j = 0; j < WH; j += 100) g.fillRect(i, j, 50, 50);   // damier discret
-    const cr = FLOOR[6]; g.strokeStyle = "rgba(62,230,196,.28)"; g.lineWidth = 3; g.setLineDash([18, 14]); g.beginPath(); g.moveTo(cr.x + 10, cr.y + cr.h / 2); g.lineTo(cr.x + cr.w - 10, cr.y + cr.h / 2); g.stroke(); g.setLineDash([]);
+    CORR.forEach(cr => { g.strokeStyle = "rgba(62,230,196,.28)"; g.lineWidth = 3; g.setLineDash([18, 14]); g.beginPath(); if (cr.w >= cr.h) { g.moveTo(cr.x + 10, cr.y + cr.h / 2); g.lineTo(cr.x + cr.w - 10, cr.y + cr.h / 2); } else { g.moveTo(cr.x + cr.w / 2, cr.y + 10); g.lineTo(cr.x + cr.w / 2, cr.y + cr.h - 10); } g.stroke(); g.setLineDash([]); });
     const ringAt = (cx, cy, r, col, lw, al) => { g.globalAlpha = al; g.strokeStyle = col; g.lineWidth = lw; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.stroke(); g.globalAlpha = 1; };
-    { const r = ROOMS[0]; [[.3, .62], [.72, .62]].forEach(([fx, fy]) => { const cx = r.x + r.w * fx, cy = r.y + r.h * fy; ringAt(cx, cy, 52, "#ff8a3d", 4, .35); ringAt(cx, cy, 34, "#ff8a3d", 2, .3); ringAt(cx, cy, 14, "#ffd23f", 3, .4); g.strokeStyle = "#ff8a3d"; g.lineWidth = 3; g.globalAlpha = .3; for (let k = 0; k < 6; k++) { const an = k * 1.047; g.beginPath(); g.moveTo(cx + Math.cos(an) * 16, cy + Math.sin(an) * 16); g.lineTo(cx + Math.cos(an) * 34, cy + Math.sin(an) * 34); g.stroke(); } g.globalAlpha = 1; }); }   // Moteurs : deux turbines peintes
+    const rc = n => ROOMS.find(r => r.n === n);
+    { const r = rc("Moteur haut"), r2 = rc("Moteur bas"); [r, r2].forEach(rm => [[.3, .6], [.72, .6]].forEach(([fx, fy]) => { const cx = rm.x + rm.w * fx, cy = rm.y + rm.h * fy; ringAt(cx, cy, 44, "#ff8a3d", 4, .35); ringAt(cx, cy, 28, "#ff8a3d", 2, .3); ringAt(cx, cy, 12, "#ffd23f", 3, .4); g.strokeStyle = "#ff8a3d"; g.lineWidth = 3; g.globalAlpha = .3; for (let k = 0; k < 6; k++) { const an = k * 1.047; g.beginPath(); g.moveTo(cx + Math.cos(an) * 14, cy + Math.sin(an) * 14); g.lineTo(cx + Math.cos(an) * 28, cy + Math.sin(an) * 28); g.stroke(); } g.globalAlpha = 1; })); }   // Moteurs : turbines peintes
     ringAt(TB[0], TB[1], 118, "#4c8dff", 5, .25); ringAt(TB[0], TB[1], 92, "#4c8dff", 2, .3); ringAt(TB[0], TB[1], 62, "#9bb8ff", 2, .25);   // Cafétéria : tapis rond
-    { const r = ROOMS[2]; g.strokeStyle = "rgba(255,210,63,.3)"; g.lineWidth = 4; g.beginPath(); g.moveTo(r.x, r.y + r.h - 50); g.lineTo(LP[0], r.y + r.h - 50); g.lineTo(LP[0], LP[1] + 18); g.moveTo(r.x + r.w, r.y + 80); g.lineTo(LP[0] + 70, r.y + 80); g.lineTo(LP[0] + 70, LP[1]); g.lineTo(LP[0] + 20, LP[1]); g.stroke(); }   // Électricité : conduits
-    { const r = ROOMS[3], cx = r.x + r.w * .68, cy = r.y + r.h * .5, cg = g.createRadialGradient(cx, cy, 5, cx, cy, 90); cg.addColorStop(0, "rgba(255,59,92,.45)"); cg.addColorStop(1, "rgba(255,59,92,0)"); g.fillStyle = cg; g.fillRect(cx - 90, cy - 90, 180, 180); ringAt(cx, cy, 62, "#ff3b5c", 4, .4); ringAt(cx, cy, 40, "#ff3b5c", 2, .4); rad(g, cx, cy, 26, "rgba(255,80,110,.5)"); }   // Réacteur : cœur
-    { const r = ROOMS[4]; g.strokeStyle = "rgba(232,185,35,.45)"; g.lineWidth = 3; [[.08, .1, .24, .3], [.38, .1, .24, .3], [.68, .1, .24, .3]].forEach(([fx, fy, fw, fh]) => { const bx = r.x + r.w * fx, by = r.y + r.h * fy, bw = r.w * fw, bh = r.h * fh; g.strokeRect(bx, by, bw, bh); g.globalAlpha = .5; g.beginPath(); g.moveTo(bx, by); g.lineTo(bx + bw, by + bh); g.moveTo(bx + bw, by); g.lineTo(bx, by + bh); g.stroke(); g.globalAlpha = 1; }); }   // Stockage : zones de caisses peintes
-    { const r = ROOMS[5], cx = r.x + r.w * .5, cy = r.y + r.h * .45; ringAt(cx, cy, 56, "#3ee6c4", 3, .35); ringAt(cx, cy, 44, "#3ee6c4", 1.5, .3); g.fillStyle = "rgba(62,230,196,.3)"; g.fillRect(cx - 6, cy - 22, 12, 44); g.fillRect(cx - 22, cy - 6, 44, 12); }   // Médbay : croix et scanner
-    CXS.forEach(cx => { g.globalAlpha = .6; hazard(g, cx - sc(35) + 4, ROOMS[0].y + ROOMS[0].h - 4, sc(70) - 8, 8); hazard(g, cx - sc(35) + 4, ROOMS[3].y - 4, sc(70) - 8, 8); }); g.globalAlpha = 1;   // portes : bandes de danger
+    { const r = rc("Électricité"); g.strokeStyle = "rgba(255,210,63,.3)"; g.lineWidth = 4; g.beginPath(); g.moveTo(r.x, r.y + r.h - 50); g.lineTo(LP[0], r.y + r.h - 50); g.lineTo(LP[0], LP[1] + 18); g.moveTo(r.x + r.w, r.y + 40); g.lineTo(LP[0] + 50, r.y + 40); g.lineTo(LP[0] + 50, LP[1]); g.lineTo(LP[0] + 20, LP[1]); g.stroke(); }   // Électricité : conduits
+    { const r = rc("Réacteur"), cx = r.x + r.w * .62, cy = r.y + r.h * .5, cg = g.createRadialGradient(cx, cy, 5, cx, cy, 90); cg.addColorStop(0, "rgba(255,59,92,.45)"); cg.addColorStop(1, "rgba(255,59,92,0)"); g.fillStyle = cg; g.fillRect(cx - 90, cy - 90, 180, 180); ringAt(cx, cy, 50, "#ff3b5c", 4, .4); ringAt(cx, cy, 32, "#ff3b5c", 2, .4); rad(g, cx, cy, 22, "rgba(255,80,110,.5)"); }   // Réacteur : cœur
+    { const r = rc("Stockage"); g.strokeStyle = "rgba(232,185,35,.45)"; g.lineWidth = 3;[[.08, .08, .38, .22], [.54, .08, .38, .22], [.08, .72, .38, .2], [.54, .72, .38, .2]].forEach(([fx, fy, fw, fh]) => { const bx = r.x + r.w * fx, by = r.y + r.h * fy, bw = r.w * fw, bh = r.h * fh; g.strokeRect(bx, by, bw, bh); g.globalAlpha = .5; g.beginPath(); g.moveTo(bx, by); g.lineTo(bx + bw, by + bh); g.moveTo(bx + bw, by); g.lineTo(bx, by + bh); g.stroke(); g.globalAlpha = 1; }); }   // Stockage : zones de caisses peintes
+    { const r = rc("Médbay"), cx = r.x + r.w * .62, cy = r.y + r.h * .5; ringAt(cx, cy, 36, "#3ee6c4", 3, .35); g.fillStyle = "rgba(62,230,196,.3)"; g.fillRect(cx - 5, cy - 16, 10, 32); g.fillRect(cx - 16, cy - 5, 32, 10); }   // Médbay : croix et scanner
+    { const r = rc("Armes"), cx = r.x + r.w / 2, cy = r.y + r.h * .45; ringAt(cx, cy, 34, "#ff6b81", 3, .4); ringAt(cx, cy, 20, "#ff6b81", 2, .4); ringAt(cx, cy, 6, "#ff6b81", 3, .5); }   // Armes : cible
+    { const r = rc("O2"), cx = r.x + r.w / 2, cy = r.y + r.h / 2; ringAt(cx - 22, cy, 14, "#7ae582", 3, .4); ringAt(cx + 22, cy, 14, "#7ae582", 3, .4); }   // O2 : deux réservoirs
+    { const r = rc("Navigation"), cx = r.x + r.w / 2, cy = r.y + r.h / 2; ringAt(cx, cy, 36, "#4cc9f0", 3, .4); g.strokeStyle = "#4cc9f0"; g.globalAlpha = .35; g.lineWidth = 2; g.beginPath(); g.moveTo(cx - 36, cy); g.lineTo(cx + 36, cy); g.moveTo(cx, cy - 36); g.lineTo(cx, cy + 36); g.stroke(); g.globalAlpha = 1; }   // Navigation : cadran
+    { const r = rc("Admin"), cx = r.x + r.w / 2, cy = r.y + r.h / 2; ringAt(cx, cy, 34, "#ffd23f", 3, .35); ringAt(cx, cy, 20, "#ffd23f", 2, .35); }   // Admin : table holographique
+    { const r = rc("Boucliers"), cx = r.x + r.w / 2, cy = r.y + r.h / 2; g.strokeStyle = "#4cc9f0"; g.globalAlpha = .4; g.lineWidth = 3; g.beginPath(); for (let k = 0; k < 6; k++) { const an = k * 1.0472 - 1.5708; g.lineTo(cx + Math.cos(an) * 44, cy + Math.sin(an) * 44); } g.closePath(); g.stroke(); g.globalAlpha = 1; }   // Boucliers : hexagone
+    { const r = rc("Comms"), cx = r.x + r.w / 2, cy = r.y + r.h * .55; ringAt(cx, cy, 30, "#b79bff", 3, .35); ringAt(cx, cy, 18, "#b79bff", 2, .35); }   // Communications : antenne
+    { const r = rc("Sécurité"); g.fillStyle = "rgba(62,230,196,.2)"; for (let k = 0; k < 3; k++) g.fillRect(r.x + 14 + k * 44, r.y + r.h - 42, 36, 22); }   // Sécurité : rangée d'écrans
     const m = document.createElement("canvas"); m.width = WW; m.height = WH; const mg = m.getContext("2d");                      // ombre portée des murs sur le sol
     mg.fillStyle = "#000"; mg.fillRect(0, 0, WW, WH); mg.globalCompositeOperation = "destination-out"; FLOOR.forEach(a => mg.fillRect(a.x, a.y, a.w, a.h));
     g.shadowColor = "rgba(0,0,0,.75)"; g.shadowBlur = 26; g.drawImage(m, 0, 0); g.shadowBlur = 0;

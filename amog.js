@@ -79,6 +79,7 @@ export async function startAmog(env) {
   const op = lob.opts || {}, SPD = [110, 140, 175][op.as === 0 || op.as === 2 ? op.as : 1], MT = [20, 40, 60][op.av === 0 || op.av === 2 ? op.av : 1];   // réglages de l'hôte : vitesse, durée du vote
   const isBot = u => u.indexOf("bot_") === 0, rnd = a => a[Math.floor(Math.random() * a.length)];
   if (ids.length < 4) return toast("Il faut au moins 4 joueurs pour lancer Amog Us (ajoute des bots 🤖 dans le lobby)");
+  CLOSED_DOORS.clear();
   await remove(RF(`games/${c}`));
   await update(RF(`lobbies/${c}`), { status: "playing" });
 
@@ -1051,7 +1052,7 @@ export function createAmogClient(env) {
     mineT.forEach(k => { const d = tk[1] >> k & 1; ly += 16; x.fillStyle = TCOL[k]; x.globalAlpha = d ? .4 : 1; x.beginPath(); x.arc(17, ly, 3, 0, 7); x.fill(); x.globalAlpha = 1; txt(`${d ? "✔" : "▫"} ${ST[k][2]}`, 25, ly, "600 12px 'DM Sans',sans-serif", d ? "#6b9" : "#fff", "left"); });
     x.textAlign = "right"; x.font = "600 13px 'DM Sans',sans-serif"; x.fillStyle = "#ffe9a8"; x.textBaseline = "middle";
     (ls.kf || []).slice(-4).forEach((t2, i) => x.fillText(t2, W - 12, 18 + i * 18));
-    if (ls.ph === "p" && ls.sb) txt(ls.sb[0] ? `☢️ RÉACTEUR : ${ls.sb[1]} s : répare les 2 panneaux !` : `💡 Lumières coupées : répare le panneau ⚡ (${ls.sb[1]} s)`, CX, 56, "800 16px 'Bricolage Grotesque',sans-serif", "#ff6b81");
+    if (ls.ph === "p" && ls.sb) txt(ls.sb[0] === 1 ? `☢️ RÉACTEUR : ${ls.sb[1]} s : répare les 2 panneaux !` : ls.sb[0] === 2 ? `🚪 PORTE FERMÉE : ${ls.sb[1]} s : approche et utilise pour ouvrir !` : `💡 Lumières coupées : répare le panneau ⚡ (${ls.sb[1]} s)`, CX, 56, "800 16px 'Bricolage Grotesque',sans-serif", "#ff6b81");
     if (cam && ls.ph === "p") txt("📹 CAMÉRAS : bouge pour quitter", CX, 516, "700 15px 'DM Sans',sans-serif", "#3ee6c4");
     if (ghost) txt("👻 Tu es un fantôme : traverse les murs et finis tes tâches !", CX, 20, "700 15px 'DM Sans',sans-serif", "#b9b2ff");
     if (ls.ph === "p" && ls.t < 5 && myIdx >= 0) {                          // annonce du rôle au début (fondu)

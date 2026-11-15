@@ -561,7 +561,7 @@ export function createAmogClient(env) {
     x.drawImage(mmBase, mx - 5, my - 5);
     if (imp && !ghost) { x.fillStyle = "#9b7dff"; VENTS.forEach(v => x.fillRect(mx + v[0] * k - 2, my + v[1] * k - 2, 4, 4)); }
     ST.forEach((t, i) => { if (!(tk[0] >> i & 1) || (tk[1] >> i & 1)) return; x.fillStyle = imp ? "#ff8fa3" : TCOL[i]; x.beginPath(); x.arc(mx + t[0] * k, my + t[1] * k, 3 + Math.sin(now / 300 + i) * .7, 0, 7); x.fill(); });
-    if (ls.sb && Math.floor(now / 300) % 2) { x.fillStyle = "#ff3b5c"; (ls.sb[0] === 0 ? [LP] : RP.filter((p, i) => !(ls.sb[2] >> i & 1))).forEach(p => { x.beginPath(); x.arc(mx + p[0] * k, my + p[1] * k, 4.5, 0, 7); x.fill(); }); }
+    if (ls.sb && Math.floor(now / 300) % 2) { x.fillStyle = "#ff3b5c"; if (ls.sb[0] === 2) { const d = DOORS.find(z => z.id === ls.sb[2]); if (d) { x.beginPath(); x.arc(mx + (d.x + d.w / 2) * k, my + (d.y + d.h / 2) * k, 5, 0, 7); x.fill(); } } else (ls.sb[0] === 0 ? [LP] : RP.filter((p, i) => !(ls.sb[2] >> i & 1))).forEach(p => { x.beginPath(); x.arc(mx + p[0] * k, my + p[1] * k, 4.5, 0, 7); x.fill(); }); }
     if (ghost && pos) pos.forEach((p, i) => { if (i !== myIdx && ls.p[i] && ls.p[i][2] && pl[i]) { x.fillStyle = pl[i][2]; x.beginPath(); x.arc(mx + p[0] * k, my + p[1] * k, 2.5, 0, 7); x.fill(); } });   // les fantômes voient tout le monde
     x.strokeStyle = "rgba(255,255,255,.55)"; x.lineWidth = 1; x.strokeRect(mx + camX * k, my + camY * k, vw * k, vh * k);
     const c = pl && pl[myIdx] ? pl[myIdx][2] : "#fff"; x.fillStyle = c; x.strokeStyle = "#fff"; x.lineWidth = 1.5; x.beginPath(); x.arc(mx + mp[0] * k, my + mp[1] * k, 3.5, 0, 7); x.fill(); x.stroke();
@@ -585,7 +585,7 @@ export function createAmogClient(env) {
       x.lineWidth = 3; x.strokeStyle = "rgba(0,0,0,.7)"; x.font = "700 10px 'DM Sans',sans-serif"; x.textAlign = "center"; x.textBaseline = "middle";
       const lb = (dn ? "✔ " : "") + t[2]; x.strokeText(lb, px, py + 16); x.fillStyle = dn ? "#9fe0c4" : "#fff"; x.fillText(lb, px, py + 16); x.globalAlpha = 1;
     });
-    if (ls.sb && Math.floor(now / 300) % 2) { x.fillStyle = "#ff3b5c"; (ls.sb[0] === 0 ? [LP] : RP.filter((p, i) => !(ls.sb[2] >> i & 1))).forEach(p => { x.beginPath(); x.arc(p[0] * k, p[1] * k, 9, 0, 7); x.fill(); }); }
+    if (ls.sb && Math.floor(now / 300) % 2) { x.fillStyle = "#ff3b5c"; if (ls.sb[0] === 2) { const d = DOORS.find(z => z.id === ls.sb[2]); if (d) { x.beginPath(); x.arc((d.x + d.w / 2) * k, (d.y + d.h / 2) * k, 9, 0, 7); x.fill(); } } else (ls.sb[0] === 0 ? [LP] : RP.filter((p, i) => !(ls.sb[2] >> i & 1))).forEach(p => { x.beginPath(); x.arc(p[0] * k, p[1] * k, 9, 0, 7); x.fill(); }); }
     if (ghost && pos) pos.forEach((p, i) => { if (i !== myIdx && ls.p[i] && ls.p[i][2] && pl[i]) { x.fillStyle = pl[i][2]; x.strokeStyle = "#fff"; x.lineWidth = 1.5; x.beginPath(); x.arc(p[0] * k, p[1] * k, 5, 0, 7); x.fill(); x.stroke(); } });
     const c = pl && pl[myIdx] ? pl[myIdx][2] : "#fff", pr = (now / 800) % 1;
     x.strokeStyle = "#fff"; x.globalAlpha = 1 - pr; x.lineWidth = 2; x.beginPath(); x.arc(mp[0] * k, mp[1] * k, 8 + pr * 14, 0, 7); x.stroke(); x.globalAlpha = 1;
@@ -1031,7 +1031,7 @@ export function createAmogClient(env) {
     if (ls.ph === "p" && ls.sb) {                                           // sabotage en cours : panneaux à réparer qui clignotent
       const pu = .6 + .4 * Math.sin(now / 160);
       const mark = (p, rd) => { x.globalAlpha = pu; x.fillStyle = "#ff3b5c"; x.beginPath(); x.arc(p[0], p[1], 22, 0, 7); x.fill(); x.globalAlpha = 1; if (rd) rad(x, p[0], p[1], 12, "#fff"); else bolt(x, p[0], p[1], 12, "#fff"); };
-      if (ls.sb[0] === 0) mark(LP, false); else { RP.forEach((p, k) => { if (!(ls.sb[2] >> k & 1)) mark(p, true); }); x.fillStyle = `rgba(255,30,60,${.08 + .07 * Math.sin(now / 120)})`; x.fillRect(camX, camY, vw, vh); }
+      if (ls.sb[0] === 0) mark(LP, false); else if (ls.sb[0] === 1) { RP.forEach((p, k) => { if (!(ls.sb[2] >> k & 1)) mark(p, true); }); x.fillStyle = `rgba(255,30,60,${.08 + .07 * Math.sin(now / 120)})`; x.fillRect(camX, camY, vw, vh); }
     }
     if (ls.ph === "p" && ls.cm && ls.cm.length && !cam && Math.floor(now / 400) % 2 && vis(CAMP[0], CAMP[1])) { x.fillStyle = "#ff3b5c"; x.beginPath(); x.arc(CAMP[0] + 20, CAMP[1] - 18, 5, 0, 7); x.fill(); }   // voyant rouge : quelqu'un regarde les caméras
     x.restore();

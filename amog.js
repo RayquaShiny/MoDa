@@ -48,7 +48,7 @@ const DOORS=[
  {id:4,n:"Électricité",x:sc(380*.8),y:sc(306*.8),w:sc(9*.8),h:sc(26*.8)},
  {id:5,n:"Stockage",x:sc(545*.8),y:sc(375*.8),w:sc(28*.8),h:sc(9*.8)}
 ];
-let CLOSED_DOORS=let CLOSED_DOORS=new Set();
+let CLOSED_DOORS=new Set();
 const doorBlocked=(px,py)=>DOORS.some(d=>CLOSED_DOORS.has(d.id)&&px+RAD>d.x&&px-RAD<d.x+d.w&&py+RAD>d.y&&py-RAD<d.y+d.h);
 const ST=[
  [151,112,"Aligner les moteurs"],[268,280,"Brancher les câbles"],[73,222,"Refroidir le réacteur"],
@@ -115,7 +115,7 @@ const VENTS = [
  [675,340],[500,480],[900,255],[745,145],[755,450],[665,220],[495,420]
 ].map(v=>[sc(v[0]*.8),sc(v[1]*.8)]), VN = [1,2,0,5,3,4,8,10,6,11,7,9,13,12];
 const LP = [380,385].map(v=>sc(v*.8)), RP = [[100,280],[130,300]].map(([x,y])=>[sc(x*.8),sc(y*.8)]), CAMP = [250,240].map(v=>sc(v*.8));
-const CAMZ =const CAMZ = CORR, inCam = (px, py) => CAMZ.some(a => px >= a.x && px <= a.x + a.w && py >= a.y && py <= a.y + a.h);   // les caméras couvrent les couloirs
+const CAMZ = CORR, inCam = (px, py) => CAMZ.some(a => px >= a.x && px <= a.x + a.w && py >= a.y && py <= a.y + a.h);   // les caméras couvrent les couloirs
 const pc = m => { let n = 0; while (m) { n += m & 1; m >>= 1; } return n; };
 export const _t = { ok, move, route, los, ST, FLOOR, TB };
 

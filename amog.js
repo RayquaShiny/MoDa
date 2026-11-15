@@ -13,24 +13,33 @@ const W = 800, H = 560, RAD = 11, BR = 15, SPD = 125, DT = 1 / 30;
 const KCD0 = 8, KCD = 12, KR = 52, TT = 1.6, MT = 40, RT = 8, VIS = 290;
 const K = 1.75, WW = 1400, WH = 800, sc = v => Math.round(v * K), scp = a => a.map(sc);
 // Reconstitution à l'échelle du plan officiel du Skeld (référence GamesRadar / InnerSloth).
-const TB = scp([422, 178]);
+const TB = scp([424, 112]);
+// Coordonnées relevées sur le plan de référence 1000×563, converties dans l'échelle du monde.
 const ROOMS = [
-  { n:"Réacteur",x:2,y:143,w:110,h:152 }, { n:"Moteur haut",x:77,y:58,w:89,h:90 },
-  { n:"Moteur bas",x:77,y:289,w:89,h:101 }, { n:"Sécurité",x:143,y:161,w:77,h:104 },
-  { n:"Médbay",x:228,y:122,w:117,h:115 }, { n:"Cafétéria",x:322,y:0,w:243,h:212 },
-  { n:"Armes",x:569,y:45,w:90,h:102 }, { n:"O2",x:517,y:159,w:72,h:67 },
-  { n:"Navigation",x:709,y:163,w:91,h:90 }, { n:"Admin",x:437,y:234,w:139,h:98 },
-  { n:"Électricité",x:243,y:254,w:104,h:105 }, { n:"Stockage",x:343,y:290,w:126,h:163 },
-  { n:"Comms",x:464,y:363,w:102,h:90 }, { n:"Boucliers",x:565,y:300,w:96,h:106 }
+  {n:"Réacteur",x:33.6,y:148,w:99.2,h:140},
+  {n:"Moteur haut",x:100.8,y:68,w:84.8,h:86.4},
+  {n:"Moteur bas",x:100.8,y:282.4,w:86.4,h:93.6},
+  {n:"Sécurité",x:169.6,y:164,w:67.2,h:96.8},
+  {n:"Médbay",x:243.2,y:123.2,w:108,h:111.2},
+  {n:"Cafétéria",x:328.8,y:16,w:204,h:195.2},
+  {n:"Armes",x:555.2,y:56.8,w:84,h:96},
+  {n:"O2",x:506.4,y:161.6,w:68.8,h:62.4},
+  {n:"Navigation",x:680,y:165.6,w:86.4,h:80},
+  {n:"Admin",x:438.4,y:229.6,w:123.2,h:94.4},
+  {n:"Électricité",x:256,y:248.8,w:96,h:100.8},
+  {n:"Stockage",x:348,y:304,w:114.4,h:130.4},
+  {n:"Comms",x:460.8,y:356.8,w:92.8,h:76.8},
+  {n:"Boucliers",x:553.6,y:305.6,w:86.4,h:86.4}
 ].map(r=>({n:r.n,x:sc(r.x),y:sc(r.y),w:sc(r.w),h:sc(r.h)}));
 const CORR = [
- [130,82,192,48],[165,181,64,39],[188,205,62,34],[290,151,52,43],
- [552,75,55,42],[563,137,49,42],[584,169,132,40],[398,198,46,82],
- [402,309,64,38],[309,335,78,43],[164,329,91,47],[447,360,60,40],
- [458,320,122,42],[642,235,48,108],[116,270,45,47],[210,252,54,40],
- [242,237,42,48],[343,191,45,43],[560,202,43,42],[275,317,45,46]
-].map(r=>({x:sc(r[0]),y:sc(r[1]),w:sc(r[2]),h:sc(r[3])}));
-const FLOOR=[...ROOMS,...CORR];
+ [148,105,230,35],[190,142,78,24],[235,185,52,25],[205,225,78,25],
+ [145,185,55,24],[145,315,55,24],[185,333,60,24],[230,260,30,55],
+ [340,205,38,36],[380,250,38,42],[425,205,38,55],[520,125,38,48],
+ [630,130,38,60],[700,185,55,24],[790,225,55,24],[720,275,34,100],
+ [555,255,36,52],[455,320,75,24],[535,360,60,24],[625,390,36,55],
+ [535,420,36,42],[430,430,100,24],[295,380,55,24],[220,385,70,24]
+].map(r=>({x:sc(r[0]*.8),y:sc(r[1]*.8),w:sc(r[2]*.8),h:sc(r[3]*.8)}));
+const FLOOR=[...ROOMS,...CORR];const FLOOR=[...ROOMS,...CORR];
 const DOORS=[
  {id:0,n:"Médbay",x:sc(335),y:sc(165),w:sc(9),h:sc(28)},
  {id:1,n:"Cafétéria / Admin",x:sc(420),y:sc(207),w:sc(32),h:sc(9)},
@@ -42,13 +51,13 @@ const DOORS=[
 let CLOSED_DOORS=new Set();
 const doorBlocked=(px,py)=>DOORS.some(d=>CLOSED_DOORS.has(d.id)&&px+RAD>d.x&&px-RAD<d.x+d.w&&py+RAD>d.y&&py-RAD<d.y+d.h);
 const ST=[
- [112,105,"Aligner les moteurs"],[292,333,"Brancher les câbles"],[55,218,"Refroidir le réacteur"],
- [397,365,"Trier les caisses"],[282,180,"Scanner médical"],[435,42,"Télécharger les plans"],
- [616,95,"Calibrer le détecteur"],[548,190,"Purger le circuit"],[112,345,"Faire le plein"],
- [500,410,"Vider les déchets"],[610,350,"Activer le bouclier"],[495,275,"Envoyer les données"],
- [180,220,"Analyser un échantillon"],[755,205,"Orienter l'antenne"]
-].map(t=>[sc(t[0]),sc(t[1]),t[2]]);
-const NT = 6;                                                             // tâches par équipier (sur 14 postes)
+ [151,112,"Aligner les moteurs"],[268,280,"Brancher les câbles"],[73,222,"Refroidir le réacteur"],
+ [394,360,"Trier les caisses"],[280,165,"Scanner médical"],[590,95,"Télécharger les plans"],
+ [704,177,"Calibrer le détecteur"],[535,185,"Purger le circuit"],[151,330,"Faire le plein"],
+ [493,405,"Vider les déchets"],[600,343,"Activer le bouclier"],[497,286,"Envoyer les données"],
+ [210,230,"Analyser un échantillon"],[725,215,"Orienter l'antenne"]
+].map(t=>[sc(t[0]*.8),sc(t[1]*.8),t[2]]);
+const NT = 6;const NT = 6;                                                             // tâches par équipier (sur 14 postes)
 const TTS = [2.7, 3.6, 3.0, 2.4, 3.3, 1.8, 1.5, 1.5, 2.1, 2.4, 3.0, 2.7, 3.6, 2.1];                    // durée de chaque tâche (même ordre que ST)
 let GRID = null;                                                          // grille 1 px : 1 = sol (rend at/ok/los beaucoup plus rapides)
 const at = (px, py) => {

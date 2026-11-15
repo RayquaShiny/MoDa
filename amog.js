@@ -520,16 +520,19 @@ export function createAmogClient(env) {
     hg.fillStyle = "#fff";
     ROOMS.forEach(a => { rr(hg, a.x - 13, a.y - 13, a.w + 26, a.h + 26, 22); hg.fill(); });
     CORR.forEach(a => { rr(hg, a.x - 13, a.y - 13, a.w + 26, a.h + 26, 12); hg.fill(); });
-    g.save();
-    g.shadowColor = "rgba(0,0,0,.78)"; g.shadowBlur = 34;
-    g.drawImage(hullCanvas, 0, 0);
-    g.shadowBlur = 0;
-    g.globalCompositeOperation = "source-in";
-    const wallGrad = g.createLinearGradient(0, 0, WW, WH);
+    const wallCanvas = document.createElement("canvas");
+    wallCanvas.width = WW; wallCanvas.height = WH;
+    const wg = wallCanvas.getContext("2d");
+    wg.drawImage(hullCanvas, 0, 0);
+    wg.globalCompositeOperation = "source-in";
+    const wallGrad = wg.createLinearGradient(0, 0, WW, WH);
     wallGrad.addColorStop(0, "#7771c9"); wallGrad.addColorStop(.5, "#39356f"); wallGrad.addColorStop(1, "#6560ad");
-    g.fillStyle = wallGrad; g.fillRect(0, 0, WW, WH);
-    g.globalCompositeOperation = "source-over";
-    g.drawImage(hullCanvas, 0, 0);
+    wg.fillStyle = wallGrad; wg.fillRect(0, 0, WW, WH);
+    g.save();
+    g.shadowColor = "rgba(0,0,0,.78)"; g.shadowBlur = 28;
+    g.drawImage(wallCanvas, 0, 0);
+    g.shadowBlur = 0;
+    g.drawImage(wallCanvas, 0, 0);
     g.restore();
     g.save(); g.beginPath();
     ROOMS.forEach(a => rr(g, a.x, a.y, a.w, a.h, 13));
@@ -555,16 +558,6 @@ export function createAmogClient(env) {
       }
       g.globalAlpha = 1;
     });
-    g.save(); g.beginPath();
-    ROOMS.forEach(a => rr(g, a.x, a.y, a.w, a.h, 13));
-    CORR.forEach(a => g.rect(a.x, a.y, a.w, a.h));
-    g.clip();
-    ROOMS.forEach((r, i) => { const rg = g.createRadialGradient(r.x + r.w / 2, r.y + r.h / 2, 10, r.x + r.w / 2, r.y + r.h / 2, r.w * .75); rg.addColorStop(0, RTINT[i] + "33"); rg.addColorStop(1, RTINT[i] + "00"); g.fillStyle = rg; g.fillRect(r.x, r.y, r.w, r.h); });
-    g.strokeStyle = "rgba(160,150,255,.07)"; g.lineWidth = 1;
-    for (let i = 0; i < WW; i += 50) { g.beginPath(); g.moveTo(i + .5, 0); g.lineTo(i + .5, WH); g.stroke(); }
-    for (let j = 0; j < WH; j += 50) { g.beginPath(); g.moveTo(0, j + .5); g.lineTo(WW, j + .5); g.stroke(); }
-    g.fillStyle = "rgba(255,255,255,.025)"; for (let i = 0; i < WW; i += 100) for (let j = 0; j < WH; j += 100) g.fillRect(i, j, 50, 50);   // damier discret
-    CORR.forEach(cr => { g.strokeStyle = "rgba(62,230,196,.28)"; g.lineWidth = 3; g.setLineDash([18, 14]); g.beginPath(); if (cr.w >= cr.h) { g.moveTo(cr.x + 10, cr.y + cr.h / 2); g.lineTo(cr.x + cr.w - 10, cr.y + cr.h / 2); } else { g.moveTo(cr.x + cr.w / 2, cr.y + 10); g.lineTo(cr.x + cr.w / 2, cr.y + cr.h - 10); } g.stroke(); g.setLineDash([]); });
     // Mobilier épuré : éléments courts, centrés et contenus dans chaque salle.
     const rc = n => ROOMS.find(r => r.n === n);
     const detail = (name, color, count = 2) => {
@@ -597,7 +590,6 @@ export function createAmogClient(env) {
     const m = document.createElement("canvas"); m.width = WW; m.height = WH; const mg = m.getContext("2d");                      // ombre portée des murs sur le sol
     mg.fillStyle = "#000"; mg.fillRect(0, 0, WW, WH); mg.globalCompositeOperation = "destination-out"; FLOOR.forEach(a => mg.fillRect(a.x, a.y, a.w, a.h));
     g.shadowColor = "rgba(0,0,0,.75)"; g.shadowBlur = 26; g.drawImage(m, 0, 0); g.shadowBlur = 0;
-    g.restore();
     ROOMS.forEach((r, i) => {                                             // voyants lumineux le long des murs
       g.fillStyle = RTINT[i]; g.globalAlpha = .85;
       for (let px = r.x + 28; px < r.x + r.w - 20; px += 48) { if (!at(px + 9, r.y - 8)) g.fillRect(px, r.y - 9, 18, 3); if (!at(px + 9, r.y + r.h + 8)) g.fillRect(px, r.y + r.h + 6, 18, 3); }

@@ -541,6 +541,31 @@ export function createAmogClient(env) {
     { const r = rc("Boucliers"), cx = r.x + r.w / 2, cy = r.y + r.h / 2; g.strokeStyle = "#4cc9f0"; g.globalAlpha = .4; g.lineWidth = 3; g.beginPath(); for (let k = 0; k < 6; k++) { const an = k * 1.0472 - 1.5708; g.lineTo(cx + Math.cos(an) * 44, cy + Math.sin(an) * 44); } g.closePath(); g.stroke(); g.globalAlpha = 1; }   // Boucliers : hexagone
     { const r = rc("Comms"), cx = r.x + r.w / 2, cy = r.y + r.h * .55; ringAt(cx, cy, 30, "#b79bff", 3, .35); ringAt(cx, cy, 18, "#b79bff", 2, .35); }   // Communications : antenne
     { const r = rc("Sécurité"); g.fillStyle = "rgba(62,230,196,.2)"; for (let k = 0; k < 3; k++) g.fillRect(r.x + 14 + k * 44, r.y + r.h - 42, 36, 22); }   // Sécurité : rangée d'écrans
+    // Mobilier intérieur : silhouettes de consoles, tables et équipements propres à chaque salle.
+    const panel = (px, py, w, h, col = "#8279c9") => {
+      g.fillStyle = "rgba(3,3,18,.48)"; rr(g, px + 3, py + 4, w, h, 6); g.fill();
+      g.fillStyle = "#17162f"; rr(g, px, py, w, h, 6); g.fill();
+      g.strokeStyle = col; g.lineWidth = 2; g.stroke();
+      g.fillStyle = col + "66"; rr(g, px + 5, py + 5, w - 10, Math.max(5, h * .32), 3); g.fill();
+      g.fillStyle = "#d8d5ff"; for (let k = 0; k < Math.max(2, Math.floor(w / 18)); k++) g.fillRect(px + 6 + k * ((w - 14) / Math.max(2, Math.floor(w / 18))), py + h - 8, 4, 3);
+    };
+    const table = (px, py, r, col = "#8b83d0") => {
+      g.fillStyle = "rgba(0,0,0,.3)"; g.beginPath(); g.ellipse(px + 3, py + 5, r * 1.08, r * .86, 0, 0, 7); g.fill();
+      g.fillStyle = "#24234c"; g.beginPath(); g.ellipse(px, py, r * 1.08, r * .86, 0, 0, 7); g.fill();
+      g.strokeStyle = col; g.lineWidth = 3; g.stroke();
+      g.fillStyle = "#4b477e"; g.beginPath(); g.ellipse(px, py - 2, r * .76, r * .58, 0, 0, 7); g.fill();
+      g.fillStyle = col; g.beginPath(); g.arc(px, py, 4, 0, 7); g.fill();
+    };
+    { const r = rc("Cafétéria"); [[.23,.25,25],[.77,.25,25],[.23,.76,25],[.77,.76,25]].forEach(([fx,fy,rrr]) => table(r.x+r.w*fx,r.y+r.h*fy,sc(rrr),"#7771b8")); table(TB[0],TB[1],sc(24),"#ff7d91"); }
+    { const r = rc("Médbay"); panel(r.x+sc(12),r.y+sc(18),sc(35),sc(22),"#3ee6c4"); panel(r.x+sc(68),r.y+sc(18),sc(35),sc(22),"#3ee6c4"); g.fillStyle="#c5fff3"; rr(g,r.x+sc(18),r.y+sc(66),sc(82),sc(20),8); g.fill(); g.strokeStyle="#3ee6c4"; g.stroke(); }
+    { const r = rc("Armes"); panel(r.x+sc(14),r.y+sc(16),sc(45),sc(24),"#ff6b81"); panel(r.x+sc(86),r.y+sc(16),sc(45),sc(24),"#ff6b81"); for(let k=0;k<3;k++){g.strokeStyle="#ff9aaa";g.lineWidth=3;g.beginPath();g.moveTo(r.x+sc(28+k*34),r.y+sc(75));g.lineTo(r.x+sc(28+k*34),r.y+sc(96));g.stroke();} }
+    { const r = rc("Navigation"); panel(r.x+sc(15),r.y+sc(18),sc(65),sc(30),"#4cc9f0"); panel(r.x+sc(22),r.y+sc(78),sc(50),sc(24),"#4cc9f0"); }
+    { const r = rc("Admin"); table(r.x+r.w*.52,r.y+r.h*.48,sc(32),"#ffd23f"); panel(r.x+sc(12),r.y+sc(12),sc(38),sc(24),"#ffd23f"); panel(r.x+r.w-sc(50),r.y+r.h-sc(38),sc(38),sc(24),"#ffd23f"); }
+    { const r = rc("Boucliers"); for(let k=0;k<3;k++)panel(r.x+sc(12+k*38),r.y+sc(72),sc(28),sc(22),"#4cc9f0"); }
+    { const r = rc("Comms"); panel(r.x+sc(18),r.y+sc(14),sc(78),sc(28),"#b79bff"); g.strokeStyle="#b79bff";g.lineWidth=3;g.beginPath();g.moveTo(r.x+r.w*.5,r.y+sc(12));g.lineTo(r.x+r.w*.5,r.y-sc(2));g.stroke(); }
+    { const r = rc("Électricité"); for(let k=0;k<3;k++)panel(r.x+sc(12+k*34),r.y+sc(18),sc(26),sc(42),"#ffd23f"); panel(r.x+sc(25),r.y+sc(78),sc(68),sc(25),"#ffd23f"); }
+    { const r = rc("Stockage"); [[.08,.3],[.54,.3],[.08,.53],[.54,.53]].forEach(([fx,fy],k)=>{const px=r.x+r.w*fx,py=r.y+r.h*fy;g.fillStyle="#39334f";rr(g,px,py,sc(48),sc(26),4);g.fill();g.strokeStyle="#d4a83b";g.lineWidth=2;g.stroke();g.strokeStyle="#8f6d2c";g.beginPath();g.moveTo(px,py);g.lineTo(px+sc(48),py+sc(26));g.moveTo(px+sc(48),py);g.lineTo(px,py+sc(26));g.stroke();}); }
+    { const r = rc("O2"); for(let k=0;k<2;k++){const px=r.x+sc(25+k*38),py=r.y+sc(18);g.fillStyle="#1c3d38";rr(g,px,py,sc(18),sc(48),8);g.fill();g.strokeStyle="#7ae582";g.lineWidth=2;g.stroke();g.fillStyle="#7ae582";g.fillRect(px+sc(5),py+sc(8),sc(8),sc(4));} }
     const m = document.createElement("canvas"); m.width = WW; m.height = WH; const mg = m.getContext("2d");                      // ombre portée des murs sur le sol
     mg.fillStyle = "#000"; mg.fillRect(0, 0, WW, WH); mg.globalCompositeOperation = "destination-out"; FLOOR.forEach(a => mg.fillRect(a.x, a.y, a.w, a.h));
     g.shadowColor = "rgba(0,0,0,.75)"; g.shadowBlur = 26; g.drawImage(m, 0, 0); g.shadowBlur = 0;

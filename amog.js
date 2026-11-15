@@ -41,14 +41,14 @@ const CORR = [
 ].map(r=>({x:sc(r[0]*.8),y:sc(r[1]*.8),w:sc(r[2]*.8),h:sc(r[3]*.8)}));
 const FLOOR=[...ROOMS,...CORR];
 const DOORS=[
- {id:0,n:"Médbay",x:sc(335),y:sc(165),w:sc(9),h:sc(28)},
- {id:1,n:"Cafétéria / Admin",x:sc(420),y:sc(207),w:sc(32),h:sc(9)},
- {id:2,n:"Armes",x:sc(570),y:sc(90),w:sc(9),h:sc(32)},
- {id:3,n:"Navigation",x:sc(710),y:sc(190),w:sc(9),h:sc(32)},
- {id:4,n:"Électricité",x:sc(335),y:sc(300),w:sc(9),h:sc(32)},
- {id:5,n:"Stockage",x:sc(445),y:sc(360),w:sc(32),h:sc(9)}
+ {id:0,n:"Médbay",x:sc(330*.8),y:sc(274*.8),w:sc(10*.8),h:sc(24*.8)},
+ {id:1,n:"Cafétéria / Admin",x:sc(555*.8),y:sc(263*.8),w:sc(28*.8),h:sc(9*.8)},
+ {id:2,n:"Armes",x:sc(695*.8),y:sc(122*.8),w:sc(9*.8),h:sc(26*.8)},
+ {id:3,n:"Navigation",x:sc(850*.8),y:sc(244*.8),w:sc(9*.8),h:sc(28*.8)},
+ {id:4,n:"Électricité",x:sc(380*.8),y:sc(306*.8),w:sc(9*.8),h:sc(26*.8)},
+ {id:5,n:"Stockage",x:sc(545*.8),y:sc(375*.8),w:sc(28*.8),h:sc(9*.8)}
 ];
-let CLOSED_DOORS=new Set();
+let CLOSED_DOORS=let CLOSED_DOORS=new Set();
 const doorBlocked=(px,py)=>DOORS.some(d=>CLOSED_DOORS.has(d.id)&&px+RAD>d.x&&px-RAD<d.x+d.w&&py+RAD>d.y&&py-RAD<d.y+d.h);
 const ST=[
  [151,112,"Aligner les moteurs"],[268,280,"Brancher les câbles"],[73,222,"Refroidir le réacteur"],
@@ -110,9 +110,12 @@ function route(px, py, tx, ty) {
   if(clr(ax,ay,tx,ty))out.push([tx,ty]);
   return out;
 }
-const VENTS = [[92,112],[55,220],[112,345],[182,220],[282,180],[292,333],[435,42],[495,275],[500,410],[755,205],[616,95],[610,350],[548,190],[397,365]].map(scp), VN = [1,2,0,5,3,4,8,10,6,11,7,9,13,12];   // conduits : trois circuits de 3
-const LP = scp([292, 333]), RP = [[55, 220], [80, 250]].map(scp), CAMP = scp([182, 220]);                              // panneau électrique (Électricité), 2 panneaux du réacteur, caméras (Sécurité)
-const CAMZ = CORR, inCam = (px, py) => CAMZ.some(a => px >= a.x && px <= a.x + a.w && py >= a.y && py <= a.y + a.h);   // les caméras couvrent les couloirs
+const VENTS = [
+ [180,124],[112,250],[180,414],[258,260],[382,248],[383,385],[530,130],
+ [675,340],[500,480],[900,255],[745,145],[755,450],[665,220],[495,420]
+].map(v=>[sc(v[0]*.8),sc(v[1]*.8)]), VN = [1,2,0,5,3,4,8,10,6,11,7,9,13,12];
+const LP = [380,385].map(v=>sc(v*.8)), RP = [[100,280],[130,300]].map(([x,y])=>[sc(x*.8),sc(y*.8)]), CAMP = [250,240].map(v=>sc(v*.8));
+const CAMZ =const CAMZ = CORR, inCam = (px, py) => CAMZ.some(a => px >= a.x && px <= a.x + a.w && py >= a.y && py <= a.y + a.h);   // les caméras couvrent les couloirs
 const pc = m => { let n = 0; while (m) { n += m & 1; m >>= 1; } return n; };
 export const _t = { ok, move, route, los, ST, FLOOR, TB };
 

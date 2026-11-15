@@ -1917,6 +1917,8 @@ function paintMaintenance(){
   const small=el.querySelector("small");if(small){if(!small.dataset.normal)small.dataset.normal=small.textContent;small.textContent=on?"Sous maintenance":small.dataset.normal;}
  });
 }
+// Synchronisation en direct pour tous les joueurs, même sans ouvrir le panneau admin.
+onValue(R("settings/maintenance"),s=>{stD.maintenance=s.val()||{};paintMaintenance();if(me&&me.owner&&adm)renderMaintenanceAdmin();if(cur==="lobby"&&lobby&&isMaintained(lobby.game))renderLobby();},()=>{});
 // ---------- Panneau admin (owners) : onglet 2 du menu Stats ----------
 const admErr=()=>toast("Action refusée : les règles Firebase doivent autoriser les owners à écrire dans lobbies, games et stats");
 function setStTab(i){$("stView").hidden=!!i;$("admView").hidden=!i;

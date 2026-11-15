@@ -1,6 +1,6 @@
 /* MoDa : « Amog Us » 🚀 : trouve les imposteurs avant qu'ils éliminent tout l'équipage !
    - 4 joueurs minimum (bots 🤖 compris, jusqu'à 10). 4-7 joueurs : 1 imposteur · 8-10 joueurs : 2 imposteurs.
-   - Équipiers : font leurs 5 tâches (reste sur place 1,5 à 3,6 s selon la tâche) · Imposteurs : éliminent en silence (cooldown 12 s).
+   - Équipiers : font leurs 6 tâches parmi 14 postes différents (reste sur place 1,5 à 3,6 s selon la tâche) · Imposteurs : éliminent en silence (cooldown 12 s).
    - Un corps trouvé (SIGNALER) ou le bouton d'urgence de la cafétéria (1 fois par joueur) lance une réunion : on vote
      pour éjecter quelqu'un (ou on passe). Les morts deviennent des fantômes : ils traversent les murs et peuvent finir leurs tâches.
    - Victoire équipage : toutes les tâches faites OU tous les imposteurs éjectés. Victoire imposteurs : autant d'imposteurs que d'équipiers.
@@ -10,7 +10,7 @@
      « ax,ay,compteurUtiliser,compteurTuer,vote » dans games/<code>/inputs/<uid>. Aucun nouveau chemin Firebase. */
 
 const W = 800, H = 560, RAD = 11, BR = 15, SPD = 125, DT = 1 / 30;   // W × H = fenêtre de vue (le canvas) ; la carte fait WW × WH et la caméra suit le joueur
-const KCD0 = 8, KCD = 12, KR = 52, TT = 1.6, MT = 40, RT = 5.5, VIS = 290;
+const KCD0 = 8, KCD = 12, KR = 52, TT = 1.6, MT = 40, RT = 8, VIS = 290;
 const K = 1.75, WW = 1400, WH = 980, sc = v => Math.round(v * K), scp = a => a.map(sc);   // la carte est 1,75 fois plus grande que l'ancienne (même plan)
 const TB = scp([400, 125]);                                              // table d'urgence (cafétéria)
 const ROOMS = [
@@ -20,10 +20,11 @@ const ROOMS = [
 const CXS = [130, 400, 670].map(sc);
 const FLOOR = [...ROOMS, { x: sc(30), y: sc(250), w: sc(740), h: sc(60) }];             // salles + couloir central
 CXS.forEach(cx => { FLOOR.push({ x: cx - sc(35), y: sc(190), w: sc(70), h: sc(70) }, { x: cx - sc(35), y: sc(300), w: sc(70), h: sc(70) }); }); // portes
-const ST = [[80, 100, "Moteurs"], [720, 100, "Électricité"], [80, 470, "Réacteur"], [330, 480, "Stockage"], [720, 470, "Médbay"], [330, 75, "Cafétéria"], [210, 280, "Couloir G"], [590, 280, "Couloir D"]].map(t => [sc(t[0]), sc(t[1]), t[2]]);
+const ST = [[80, 100, "Aligner les moteurs"], [720, 100, "Brancher les câbles"], [80, 470, "Refroidir le réacteur"], [330, 480, "Trier les caisses"], [720, 470, "Scanner médical"], [330, 75, "Télécharger les plans"], [210, 280, "Calibrer le détecteur"], [590, 280, "Purger le circuit"],
+  [130, 62, "Faire le plein"], [470, 480, "Vider les déchets"], [60, 395, "Activer le bouclier"], [680, 170, "Envoyer les données"], [615, 415, "Analyser un échantillon"], [400, 282, "Orienter l'antenne"]].map(t => [sc(t[0]), sc(t[1]), t[2]]);   // 14 postes de tâche
 
-const NT = 5;                                                             // tâches par équipier (sur 8 postes)
-const TTS = [2.7, 3.6, 3.0, 2.4, 3.3, 1.8, 1.5, 1.5];                    // durée de chaque tâche (même ordre que ST)
+const NT = 6;                                                             // tâches par équipier (sur 14 postes)
+const TTS = [2.7, 3.6, 3.0, 2.4, 3.3, 1.8, 1.5, 1.5, 2.1, 2.4, 3.0, 2.7, 3.6, 2.1];                    // durée de chaque tâche (même ordre que ST)
 let GRID = null;                                                          // grille 1 px : 1 = sol (rend at/ok/los beaucoup plus rapides)
 const at = (px, py) => {
   if (!GRID) { GRID = new Uint8Array(WW * WH); FLOOR.forEach(a => { for (let j = a.y; j <= a.y + a.h && j < WH; j++) GRID.fill(1, j * WW + a.x, j * WW + Math.min(WW - 1, a.x + a.w) + 1); }); }
@@ -64,7 +65,7 @@ export async function startAmog(env) {
   const gb = u => bs[u] || (bs[u] = { p: [], w: 0, k: 0, sus: {}, fl: 0 });   // mémoire d'un bot : sus = suspicion par joueur (≥ 10 : a vu le crime)
   let sab = null, sbcd = 20, t = 0, ph = "c", mid = 0, mt = 0, rt = 0, mcaller = -1, mrep = 0, near = new Set(), bodies = [], evs = [], kf = [], pubN = 0, evId = 0, over = null, rs = null;
   ids.forEach((u, i) => {
-    const a = i / ids.length * 6.283, s = [0, 1, 2, 3, 4, 5, 6, 7].sort(() => Math.random() - .5).slice(0, NT);
+    const a = i / ids.length * 6.283, s = ST.map((_, k) => k).sort(() => Math.random() - .5).slice(0, NT);
     P[u] = { n: players[u].name, c: players[u].color, x: TB[0] + Math.cos(a) * 58, y: TB[1] + Math.sin(a) * 58, a: 1, f: 1, imp: imps.has(u) ? 1 : 0, kcd: KCD0, ch: 0, chS: -1, asg: s.reduce((m, k) => m | 1 << k, 0), dn: 0, em: 0, gone: 0, iv: -1, cm: 0 };
     I[u] = { ax: 0, ay: 0, uc: 0, kc: 0, wu: 0, wk: 0, v: null, vc: 0, sc: 0, wv: 0, ws: 0, sty: 0 };
   });
@@ -293,6 +294,7 @@ export async function startAmog(env) {
 const KEYS = { ArrowUp: "U", w: "U", z: "U", ArrowDown: "D", s: "D", ArrowLeft: "L", a: "L", q: "L", ArrowRight: "R", d: "R" };
 const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) || 0);
 const mixC = {};
+const roomAt = (px, py) => { const r = ROOMS.find(a => px >= a.x && px <= a.x + a.w && py >= a.y && py <= a.y + a.h); return r ? r.n : "Couloir"; };
 const mix = (h, k) => { const key = h + k; if (mixC[key]) return mixC[key]; const m = hex(h).map(v => Math.round(k > 0 ? v * (1 - k) : v + (255 - v) * -k)); return mixC[key] = `rgb(${m[0]},${m[1]},${m[2]})`; };
 const rr = (g, px, py, w, h, r) => { g.beginPath(); g.moveTo(px + r, py); g.arcTo(px + w, py, px + w, py + h, r); g.arcTo(px + w, py + h, px, py + h, r); g.arcTo(px, py + h, px, py, r); g.arcTo(px, py, px + w, py, r); g.closePath(); };
 const USEB = { x: 730, y: 488, r: 48 }, KILLB = { x: 622, y: 500, r: 38 }, VENTB = { x: 622, y: 436, r: 26 }, S1B = { x: 548, y: 508, r: 26 }, S2B = { x: 548, y: 446, r: 26 };
@@ -304,6 +306,7 @@ export function createAmogClient(env) {
   let active = false, raf = 0, snaps = [], pl = null, lastEv = 0, parts = [], useSeq = 0, killSeq = 0, vote = "", sentStr = "", sentAt = 0;
   let stick = null, tPrev = 0, myIdx = -1, ovT = "", bg = null, mid = 0, rects = [], ls = null;
   const keys = new Set();
+  let bigMap = false, flash = null, floats = [], lastPh = "", mStart = 0, rStart = 0, mMax = 0, lastTick = -1; const dustT = {};
   let ventSeq = 0, sabSeq = 0, sabTy = 0, camCX = 0, camCY = 0, camOn = false, zm = 1, tNow = 0, camM = null, visG = null, mmBase = null, ghostTint = null; const gradC = new Map(), vigC = new Map();
 
   const sendInput = (now, force) => {
@@ -326,6 +329,7 @@ export function createAmogClient(env) {
     if (!active || /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
     if (e.key === " " || e.key === "e" || e.key === "E") { e.preventDefault(); if (!e.repeat) doUse(); return; }
     if (e.key === "k" || e.key === "K" || e.key === "Shift") { e.preventDefault(); if (!e.repeat) doKill(); return; }
+    if (e.key === "m" || e.key === "M") { e.preventDefault(); if (!e.repeat && ls && ls.ph === "p") bigMap = !bigMap; return; }
     if (e.key === "v" || e.key === "V") { e.preventDefault(); if (!e.repeat) doVent(); return; }
     if (e.key === "1" || e.key === "2") { if (!e.repeat) doSab(+e.key - 1); return; }
     const k = KEYS[e.key.length > 1 ? e.key : e.key.toLowerCase()]; if (k) { e.preventDefault(); keys.add(k); }
@@ -341,6 +345,8 @@ export function createAmogClient(env) {
       if (r) { vote = `${mid}_${r.t}`; sendInput(performance.now(), true); beep(520, .06, "square", .04); }
       return;
     }
+    if (bigMap) { bigMap = false; return; }
+    if (ls && ls.ph === "p" && p.x >= 7 && p.x <= 207 && p.y >= H - 150 && p.y <= H - 7) { bigMap = true; return; }   // un appui sur la mini-carte l'agrandit
     if (e.button === 2) return doUse();
     if (hit(p, USEB)) return doUse();
     if (isImp() && hit(p, KILLB)) return doKill();
@@ -366,11 +372,11 @@ export function createAmogClient(env) {
   const vib = ms => { if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(ms); };
   const onEv = e => {
     const [ex, ey, ty, id] = e; if (id <= lastEv) return; lastEv = id;
-    if (ty === 1) { spark(ex, ey, 14, "#ff3b5c", 160); beep(90, .3, "sawtooth", .06, 40); if (e[4] === myIdx) vib(200); }
-    else if (ty === 2) { spark(ex, ey, 6, "#3ee6c4", 90); if (e[4] === myIdx) beep(660, .12, "sine", .05, 990); }
+    if (ty === 1) { spark(ex, ey, 14, "#ff3b5c", 160); beep(90, .3, "sawtooth", .06, 40); if (e[4] === myIdx) { vib(200); flash = { t: tNow, c: "255,30,60", d: 1100, a: .55, m: "💀 Tu as été éliminé" }; } else if (Math.hypot(ex - mpL[0], ey - mpL[1]) < 260) flash = { t: tNow, c: "255,30,60", d: 380, a: .22 }; }
+    else if (ty === 2) { spark(ex, ey, 6, "#3ee6c4", 90); if (e[4] === myIdx) { beep(660, .12, "sine", .05, 990); floats.push({ x: ex, y: ey - 30, t: "✔ Fait !", l: 1 }); } }
     else if (ty === 3) { beep(300, .6, "sawtooth", .06, 700); vib(150); }
     else if (ty === 4) { if (ghL || (Math.hypot(ex - mpL[0], ey - mpL[1]) < VIS && los(mpL[0], mpL[1], ex, ey))) { spark(ex, ey, 10, "#8a85b8", 70); beep(140, .18, "triangle", .05, 70); } }   // quelqu'un entre ou sort d'un conduit
-    else if (ty === 5) { beep(220, .7, "square", .07, 120); vib(120); }                                    // sabotage !
+    else if (ty === 5) { beep(220, .7, "square", .07, 120); vib(120); if (!flash) flash = { t: tNow, c: "255,170,30", d: 700, a: .3 }; }                                    // sabotage !
   };
 
   function sample(rt) {
@@ -382,7 +388,8 @@ export function createAmogClient(env) {
   }
 
   // ----- dessin -----
-  const TCOL = ["#ff9f43", "#ffd23f", "#ff6b81", "#b79bff", "#3ee6c4", "#4cc9f0", "#7ae582", "#4cc9f0"];   // couleur de chaque poste de tâche
+  const KIND = ["align", "wires", "cool", "crate", "scan", "dl", "calib", "purge", "fuel", "trash", "shield", "up", "sample", "ant"];   // type d'animation de chaque poste
+  const TCOL = ["#ff9f43", "#ffd23f", "#ff6b81", "#b79bff", "#3ee6c4", "#4cc9f0", "#7ae582", "#4cc9f0", "#ff9f43", "#ffd23f", "#b79bff", "#7ae582", "#ff6b81", "#3ee6c4"];   // couleur de chaque poste de tâche
   const RTINT = ["#ff8a3d", "#4c8dff", "#ffd23f", "#ff3b5c", "#c79a52", "#3ee6c4"];                         // ambiance de chaque salle
   function bolt(g, cx, cy, s2, col) { g.fillStyle = col; g.beginPath(); [[.25, -1], [-.55, .1], [-.08, .1], [-.28, 1], [.55, -.2], [.08, -.2]].forEach((p, i) => g[i ? "lineTo" : "moveTo"](cx + p[0] * s2, cy + p[1] * s2)); g.closePath(); g.fill(); }
   function rad(g, cx, cy, r, col) { g.fillStyle = col; for (let k = 0; k < 3; k++) { const an = k * 2.0944 - 1.5708; g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, r, an - .5, an + .5); g.closePath(); g.fill(); } g.beginPath(); g.arc(cx, cy, r * .22, 0, 7); g.fill(); }
@@ -446,7 +453,7 @@ export function createAmogClient(env) {
   }
   const camMask = () => { if (camM) return camM; camM = document.createElement("canvas"); camM.width = WW; camM.height = WH; const g = camM.getContext("2d"); g.fillStyle = "rgba(4,3,14,.9)"; g.fillRect(0, 0, WW, WH); g.globalCompositeOperation = "destination-out"; g.fillStyle = "#000"; CAMZ.forEach(a => g.fillRect(a.x, a.y, a.w, a.h)); return camM; };
   function bean(px, py, col, f, al, walk, gh) {                          // personnage : sac à dos, visière, jambes animées ; fantôme = silhouette flottante
-    x.save(); x.globalAlpha *= al; x.translate(px, py + (gh ? Math.sin(tNow / 260 + px) * 3 - 3 : 0)); x.scale(f || 1, 1);
+    x.save(); x.globalAlpha *= al; x.translate(px, py + (gh ? Math.sin(tNow / 260 + px) * 3 - 3 : (walk ? -Math.abs(Math.sin(tNow / 75)) * 1.8 : 0))); x.scale(f || 1, 1);
     const hw = BR * .85, tp = -BR * 1.2, bt = BR;
     if (gh) {
       x.globalAlpha *= .6; x.shadowColor = col; x.shadowBlur = 16;
@@ -488,18 +495,78 @@ export function createAmogClient(env) {
     x.fillStyle = "#fff"; x.textAlign = "center"; x.textBaseline = "middle"; x.font = `800 ${b.r > 40 ? 15 : 14}px 'Bricolage Grotesque',sans-serif`;
     x.shadowColor = "rgba(0,0,0,.5)"; x.shadowBlur = 4; x.fillText(sub || label, b.x, b.y); x.restore();
   }
-  function minimap(tk, mp, ghost, imp, now, camX, camY, vw, vh) {        // mini-carte : plan, mes tâches restantes, ma position
-    const mw = 150, mh = 105, mx = 12, my = H - mh - 12, k = mw / WW;
+  function minimap(tk, mp, ghost, imp, now, camX, camY, vw, vh, pos) {   // mini-carte (touche M ou appui : plein écran) : plan, salles, mes tâches restantes, ma position
+    const mw = 190, mh = 133, mx = 12, my = H - mh - 12, k = mw / WW;
     if (!mmBase) {
       mmBase = document.createElement("canvas"); mmBase.width = mw + 10; mmBase.height = mh + 10; const mg = mmBase.getContext("2d");
       mg.fillStyle = "rgba(6,5,20,.72)"; rr(mg, 0, 0, mw + 10, mh + 10, 9); mg.fill(); mg.strokeStyle = "rgba(160,150,255,.5)"; mg.lineWidth = 1.5; mg.stroke();
-      mg.fillStyle = "#4b4596"; FLOOR.forEach(a => mg.fillRect(5 + a.x * k, 5 + a.y * k, Math.max(1, a.w * k), Math.max(1, a.h * k)));
+      mg.fillStyle = "#4b4596"; FLOOR.forEach(a2 => mg.fillRect(5 + a2.x * k, 5 + a2.y * k, Math.max(1, a2.w * k), Math.max(1, a2.h * k)));
+      ROOMS.forEach((r, i) => { mg.fillStyle = RTINT[i] + "40"; mg.fillRect(5 + r.x * k, 5 + r.y * k, r.w * k, r.h * k); });
+      mg.font = "700 8px 'DM Sans',sans-serif"; mg.textAlign = "center"; mg.fillStyle = "rgba(255,255,255,.55)"; ROOMS.forEach(r => mg.fillText(r.n, 5 + (r.x + r.w / 2) * k, 5 + (r.y + r.h / 2) * k + 3));
+      mg.fillStyle = "#ff3b5c"; mg.beginPath(); mg.arc(5 + TB[0] * k, 5 + TB[1] * k + 12, 2.5, 0, 7); mg.fill();
     }
     x.drawImage(mmBase, mx - 5, my - 5);
-    ST.forEach((t, i) => { if (!(tk[0] >> i & 1) || (tk[1] >> i & 1)) return; x.fillStyle = imp ? "#ff8fa3" : "#ffd23f"; x.beginPath(); x.arc(mx + t[0] * k, my + t[1] * k, 3, 0, 7); x.fill(); });
-    if (ls.sb && Math.floor(now / 300) % 2) { x.fillStyle = "#ff3b5c"; (ls.sb[0] === 0 ? [LP] : RP.filter((p, i) => !(ls.sb[2] >> i & 1))).forEach(p => { x.beginPath(); x.arc(mx + p[0] * k, my + p[1] * k, 4, 0, 7); x.fill(); }); }
+    if (imp && !ghost) { x.fillStyle = "#9b7dff"; VENTS.forEach(v => x.fillRect(mx + v[0] * k - 2, my + v[1] * k - 2, 4, 4)); }
+    ST.forEach((t, i) => { if (!(tk[0] >> i & 1) || (tk[1] >> i & 1)) return; x.fillStyle = imp ? "#ff8fa3" : TCOL[i]; x.beginPath(); x.arc(mx + t[0] * k, my + t[1] * k, 3 + Math.sin(now / 300 + i) * .7, 0, 7); x.fill(); });
+    if (ls.sb && Math.floor(now / 300) % 2) { x.fillStyle = "#ff3b5c"; (ls.sb[0] === 0 ? [LP] : RP.filter((p, i) => !(ls.sb[2] >> i & 1))).forEach(p => { x.beginPath(); x.arc(mx + p[0] * k, my + p[1] * k, 4.5, 0, 7); x.fill(); }); }
+    if (ghost && pos) pos.forEach((p, i) => { if (i !== myIdx && ls.p[i] && ls.p[i][2] && pl[i]) { x.fillStyle = pl[i][2]; x.beginPath(); x.arc(mx + p[0] * k, my + p[1] * k, 2.5, 0, 7); x.fill(); } });   // les fantômes voient tout le monde
     x.strokeStyle = "rgba(255,255,255,.55)"; x.lineWidth = 1; x.strokeRect(mx + camX * k, my + camY * k, vw * k, vh * k);
     const c = pl && pl[myIdx] ? pl[myIdx][2] : "#fff"; x.fillStyle = c; x.strokeStyle = "#fff"; x.lineWidth = 1.5; x.beginPath(); x.arc(mx + mp[0] * k, my + mp[1] * k, 3.5, 0, 7); x.fill(); x.stroke();
+    txt("M", mx + mw - 6, my + 8, "700 9px 'DM Sans',sans-serif", "rgba(255,255,255,.5)");
+  }
+  function bigmap(tk, mp, ghost, imp, now, pos) {                         // carte plein écran : salles, postes de tâche nommés, conduits (imposteur)
+    x.fillStyle = "rgba(4,3,14,.88)"; x.fillRect(0, 0, W, H);
+    txt("🗺️ Carte du vaisseau", CX, 24, "800 20px 'Bricolage Grotesque',sans-serif", "#fff");
+    const k = .5, ox = (W - WW * k) / 2, oy = 50;
+    x.save(); x.translate(ox, oy);
+    x.fillStyle = "#3b3680"; FLOOR.forEach(a2 => x.fillRect(a2.x * k, a2.y * k, a2.w * k, a2.h * k));
+    ROOMS.forEach((r, i) => { x.fillStyle = RTINT[i] + "40"; x.fillRect(r.x * k, r.y * k, r.w * k, r.h * k); });
+    x.strokeStyle = "rgba(160,150,255,.7)"; x.lineWidth = 2; FLOOR.forEach(a2 => x.strokeRect(a2.x * k, a2.y * k, a2.w * k, a2.h * k));
+    ROOMS.forEach(r => txt(r.n.toUpperCase(), (r.x + r.w / 2) * k, (r.y + 10) * k + 4, "800 13px 'Bricolage Grotesque',sans-serif", "rgba(255,255,255,.35)"));
+    x.fillStyle = "#ff3b5c"; x.beginPath(); x.arc(TB[0] * k, TB[1] * k + 18, 7, 0, 7); x.fill(); txt("Urgence", TB[0] * k, TB[1] * k + 32, "700 10px 'DM Sans',sans-serif", "#ffb3c0");
+    txt("📹", CAMP[0] * k, CAMP[1] * k, "700 14px 'DM Sans',sans-serif", "#3ee6c4");
+    if (imp && !ghost) VENTS.forEach(v => { x.fillStyle = "#9b7dff"; x.fillRect(v[0] * k - 5, v[1] * k - 5, 10, 10); });
+    ST.forEach((t, i) => {
+      if (!(tk[0] >> i & 1)) return; const dn = tk[1] >> i & 1, px = t[0] * k, py = t[1] * k;
+      x.globalAlpha = dn ? .5 : 1; x.fillStyle = dn ? "#3a8f6f" : imp ? "#ff8fa3" : TCOL[i]; x.beginPath(); x.arc(px, py, 7 + (dn ? 0 : Math.sin(now / 300 + i) * 1.2), 0, 7); x.fill();
+      x.lineWidth = 3; x.strokeStyle = "rgba(0,0,0,.7)"; x.font = "700 10px 'DM Sans',sans-serif"; x.textAlign = "center"; x.textBaseline = "middle";
+      const lb = (dn ? "✔ " : "") + t[2]; x.strokeText(lb, px, py + 16); x.fillStyle = dn ? "#9fe0c4" : "#fff"; x.fillText(lb, px, py + 16); x.globalAlpha = 1;
+    });
+    if (ls.sb && Math.floor(now / 300) % 2) { x.fillStyle = "#ff3b5c"; (ls.sb[0] === 0 ? [LP] : RP.filter((p, i) => !(ls.sb[2] >> i & 1))).forEach(p => { x.beginPath(); x.arc(p[0] * k, p[1] * k, 9, 0, 7); x.fill(); }); }
+    if (ghost && pos) pos.forEach((p, i) => { if (i !== myIdx && ls.p[i] && ls.p[i][2] && pl[i]) { x.fillStyle = pl[i][2]; x.strokeStyle = "#fff"; x.lineWidth = 1.5; x.beginPath(); x.arc(p[0] * k, p[1] * k, 5, 0, 7); x.fill(); x.stroke(); } });
+    const c = pl && pl[myIdx] ? pl[myIdx][2] : "#fff", pr = (now / 800) % 1;
+    x.strokeStyle = "#fff"; x.globalAlpha = 1 - pr; x.lineWidth = 2; x.beginPath(); x.arc(mp[0] * k, mp[1] * k, 8 + pr * 14, 0, 7); x.stroke(); x.globalAlpha = 1;
+    x.fillStyle = c; x.lineWidth = 2; x.beginPath(); x.arc(mp[0] * k, mp[1] * k, 7, 0, 7); x.fill(); x.stroke();
+    x.restore();
+    txt("Tu es ici : " + roomAt(mp[0], mp[1]) + "  ·  M ou un appui pour fermer", CX, 546, "600 13px 'DM Sans',sans-serif", "#b9b2ff");
+  }
+  function taskAnim(kd, p, t) {                                           // petite animation propre à chaque type de tâche (boîte 76 × 52)
+    switch (kd) {
+      case "wires": [["#ff5d5d", 10], ["#ffd23f", 26], ["#4cc9f0", 42]].forEach(([cc, yy], i) => { const e = Math.max(0, Math.min(1, p * 1.5 - i * .2)); x.strokeStyle = cc; x.fillStyle = cc; x.beginPath(); x.moveTo(6, yy); x.lineTo(6 + 64 * e, yy); x.stroke(); x.beginPath(); x.arc(6, yy, 3, 0, 7); x.arc(70, yy, 3, 0, 7); x.fill(); if (e < 1) { x.globalAlpha = .5 + .5 * Math.sin(t * 20); x.beginPath(); x.arc(6 + 64 * e, yy, 4, 0, 7); x.fill(); x.globalAlpha = 1; } }); break;
+      case "fuel": x.strokeRect(24, 5, 28, 42); x.globalAlpha = .85; x.fillRect(26, 45 - 38 * p, 24, 38 * p); x.globalAlpha = 1; x.fillRect(48, 12, 10, 3); break;
+      case "cool": x.strokeRect(32, 4, 12, 36); x.beginPath(); x.arc(38, 44, 7, 0, 7); x.stroke(); x.fillStyle = `hsl(${10 + 190 * p},85%,60%)`; x.fillRect(35, 40 - 34 * p, 6, 34 * p + 2); x.beginPath(); x.arc(38, 44, 5, 0, 7); x.fill(); break;
+      case "crate": for (let i = 0; i < 4; i++) if (p > i / 4) { const bx = 14 + (i % 2) * 24, by = 30 - Math.floor(i / 2) * 20 - (p < (i + 1) / 4 ? Math.sin(t * 12) * 2 : 0); x.strokeRect(bx, by, 22, 18); x.beginPath(); x.moveTo(bx, by); x.lineTo(bx + 22, by + 18); x.stroke(); } break;
+      case "scan": x.beginPath(); x.arc(38, 16, 9, 0, 7); x.stroke(); x.strokeRect(24, 28, 28, 20); x.globalAlpha = .85; x.fillRect(8, 6 + 40 * (.5 + .5 * Math.sin(t * 4)), 60, 2); x.globalAlpha = 1; break;
+      case "sample": x.strokeRect(30, 4, 16, 44); x.globalAlpha = .8; x.fillRect(32, 46 - 40 * p, 12, 40 * p); x.globalAlpha = 1; for (let i = 0; i < 3; i++) { x.beginPath(); x.arc(34 + i * 4, 44 - ((t * 20 + i * 13) % 36), 1.8, 0, 7); x.stroke(); } break;
+      case "dl": case "up": { const up = kd === "up"; for (let i = 0; i < 4; i++) { const yy = (t * 34 + i * 13) % 52; x.globalAlpha = .4 + .6 * (up ? 1 - yy / 52 : yy / 52); x.fillRect(32, up ? 52 - yy : yy, 12, 6); } x.globalAlpha = 1; x.beginPath(); if (up) { x.moveTo(38, 2); x.lineTo(24, 16); x.lineTo(52, 16); } else { x.moveTo(38, 50); x.lineTo(24, 36); x.lineTo(52, 36); } x.closePath(); x.fill(); break; }
+      case "align": { const d = 24 * (1 - p); x.beginPath(); x.arc(38 - d, 26, 12, 0, 7); x.stroke(); x.beginPath(); x.arc(38 + d, 26, 12, 0, 7); x.stroke(); x.beginPath(); x.moveTo(38, 4); x.lineTo(38, 48); x.moveTo(10, 26); x.lineTo(66, 26); x.lineWidth = 1; x.stroke(); break; }
+      case "trash": x.strokeRect(24, 26, 28, 22); x.fillRect(20, 22, 36, 3); for (let i = 0; i < 3; i++) { const yy = (t * 36 + i * 11) % 28; x.fillRect(29 + i * 7, yy - 4, 5, 5); } break;
+      case "shield": x.beginPath(); for (let i = 0; i < 6; i++) { const an = i * 1.0472 - 1.5708; x.lineTo(38 + Math.cos(an) * 22, 26 + Math.sin(an) * 22); } x.closePath(); x.globalAlpha = .15 + .6 * p; x.fill(); x.globalAlpha = 1; x.stroke(); break;
+      case "ant": x.save(); x.translate(38, 38); x.rotate(-.9 + Math.sin(t * 2) * .6 * (1 - p)); x.beginPath(); x.arc(0, 0, 16, Math.PI, 0); x.stroke(); x.beginPath(); x.moveTo(0, 0); x.lineTo(0, -22); x.stroke(); x.restore(); x.globalAlpha = p; x.beginPath(); x.arc(38, 38, 22, -2.2, -.9); x.stroke(); x.beginPath(); x.arc(38, 38, 30, -2.2, -.9); x.stroke(); x.globalAlpha = 1; break;
+      case "calib": x.beginPath(); for (let i = 0; i <= 64; i += 2) { const yy = 26 + Math.sin(i / 5 + t * 8) * 18 * (1 - p); if (i) x.lineTo(6 + i, yy); else x.moveTo(6 + i, yy); } x.stroke(); break;
+      case "purge": for (let i = 0; i < 5; i++) { x.beginPath(); x.arc(14 + i * 12, 48 - ((t * 24 + i * 17) % 48), 3 + (i % 2), 0, 7); x.stroke(); } break;
+      default: x.beginPath(); x.arc(38, 26, 14, t * 5, t * 5 + 4); x.stroke();
+    }
+  }
+  function taskPanel(k, p, now) {                                         // fenêtre de la tâche en cours (bas du écran)
+    const bx = 250, by = 452, bw = 262, bh = 72, c = TCOL[k];
+    x.save(); x.fillStyle = "rgba(10,8,32,.84)"; rr(x, bx, by, bw, bh, 12); x.fill(); x.lineWidth = 2; x.strokeStyle = c; x.stroke();
+    x.fillStyle = "rgba(0,0,0,.35)"; rr(x, bx + 12, by + 10, 76, 52, 8); x.fill();
+    x.save(); x.beginPath(); x.rect(bx + 12, by + 10, 76, 52); x.clip(); x.translate(bx + 12, by + 10); x.strokeStyle = c; x.fillStyle = c; x.lineWidth = 2.5; taskAnim(KIND[k], p, now / 1000); x.restore();
+    txt(ST[k][2], bx + 100, by + 20, "700 13px 'DM Sans',sans-serif", "#fff", "left");
+    x.fillStyle = "rgba(255,255,255,.15)"; rr(x, bx + 100, by + 34, 150, 10, 5); x.fill(); x.fillStyle = c; rr(x, bx + 100, by + 34, Math.max(10, 150 * p), 10, 5); x.fill();
+    txt(`${Math.round(p * 100)} % · reste immobile`, bx + 100, by + 57, "600 11px 'DM Sans',sans-serif", "#b9b2ff", "left");
+    x.restore();
   }
   function setOv(tx) {
     if (tx === ovT) return; ovT = tx; ov.textContent = tx;
@@ -518,25 +585,52 @@ export function createAmogClient(env) {
     return ["UTILISER", 1];
   }
 
+  function cutscene(rsl, el) {                                            // éjection : le joueur file dans l'espace, le verdict apparaît ensuite
+    x.fillStyle = "#03020a"; x.fillRect(0, 0, W, H);
+    const t = el / 1000;
+    for (let i = 0; i < 70; i++) { const sp = 140 + (i % 5) * 90, sx = (((i * 97.3 - t * sp) % W) + W) % W, sy = (i * 53.9) % H; x.globalAlpha = .3 + (i % 4) * .15; x.fillStyle = "#e8ecff"; x.fillRect(sx, sy, 1 + (i % 3), 1 + (i % 2)); }
+    x.globalAlpha = 1;
+    const ej = rsl.ej >= 0 ? pl[rsl.ej] : null;
+    if (ej) {
+      const px = -50 + (W + 100) * Math.min(1, t / 3.4), py = H / 2 + 20 + Math.sin(t * 2) * 16;
+      x.save(); x.translate(px, py); x.rotate(t * 3.5); x.scale(2.4, 2.4); bean(0, 0, ej[2], 1, 1, false, false); x.restore();
+      const msg = `${ej[1]} a été éjecté(e).`; txt(msg.slice(0, Math.min(msg.length, Math.floor(t * 18))), CX, 70, "800 28px 'Bricolage Grotesque',sans-serif", "#fff");
+      x.globalAlpha = Math.max(0, Math.min(1, (t - 2) / .5)); txt(rsl.ei ? "C'était un imposteur ! 🎉" : "Ce n'était PAS un imposteur… 😬", CX, 112, "700 20px 'DM Sans',sans-serif", rsl.ei ? "#3ee6c4" : "#ff3b5c");
+      x.globalAlpha = Math.max(0, Math.min(1, (t - 2.6) / .5)); txt(`Il reste ${rsl.ir} imposteur${rsl.ir > 1 ? "s" : ""}`, CX, 144, "600 16px 'DM Sans',sans-serif", "#b9b2ff"); x.globalAlpha = 1;
+    } else {
+      x.globalAlpha = Math.min(1, t / .6); txt("Personne n'a été éjecté.", CX, H / 2 - 14, "800 30px 'Bricolage Grotesque',sans-serif", "#fff");
+      txt("Égalité ou majorité de « passer »", CX, H / 2 + 24, "700 18px 'DM Sans',sans-serif", "#ffe9a8"); x.globalAlpha = 1;
+    }
+  }
   function meeting(s, now) {
-    x.fillStyle = "rgba(8,6,24,.94)"; x.fillRect(0, 0, W, H); rects = [];
+    x.fillStyle = "#08061a"; x.fillRect(0, 0, W, H); rects = [];
     const res = s.ph === "r", m = s.mt, rsl = s.rs, mine = s.p[myIdx] && s.p[myIdx][2];
+    if (res && now - rStart < 3800) return cutscene(rsl, now - rStart);
+    const bgG = x.createRadialGradient(CX, 60, 20, CX, 260, 520); bgG.addColorStop(0, "rgba(70,55,150,.5)"); bgG.addColorStop(1, "rgba(8,6,26,0)"); x.fillStyle = bgG; x.fillRect(0, 0, W, H);
+    for (let i = 0; i < 26; i++) { const sx = (i * 137.5 + now * (.006 + (i % 4) * .004)) % W, sy = (i * 71.3) % H; x.globalAlpha = .12 + (i % 5) * .05; x.fillStyle = "#cfd6ff"; x.fillRect(sx, sy, 2, 2); }
+    x.globalAlpha = 1;
     if (res) {
       const ej = rsl.ej >= 0 ? pl[rsl.ej] : null;
       txt(ej ? `${ej[1]} a été éjecté(e).` : "Personne n'a été éjecté.", CX, 40, "800 28px 'Bricolage Grotesque',sans-serif", "#fff");
       txt(ej ? (rsl.ei ? "C'était un imposteur ! 🎉" : "Ce n'était PAS un imposteur… 😬") : "Égalité ou majorité de « passer »", CX, 74, "700 18px 'DM Sans',sans-serif", ej ? (rsl.ei ? "#3ee6c4" : "#ff3b5c") : "#ffe9a8");
       txt(`Il reste ${rsl.ir} imposteur${rsl.ir > 1 ? "s" : ""}`, CX, 98, "600 15px 'DM Sans',sans-serif", "#b9b2ff");
     } else {
+      mMax = Math.max(mMax, m.r);
+      x.fillStyle = "rgba(255,255,255,.1)"; x.fillRect(0, 0, W, 6); x.fillStyle = m.r <= 8 ? "#ff3b5c" : "#7c6cff"; x.fillRect(0, 0, W * Math.max(0, m.r) / Math.max(1, mMax), 6);   // barre de temps
+      if (m.r <= 5 && m.r !== lastTick) { lastTick = m.r; beep(880, .05, "square", .03); }
+      const alive = s.p.filter(q => q[2]).length, voted = m.v.filter((v, i) => v && s.p[i] && s.p[i][2]).length;
       txt(m.b ? `📢 ${pl[m.c][1]} a trouvé un corps !` : `🚨 Réunion d'urgence : ${pl[m.c][1]}`, CX, 36, "800 26px 'Bricolage Grotesque',sans-serif", "#fff");
       txt(mine ? "Qui est l'imposteur ? Discutez, puis votez." : "👻 Les morts ne votent pas", CX, 70, "700 17px 'DM Sans',sans-serif", "#ffe9a8");
       txt(`${m.r} s`, 760, 36, "800 24px 'Bricolage Grotesque',sans-serif", m.r <= 8 ? "#ff3b5c" : "#9b8cff");
+      txt(`🗳 ${voted}/${alive} ont voté`, CX, 96, "600 14px 'DM Sans',sans-serif", voted === alive ? "#3ee6c4" : "#b9b2ff");
     }
     s.p.forEach((q, i) => {
       const col = i < 5 ? 0 : 1, rx = 50 + col * 370, ry = 118 + (i % 5) * 56, al = q[2] ? 1 : .4;
-      const sel = vote === `${mid}_${i}`;
-      x.globalAlpha = al; x.fillStyle = sel ? "#4a3f95" : "#241f52"; rr(x, rx, ry, 330, 48, 12); x.fill();
-      x.lineWidth = sel ? 3 : 1.5; x.strokeStyle = sel ? "#ffd23f" : "#4b4590"; x.stroke();
+      const sel = vote === `${mid}_${i}`, win = res && rsl.ej === i;
+      x.globalAlpha = al; x.fillStyle = win ? "#5a2440" : sel ? "#4a3f95" : "#241f52"; rr(x, rx, ry, 330, 48, 12); x.fill();
+      x.lineWidth = sel || win ? 3 : 1.5; x.strokeStyle = win ? "#ff3b5c" : sel ? "#ffd23f" : "#4b4590"; x.stroke();
       bean(rx + 26, ry + 26, pl[i][2], 1, 1);
+      if (!res && i === m.c) txt("📢", rx + 8, ry + 9, "700 13px 'DM Sans',sans-serif", "#fff");
       txt(pl[i][1] + (i === myIdx ? " (toi)" : "") + (q[2] ? "" : " ✖"), rx + 54, ry + 24, "700 16px 'DM Sans',sans-serif", ls.ro[i] === "1" && isImp() ? "#ff6b81" : "#fff", "left");
       if (!res && m.v[i]) txt("✔ a voté", rx + 322, ry + 24, "600 13px 'DM Sans',sans-serif", "#3ee6c4", "right");
       if (res) txt(`🗳 ${rsl.vc[i]}`, rx + 322, ry + 24, "800 18px 'DM Sans',sans-serif", rsl.ej === i ? "#ff3b5c" : "#ffe9a8", "right");
@@ -549,6 +643,8 @@ export function createAmogClient(env) {
     txt(res ? `⏭ Passer : ${rsl.vc[rsl.vc.length - 1]}` : "⏭ Passer (ne pas voter)", CX, 443, "700 16px 'DM Sans',sans-serif", "#fff");
     if (res && rsl.vt) { let k = 0; rsl.vt.forEach((v, vi) => { if (v === rsl.vc.length - 1 && pl[vi]) { x.fillStyle = pl[vi][2]; x.strokeStyle = "rgba(0,0,0,.6)"; x.lineWidth = 1.5; x.beginPath(); x.arc(518 - k++ * 12, 443, 5, 0, 7); x.fill(); x.stroke(); } }); }
     if (!res && mine) rects.push({ x: 270, y: 420, w: 260, h: 46, t: 99 });
+    const el = (now - mStart) / 1000;                                     // annonce qui claque au début de la réunion
+    if (!res && el < 1.5) { const k2 = el < .25 ? 2.2 - el / .25 * 1.2 : 1; x.save(); x.globalAlpha = Math.max(0, el > 1.1 ? (1.5 - el) / .4 : 1); x.fillStyle = "rgba(8,6,24,.7)"; x.fillRect(0, H / 2 - 70, W, 140); x.translate(CX, H / 2); x.scale(k2, k2); txt(m.b ? "CORPS SIGNALÉ" : "RÉUNION D'URGENCE", 0, 0, "800 44px 'Bricolage Grotesque',sans-serif", m.b ? "#ff3b5c" : "#ffd23f"); x.restore(); }
   }
   const CX = 400;
 
@@ -563,6 +659,7 @@ export function createAmogClient(env) {
     const { a, b, f } = sm; ls = snaps[snaps.length - 1].s; const sa = a.s, sb = b.s;
     snaps.forEach(sn => { if (!sn.done && sn.at <= now - 110) { sn.done = true; (sn.s.ev || []).forEach(onEv); } });
     if (!pl) return;
+    if (ls.ph !== lastPh) { if (ls.ph === "m") { mStart = now; mMax = 0; lastTick = -1; } else if (ls.ph === "r") rStart = now; if (ls.ph !== "p") bigMap = false; lastPh = ls.ph; }
     if (ls.mt) mid = ls.mt.id;
     const me = sa.p[myIdx], ghost = !!me && !me[2], imp = isImp();
     const pos = sa.p.map((qa, i) => { const qb = sb.p[i]; return qb && qa[2] && qb[2] ? [qa[0] + (qb[0] - qa[0]) * f, qa[1] + (qb[1] - qa[1]) * f] : [qa[0], qa[1]]; });
@@ -592,6 +689,7 @@ export function createAmogClient(env) {
       const qa = sa.p[i], p = pos[i]; if (!pl[i] || (i !== myIdx && (!vis(p[0], p[1]) || (qa[6] && !imp && !ghost)))) return;   // un imposteur en conduit est invisible
       if (i === tgt) { x.strokeStyle = "#ff3b5c"; x.lineWidth = 3; x.beginPath(); x.arc(p[0], p[1], BR + 8, 0, 7); x.stroke(); }
       const gh = !qa[2];
+      if (mvg[i] && !gh && now - (dustT[i] || 0) > 110 && parts.length < 150) { dustT[i] = now; parts.push({ x: p[0] - (qa[3] || 1) * 6, y: p[1] + BR, vx: (Math.random() - .5) * 14, vy: -8 - Math.random() * 8, l: .6, c: "rgba(190,185,255,.55)", s: 2.4 }); }
       bean(p[0], p[1], pl[i][2], qa[3] || 1, qa[6] ? .45 : 1, !gh && mvg[i], gh);
       const me2 = i === myIdx, red = ls.ro[i] === "1" && (imp || ls.o);
       x.font = "700 13px 'DM Sans',sans-serif"; x.textAlign = "center"; x.textBaseline = "alphabetic"; x.lineWidth = 3; x.strokeStyle = "rgba(0,0,0,.7)"; x.fillStyle = red ? "#ff4d6d" : me2 ? "#ffd23f" : "#fff";
@@ -611,6 +709,8 @@ export function createAmogClient(env) {
     if (cam && ls.ph === "p") x.drawImage(camMask(), 0, 0);                         // caméras : seuls le couloir et les portes sont visibles
     parts = parts.filter(q => (q.l -= dt * 2.2) > 0);
     parts.forEach(q => { q.x += q.vx * dt; q.y += q.vy * dt; x.globalAlpha = Math.max(0, q.l); x.fillStyle = q.c; x.beginPath(); x.arc(q.x, q.y, q.s * q.l, 0, 7); x.fill(); });
+    floats = floats.filter(q => (q.l -= dt * .9) > 0);
+    floats.forEach(q => { q.y -= dt * 26; x.globalAlpha = Math.min(1, q.l * 1.5); txt(q.t, q.x, q.y, "800 20px 'Bricolage Grotesque',sans-serif", "#7dffd9"); });
     x.globalAlpha = 1;
     if (ls.ph === "p") {                                                  // « ! » des tâches (visibles même dans le noir) + flèche vers la plus proche
       let nt = null, nd = 1e9;
@@ -644,18 +744,26 @@ export function createAmogClient(env) {
     x.fillStyle = "rgba(0,0,0,.55)"; rr(x, 10, 10, 210, 22, 11); x.fill();
     if (tot && dn) { const tg = x.createLinearGradient(10, 0, 220, 0); tg.addColorStop(0, "#2bd9b3"); tg.addColorStop(1, "#7dffd9"); x.fillStyle = tg; rr(x, 10, 10, Math.max(22, 210 * dn / tot), 22, 11); x.fill(); }
     txt(`Tâches ${dn}/${tot}`, 115, 22, "700 13px 'DM Sans',sans-serif", "#fff");
-    let ly = 48; txt(imp ? "Fausses tâches :" : "Mes tâches :", 12, ly, "700 12px 'DM Sans',sans-serif", imp ? "#ff8fa3" : "#b9b2ff", "left");
-    ST.forEach((s2, k) => { if (!(tk[0] >> k & 1)) return; ly += 16; txt(`${tk[1] >> k & 1 ? "✔" : "▫"} ${s2[2]}`, 12, ly, "600 12px 'DM Sans',sans-serif", tk[1] >> k & 1 ? "#6b9" : "#fff", "left"); });
+    let ly = 48; const mineT = ST.map((_, k) => k).filter(k => tk[0] >> k & 1);
+    x.fillStyle = "rgba(6,5,20,.55)"; rr(x, 6, 38, 200, 24 + mineT.length * 16, 9); x.fill();
+    txt(imp ? "Fausses tâches :" : "Mes tâches :", 14, ly, "700 12px 'DM Sans',sans-serif", imp ? "#ff8fa3" : "#b9b2ff", "left");
+    mineT.forEach(k => { const d = tk[1] >> k & 1; ly += 16; x.fillStyle = TCOL[k]; x.globalAlpha = d ? .4 : 1; x.beginPath(); x.arc(17, ly, 3, 0, 7); x.fill(); x.globalAlpha = 1; txt(`${d ? "✔" : "▫"} ${ST[k][2]}`, 25, ly, "600 12px 'DM Sans',sans-serif", d ? "#6b9" : "#fff", "left"); });
     x.textAlign = "right"; x.font = "600 13px 'DM Sans',sans-serif"; x.fillStyle = "#ffe9a8"; x.textBaseline = "middle";
     (ls.kf || []).slice(-4).forEach((t2, i) => x.fillText(t2, W - 12, 18 + i * 18));
     if (ls.ph === "p" && ls.sb) txt(ls.sb[0] ? `☢️ RÉACTEUR : ${ls.sb[1]} s : répare les 2 panneaux !` : `💡 Lumières coupées : répare le panneau ⚡ (${ls.sb[1]} s)`, CX, 56, "800 16px 'Bricolage Grotesque',sans-serif", "#ff6b81");
-    if (cam && ls.ph === "p") txt("📹 CAMÉRAS : bouge pour quitter", CX, 540, "700 15px 'DM Sans',sans-serif", "#3ee6c4");
+    if (cam && ls.ph === "p") txt("📹 CAMÉRAS : bouge pour quitter", CX, 516, "700 15px 'DM Sans',sans-serif", "#3ee6c4");
     if (ghost) txt("👻 Tu es un fantôme : traverse les murs et finis tes tâches !", CX, 20, "700 15px 'DM Sans',sans-serif", "#b9b2ff");
-    if (ls.ph === "p" && ls.t < 5 && myIdx >= 0) {                          // annonce du rôle au début
-      txt(imp ? "🔪 Tu es IMPOSTEUR" : "🧑‍🚀 Tu es ÉQUIPIER", CX, 90, "800 30px 'Bricolage Grotesque',sans-serif", imp ? "#ff3b5c" : "#3ee6c4");
-      txt(imp ? "Élimine en silence. Ne te fais pas voter !" : "Fais tes tâches et trouve les imposteurs.", CX, 122, "600 15px 'DM Sans',sans-serif", "#fff");
+    if (ls.ph === "p" && ls.t < 5 && myIdx >= 0) {                          // annonce du rôle au début (fondu)
+      const al = Math.max(0, Math.min(1, ls.t / .5, (5 - ls.t) / .7)), nI = ls.ro.split("").filter(c2 => c2 === "1").length, c0 = imp ? "224,36,63" : "46,200,170";
+      const mates = ls.ro.split("").map((c2, i) => c2 === "1" && i !== myIdx && pl[i] ? pl[i][1] : null).filter(Boolean).join(", ");
+      x.save(); x.globalAlpha = al; const bg2 = x.createLinearGradient(0, 0, W, 0); bg2.addColorStop(0, `rgba(${c0},0)`); bg2.addColorStop(.5, `rgba(${c0},.4)`); bg2.addColorStop(1, `rgba(${c0},0)`); x.fillStyle = bg2; x.fillRect(0, 70, W, 90);
+      txt(imp ? "🔪 Tu es IMPOSTEUR" : "🧑‍🚀 Tu es ÉQUIPIER", CX, 98 + (1 - al) * 12, "800 32px 'Bricolage Grotesque',sans-serif", imp ? "#ff3b5c" : "#3ee6c4");
+      txt(imp ? "Élimine en silence. Ne te fais pas voter !" + (mates ? ` Complice : ${mates}` : "") : `${nI} imposteur${nI > 1 ? "s" : ""} parmi vous : fais tes tâches et démasque-le${nI > 1 ? "s" : ""}.`, CX, 134, "600 15px 'DM Sans',sans-serif", "#fff");
+      x.restore();
     }
-    if (ls.ph === "p") minimap(tk, mp, ghost, imp, now, camX, camY, vw, vh);
+    if (ls.ph === "p") minimap(tk, mp, ghost, imp, now, camX, camY, vw, vh, pos);
+    if (ls.ph === "p" && !cam) txt(roomAt(mp[0], mp[1]).toUpperCase(), CX, 538, "800 13px 'Bricolage Grotesque',sans-serif", "rgba(255,255,255,.35)");
+    if (ls.ph === "p" && me && me[5] > 0) { let tk2 = -1; for (let k = 0; k < ST.length; k++) if ((tk[0] >> k & 1) && !(tk[1] >> k & 1) && Math.hypot(mp[0] - ST[k][0], mp[1] - ST[k][1]) < 48) { tk2 = k; break; } if (tk2 >= 0) taskPanel(tk2, me[5] / 100, now); }
     if (ls.ph === "p") {
       const [lb, dim] = useInfo(ls); btn(USEB, lb, "#2e7dff", dim, lb);      // le fantôme a aussi son bouton (tâches)
       if (imp && !ghost) {
@@ -665,6 +773,8 @@ export function createAmogClient(env) {
         btn(S1B, "💡", "#c98a00", sd, ls.sc > 0 && !ls.sb ? String(ls.sc) : "💡"); btn(S2B, "☢️", "#b3261e", sd, ls.sc > 0 && !ls.sb ? String(ls.sc) : "☢️");
       }
     }
+    if (bigMap && ls.ph === "p") bigmap(tk, mp, ghost, imp, now, pos);
+    if (flash) { const el = now - flash.t; if (el > flash.d) flash = null; else { x.fillStyle = `rgba(${flash.c},${(flash.a * (1 - el / flash.d)).toFixed(3)})`; x.fillRect(0, 0, W, H); if (flash.m) txt(flash.m, CX, H / 2, "800 34px 'Bricolage Grotesque',sans-serif", "#fff"); } }
     if (stick && ls.ph === "p") {
       x.fillStyle = "rgba(255,255,255,.08)"; x.strokeStyle = "rgba(255,255,255,.28)"; x.lineWidth = 2; x.beginPath(); x.arc(stick.ox, stick.oy, 55, 0, 7); x.fill(); x.stroke();
       x.fillStyle = "rgba(255,255,255,.65)"; x.beginPath(); x.arc(stick.ox + stick.dx * 55, stick.oy + stick.dy * 55, 22, 0, 7); x.fill();
@@ -676,8 +786,8 @@ export function createAmogClient(env) {
 
   return {
     enter(c) {
-      active = true; snaps = []; pl = null; lastEv = 0; parts = []; useSeq = killSeq = ventSeq = sabSeq = sabTy = 0; vote = ""; sentStr = ""; sentAt = 0; stick = null; keys.clear(); tPrev = 0; myIdx = -1; ovT = "\u0000"; mid = 0; rects = []; ls = null; camOn = false; zm = 1;
-      $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : utiliser / signaler · K ou Maj : tuer · V : conduit · 1 / 2 : saboter (imposteur) · fantôme : traverse les murs et finit ses tâches · glisse sur mobile";
+      active = true; snaps = []; pl = null; lastEv = 0; parts = []; bigMap = false; flash = null; floats = []; lastPh = ""; mStart = rStart = mMax = 0; lastTick = -1; useSeq = killSeq = ventSeq = sabSeq = sabTy = 0; vote = ""; sentStr = ""; sentAt = 0; stick = null; keys.clear(); tPrev = 0; myIdx = -1; ovT = "\u0000"; mid = 0; rects = []; ls = null; camOn = false; zm = 1;
+      $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : utiliser / signaler · K ou Maj : tuer · V : conduit · 1 / 2 : saboter (imposteur) · M : grande carte · fantôme : traverse les murs et finit ses tâches · glisse sur mobile";
       const myUid = getMe().uid;
       set(RF(`games/${c}/inputs/${myUid}`), "0,0,0,0,").catch(() => { });
       const un = onValue(RF(`games/${c}/state`), snap => {

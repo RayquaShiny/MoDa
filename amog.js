@@ -32,12 +32,21 @@ const ROOMS = [
   { n: "Électricité", x: 155, y: 365, w: 120, h: 125 }
 ].map(r => ({ n: r.n, x: sc(r.x), y: sc(r.y), w: sc(r.w), h: sc(r.h) }));
 const CORR = [
+  // Couloir longitudinal ouest : moteurs, réacteur, sécurité et moteur bas.
   [125, 155, 35, 330], [85, 345, 70, 35], [125, 445, 55, 35],
-  [145, 185, 35, 35], [235, 170, 65, 65], [510, 110, 90, 35],
-  [560, 175, 35, 70], [620, 250, 100, 35], [430, 230, 35, 100],
-  [520, 285, 35, 55], [400, 405, 55, 35], [265, 405, 55, 35],
-  [430, 475, 80, 35], [450, 445, 220, 35], [700, 365, 35, 65],
-  [145, 485, 35, 30]
+  [145, 485, 35, 30],
+  // Liaison Médbay ↔ Cafétéria et accès ouest vers le Réacteur.
+  [95, 235, 70, 35], [145, 185, 35, 35], [235, 170, 65, 65],
+  // Branche nord-est : Cafétéria ↔ Armes.
+  [510, 110, 90, 35],
+  // Branche est : Cafétéria ↔ O2 ↔ Navigation ↔ Boucliers.
+  [510, 190, 60, 45], [620, 250, 100, 35], [700, 365, 35, 65],
+  // Couloir central : Cafétéria ↔ Admin ↔ Stockage.
+  [430, 230, 35, 100], [520, 285, 35, 55], [400, 405, 55, 35],
+  // Branche sud : Électricité ↔ Stockage ↔ Communications ↔ Boucliers.
+  [265, 405, 55, 35], [430, 475, 80, 35], [450, 445, 220, 35],
+  // Accès dédié entre Sécurité et Électricité.
+  [125, 395, 55, 35]
 ].map(r => ({ x: sc(r[0]), y: sc(r[1]), w: sc(r[2]), h: sc(r[3]) }));
 const FLOOR = [...ROOMS, ...CORR];
 const DOORS = [

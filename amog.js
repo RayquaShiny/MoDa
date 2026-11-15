@@ -9,60 +9,45 @@
    - Même fonctionnement que Sumo Arena : l'hôte simule (30 pas/s) et publie games/<code>/state ; chaque joueur écrit
      « ax,ay,compteurUtiliser,compteurTuer,vote » dans games/<code>/inputs/<uid>. Aucun nouveau chemin Firebase. */
 
-const W = 800, H = 560, RAD = 11, BR = 15, SPD = 125, DT = 1 / 30;   // W × H = fenêtre de vue (le canvas) ; la carte fait WW × WH et la caméra suit le joueur
+const W = 800, H = 560, RAD = 11, BR = 15, SPD = 125, DT = 1 / 30;
 const KCD0 = 8, KCD = 12, KR = 52, TT = 1.6, MT = 40, RT = 8, VIS = 290;
-const K = 1.75, WW = 1400, WH = 980, sc = v => Math.round(v * K), scp = a => a.map(sc);   // la carte est 1,75 fois plus grande que l'ancienne (même plan)
-const TB = scp([400, 125]);                                               // table d'urgence (cafétéria)
-// Plan de navigation du Skeld : moteurs à gauche, cafétéria en haut-centre,
-// armes et navigation à droite, puis stockage/électricité en bas.
+const K = 1.75, WW = 1400, WH = 800, sc = v => Math.round(v * K), scp = a => a.map(sc);
+// Reconstitution à l'échelle du plan officiel du Skeld (référence GamesRadar / InnerSloth).
+const TB = scp([422, 178]);
 const ROOMS = [
-  { n: "Moteur haut", x: 20, y: 75, w: 135, h: 105 },
-  { n: "Réacteur", x: 5, y: 245, w: 100, h: 125 },
-  { n: "Sécurité", x: 45, y: 375, w: 100, h: 90 },
-  { n: "Moteur bas", x: 20, y: 470, w: 135, h: 85 },
-  { n: "Médbay", x: 145, y: 170, w: 120, h: 105 },
-  { n: "Cafétéria", x: 270, y: 25, w: 265, h: 220 },
-  { n: "Armes", x: 590, y: 65, w: 145, h: 120 },
-  { n: "O2", x: 535, y: 220, w: 100, h: 85 },
-  { n: "Navigation", x: 700, y: 250, w: 95, h: 130 },
-  { n: "Admin", x: 430, y: 315, w: 140, h: 110 },
-  { n: "Boucliers", x: 660, y: 420, w: 130, h: 115 },
-  { n: "Comms", x: 500, y: 475, w: 115, h: 75 },
-  { n: "Stockage", x: 300, y: 355, w: 155, h: 155 },
-  { n: "Électricité", x: 155, y: 365, w: 120, h: 125 }
-].map(r => ({ n: r.n, x: sc(r.x), y: sc(r.y), w: sc(r.w), h: sc(r.h) }));
+  { n:"Réacteur",x:2,y:143,w:110,h:152 }, { n:"Moteur haut",x:77,y:58,w:89,h:90 },
+  { n:"Moteur bas",x:77,y:289,w:89,h:101 }, { n:"Sécurité",x:143,y:161,w:77,h:104 },
+  { n:"Médbay",x:228,y:122,w:117,h:115 }, { n:"Cafétéria",x:322,y:0,w:243,h:212 },
+  { n:"Armes",x:569,y:45,w:90,h:102 }, { n:"O2",x:517,y:159,w:72,h:67 },
+  { n:"Navigation",x:709,y:163,w:91,h:90 }, { n:"Admin",x:437,y:234,w:139,h:98 },
+  { n:"Électricité",x:243,y:254,w:104,h:105 }, { n:"Stockage",x:343,y:290,w:126,h:163 },
+  { n:"Comms",x:464,y:363,w:102,h:90 }, { n:"Boucliers",x:565,y:300,w:96,h:106 }
+].map(r=>({n:r.n,x:sc(r.x),y:sc(r.y),w:sc(r.w),h:sc(r.h)}));
 const CORR = [
-  // Couloir longitudinal ouest : moteurs, réacteur, sécurité et moteur bas.
-  [125, 155, 35, 330], [85, 345, 70, 35], [125, 445, 55, 35],
-  [145, 485, 35, 30],
-  // Liaison Médbay ↔ Cafétéria et accès ouest vers le Réacteur.
-  [95, 235, 70, 35], [145, 185, 35, 35], [235, 170, 65, 65],
-  // Branche nord-est : Cafétéria ↔ Armes.
-  [510, 110, 90, 35],
-  // Branche est : Cafétéria ↔ O2 ↔ Navigation ↔ Boucliers.
-  [510, 190, 60, 45], [620, 250, 100, 35], [700, 365, 35, 65],
-  // Couloir central : Cafétéria ↔ Admin ↔ Stockage.
-  [430, 230, 35, 100], [520, 285, 35, 55], [400, 405, 55, 35],
-  // Branche sud : Électricité ↔ Stockage ↔ Communications ↔ Boucliers.
-  [265, 405, 55, 35], [430, 475, 80, 35], [450, 445, 220, 35],
-  // Accès dédié entre Sécurité et Électricité.
-  [125, 395, 55, 35]
-].map(r => ({ x: sc(r[0]), y: sc(r[1]), w: sc(r[2]), h: sc(r[3]) }));
-const FLOOR = [...ROOMS, ...CORR];
-const DOORS = [
-  { id: 0, n: "Médbay", x: sc(265), y: sc(190), w: sc(9), h: sc(28) },
-  { id: 1, n: "Cafétéria / Admin", x: sc(430), y: sc(245), w: sc(32), h: sc(9) },
-  { id: 2, n: "Armes", x: sc(590), y: sc(110), w: sc(9), h: sc(32) },
-  { id: 3, n: "Navigation", x: sc(708), y: sc(285), w: sc(9), h: sc(32) },
-  { id: 4, n: "Électricité", x: sc(265), y: sc(405), w: sc(9), h: sc(32) },
-  { id: 5, n: "Stockage", x: sc(400), y: sc(475), w: sc(32), h: sc(9) }
+ [130,82,192,48],[165,181,64,39],[188,205,62,34],[290,151,52,43],
+ [552,75,55,42],[563,137,49,42],[584,169,132,40],[398,198,46,82],
+ [402,309,64,38],[309,335,78,43],[164,329,91,47],[447,360,60,40],
+ [458,320,122,42],[642,235,48,108],[116,270,45,47],[210,252,54,40],
+ [242,237,42,48],[343,191,45,43],[560,202,43,42],[275,317,45,46]
+].map(r=>({x:sc(r[0]),y:sc(r[1]),w:sc(r[2]),h:sc(r[3])}));
+const FLOOR=[...ROOMS,...CORR];
+const DOORS=[
+ {id:0,n:"Médbay",x:sc(335),y:sc(165),w:sc(9),h:sc(28)},
+ {id:1,n:"Cafétéria / Admin",x:sc(420),y:sc(207),w:sc(32),h:sc(9)},
+ {id:2,n:"Armes",x:sc(570),y:sc(90),w:sc(9),h:sc(32)},
+ {id:3,n:"Navigation",x:sc(710),y:sc(190),w:sc(9),h:sc(32)},
+ {id:4,n:"Électricité",x:sc(335),y:sc(300),w:sc(9),h:sc(32)},
+ {id:5,n:"Stockage",x:sc(445),y:sc(360),w:sc(32),h:sc(9)}
 ];
-let CLOSED_DOORS = new Set();
-const doorBlocked = (px, py) => DOORS.some(d => CLOSED_DOORS.has(d.id) && px + RAD > d.x && px - RAD < d.x + d.w && py + RAD > d.y && py - RAD < d.y + d.h);
-const ST = [[85, 125, "Aligner les moteurs"], [205, 425, "Brancher les câbles"], [45, 300, "Refroidir le réacteur"], [365, 425, "Trier les caisses"], [195, 215, "Scanner médical"], [405, 65, "Télécharger les plans"], [650, 120, "Calibrer le détecteur"], [580, 260, "Purger le circuit"],
-  [85, 505, "Faire le plein"], [545, 510, "Vider les déchets"], [720, 475, "Activer le bouclier"], [485, 365, "Envoyer les données"], [95, 415, "Analyser un échantillon"], [750, 315, "Orienter l'antenne"]].map(t => [sc(t[0]), sc(t[1]), t[2]]);   // 14 postes de tâche
-
-
+let CLOSED_DOORS=new Set();
+const doorBlocked=(px,py)=>DOORS.some(d=>CLOSED_DOORS.has(d.id)&&px+RAD>d.x&&px-RAD<d.x+d.w&&py+RAD>d.y&&py-RAD<d.y+d.h);
+const ST=[
+ [112,105,"Aligner les moteurs"],[292,333,"Brancher les câbles"],[55,218,"Refroidir le réacteur"],
+ [397,365,"Trier les caisses"],[282,180,"Scanner médical"],[435,42,"Télécharger les plans"],
+ [616,95,"Calibrer le détecteur"],[548,190,"Purger le circuit"],[112,345,"Faire le plein"],
+ [500,410,"Vider les déchets"],[610,350,"Activer le bouclier"],[495,275,"Envoyer les données"],
+ [180,220,"Analyser un échantillon"],[755,205,"Orienter l'antenne"]
+].map(t=>[sc(t[0]),sc(t[1]),t[2]]);
 const NT = 6;                                                             // tâches par équipier (sur 14 postes)
 const TTS = [2.7, 3.6, 3.0, 2.4, 3.3, 1.8, 1.5, 1.5, 2.1, 2.4, 3.0, 2.7, 3.6, 2.1];                    // durée de chaque tâche (même ordre que ST)
 let GRID = null;                                                          // grille 1 px : 1 = sol (rend at/ok/los beaucoup plus rapides)
@@ -116,8 +101,8 @@ function route(px, py, tx, ty) {
   if(clr(ax,ay,tx,ty))out.push([tx,ty]);
   return out;
 }
-const VENTS = [[110, 125], [35, 285], [85, 505], [95, 415], [195, 215], [215, 425], [405, 65], [485, 190], [485, 375], [720, 315], [650, 120], [745, 285], [745, 475], [555, 510]].map(scp), VN = [1, 2, 0, 5, 3, 4, 8, 10, 6, 11, 7, 9, 13, 12];   // conduits : trois circuits de 3
-const LP = scp([215, 420]), RP = [[35, 285], [75, 325]].map(scp), CAMP = scp([95, 415]);                              // panneau électrique (Électricité), 2 panneaux du réacteur, caméras (Sécurité)
+const VENTS = [[92,112],[55,220],[112,345],[182,220],[282,180],[292,333],[435,42],[495,275],[500,410],[755,205],[616,95],[610,350],[548,190],[397,365]].map(scp), VN = [1,2,0,5,3,4,8,10,6,11,7,9,13,12];   // conduits : trois circuits de 3
+const LP = scp([292, 333]), RP = [[55, 220], [80, 250]].map(scp), CAMP = scp([182, 220]);                              // panneau électrique (Électricité), 2 panneaux du réacteur, caméras (Sécurité)
 const CAMZ = CORR, inCam = (px, py) => CAMZ.some(a => px >= a.x && px <= a.x + a.w && py >= a.y && py <= a.y + a.h);   // les caméras couvrent les couloirs
 const pc = m => { let n = 0; while (m) { n += m & 1; m >>= 1; } return n; };
 export const _t = { ok, move, route, los, ST, FLOOR, TB };

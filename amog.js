@@ -12,29 +12,44 @@
 const W = 800, H = 560, RAD = 11, BR = 15, SPD = 125, DT = 1 / 30;   // W × H = fenêtre de vue (le canvas) ; la carte fait WW × WH et la caméra suit le joueur
 const KCD0 = 8, KCD = 12, KR = 52, TT = 1.6, MT = 40, RT = 8, VIS = 290;
 const K = 1.75, WW = 1400, WH = 980, sc = v => Math.round(v * K), scp = a => a.map(sc);   // la carte est 1,75 fois plus grande que l'ancienne (même plan)
-const TB = scp([440, 95]);                                               // table d'urgence (cafétéria)
-// Plan inspiré du vaisseau « Skeld » d'Among Us : 14 salles reliées par des couloirs
+const TB = scp([400, 125]);                                               // table d'urgence (cafétéria)
+// Plan de navigation du Skeld : moteurs à gauche, cafétéria en haut-centre,
+// armes et navigation à droite, puis stockage/électricité en bas.
 const ROOMS = [
-  { n: "Moteur haut", x: 40, y: 40, w: 140, h: 110 }, { n: "Réacteur", x: 10, y: 200, w: 110, h: 140 }, { n: "Sécurité", x: 160, y: 215, w: 80, h: 90 }, { n: "Moteur bas", x: 40, y: 390, w: 140, h: 110 },
-  { n: "Médbay", x: 215, y: 110, w: 110, h: 100 }, { n: "Cafétéria", x: 340, y: 25, w: 200, h: 140 }, { n: "Armes", x: 590, y: 40, w: 120, h: 100 }, { n: "O2", x: 545, y: 175, w: 70, h: 60 },
-  { n: "Navigation", x: 695, y: 195, w: 95, h: 130 }, { n: "Admin", x: 410, y: 250, w: 110, h: 90 }, { n: "Boucliers", x: 610, y: 370, w: 120, h: 100 }, { n: "Comms", x: 470, y: 445, w: 100, h: 70 },
-  { n: "Stockage", x: 330, y: 400, w: 120, h: 120 }, { n: "Électricité", x: 210, y: 370, w: 100, h: 90 }
+  { n: "Moteur haut", x: 20, y: 75, w: 135, h: 105 },
+  { n: "Réacteur", x: 5, y: 245, w: 100, h: 125 },
+  { n: "Sécurité", x: 45, y: 375, w: 100, h: 90 },
+  { n: "Moteur bas", x: 20, y: 470, w: 135, h: 85 },
+  { n: "Médbay", x: 145, y: 170, w: 120, h: 105 },
+  { n: "Cafétéria", x: 270, y: 25, w: 265, h: 220 },
+  { n: "Armes", x: 590, y: 65, w: 145, h: 120 },
+  { n: "O2", x: 535, y: 220, w: 100, h: 85 },
+  { n: "Navigation", x: 700, y: 250, w: 95, h: 130 },
+  { n: "Admin", x: 430, y: 315, w: 140, h: 110 },
+  { n: "Boucliers", x: 660, y: 420, w: 130, h: 115 },
+  { n: "Comms", x: 500, y: 475, w: 115, h: 75 },
+  { n: "Stockage", x: 300, y: 355, w: 155, h: 155 },
+  { n: "Électricité", x: 155, y: 365, w: 120, h: 125 }
 ].map(r => ({ n: r.n, x: sc(r.x), y: sc(r.y), w: sc(r.w), h: sc(r.h) }));
-const CORR = [[170, 90, 50, 350], [110, 245, 60, 50], [170, 60, 180, 50], [320, 125, 30, 40], [410, 150, 40, 110], [530, 70, 70, 50], [520, 150, 50, 40], [610, 195, 90, 40], [655, 135, 40, 70], [510, 285, 190, 40], [630, 320, 40, 60], [560, 455, 60, 40], [410, 335, 50, 70], [300, 420, 40, 40], [440, 455, 40, 40]].map(r => ({ x: sc(r[0]), y: sc(r[1]), w: sc(r[2]), h: sc(r[3]) }));   // couloirs
-const FLOOR = [...ROOMS, ...CORR];                                       // salles + couloirs
-// Portes automatiques du Skeld : sas fermés pendant le sabotage dédié.
+const CORR = [
+  [125, 155, 35, 330], [85, 345, 70, 35], [125, 445, 55, 35],
+  [145, 185, 35, 35], [245, 185, 45, 35], [510, 110, 90, 35],
+  [560, 175, 35, 70], [620, 250, 100, 35], [430, 230, 35, 100],
+  [520, 285, 35, 55], [400, 405, 55, 35], [265, 405, 55, 35],
+  [430, 475, 80, 35], [450, 445, 220, 35], [700, 365, 35, 65],
+  [145, 485, 35, 30]
+].map(r => ({ x: sc(r[0]), y: sc(r[1]), w: sc(r[2]), h: sc(r[3]) }));
+const FLOOR = [...ROOMS, ...CORR];
 const DOORS = [
-  { id: 0, n: "Cafétéria Ouest", x: sc(335), y: sc(125), w: sc(9), h: sc(40) },
-  { id: 1, n: "Cafétéria Sud", x: sc(410), y: sc(198), w: sc(40), h: sc(9) },
-  { id: 2, n: "Armes", x: sc(560), y: sc(70), w: sc(9), h: sc(50) },
-  { id: 3, n: "Navigation", x: sc(620), y: sc(210), w: sc(70), h: sc(9) },
-  { id: 4, n: "Électricité", x: sc(310), y: sc(420), w: sc(9), h: sc(40) },
-  { id: 5, n: "Stockage", x: sc(410), y: sc(365), w: sc(50), h: sc(9) }
+  { id: 0, n: "Médbay", x: sc(265), y: sc(190), w: sc(9), h: sc(28) },
+  { id: 1, n: "Cafétéria / Admin", x: sc(430), y: sc(245), w: sc(32), h: sc(9) },
+  { id: 2, n: "Armes", x: sc(590), y: sc(110), w: sc(9), h: sc(32) },
+  { id: 3, n: "Navigation", x: sc(700), y: sc(285), w: sc(9), h: sc(32) },
+  { id: 4, n: "Électricité", x: sc(265), y: sc(405), w: sc(9), h: sc(32) },
+  { id: 5, n: "Stockage", x: sc(400), y: sc(475), w: sc(32), h: sc(9) }
 ];
-let CLOSED_DOORS = new Set();
-const doorBlocked = (px, py) => DOORS.some(d => CLOSED_DOORS.has(d.id) && px + RAD > d.x && px - RAD < d.x + d.w && py + RAD > d.y && py - RAD < d.y + d.h);
-const ST = [[75, 105, "Aligner les moteurs"], [250, 395, "Brancher les câbles"], [92, 270, "Refroidir le réacteur"], [365, 440, "Trier les caisses"], [255, 150, "Scanner médical"], [480, 55, "Télécharger les plans"], [650, 90, "Calibrer le détecteur"], [580, 210, "Purger le circuit"],
-  [80, 445, "Faire le plein"], [415, 485, "Vider les déchets"], [670, 430, "Activer le bouclier"], [480, 295, "Envoyer les données"], [300, 188, "Analyser un échantillon"], [745, 265, "Orienter l'antenne"]].map(t => [sc(t[0]), sc(t[1]), t[2]]);   // 14 postes de tâche
+const ST = [[85, 125, "Aligner les moteurs"], [205, 425, "Brancher les câbles"], [45, 300, "Refroidir le réacteur"], [365, 425, "Trier les caisses"], [195, 215, "Scanner médical"], [405, 65, "Télécharger les plans"], [650, 120, "Calibrer le détecteur"], [580, 260, "Purger le circuit"],
+  [85, 505, "Faire le plein"], [545, 510, "Vider les déchets"], [720, 475, "Activer le bouclier"], [485, 365, "Envoyer les données"], [95, 415, "Analyser un échantillon"], [750, 315, "Orienter l'antenne"]].map(t => [sc(t[0]), sc(t[1]), t[2]]);   // 14 postes de tâche
 
 
 const NT = 6;                                                             // tâches par équipier (sur 14 postes)
@@ -66,8 +81,8 @@ function route(px, py, tx, ty) {                                          // che
   while (i < pts.length) { let j = pts.length - 1; while (j > i && !clr(ax, ay, pts[j][0], pts[j][1])) j--; o.push(pts[j]); ax = pts[j][0]; ay = pts[j][1]; i = j + 1; }
   return o;
 }
-const VENTS = [[150, 135], [175, 295], [35, 300], [500, 325], [360, 150], [235, 125], [600, 130], [770, 310], [625, 455]].map(scp), VN = [1, 2, 0, 4, 5, 3, 7, 8, 6];   // conduits : trois circuits de 3
-const LP = scp([290, 435]), RP = [[55, 222], [55, 318]].map(scp), CAMP = scp([200, 232]);                              // panneau électrique (Électricité), 2 panneaux du réacteur, caméras (Sécurité)
+const VENTS = [[110, 125], [35, 285], [85, 505], [95, 415], [195, 215], [215, 425], [405, 65], [485, 190], [485, 375], [720, 315], [650, 120], [745, 285], [745, 475], [555, 510]].map(scp), VN = [1, 2, 0, 5, 3, 4, 8, 10, 6, 11, 7, 9, 13, 12];   // conduits : trois circuits de 3
+const LP = scp([215, 420]), RP = [[35, 285], [75, 325]].map(scp), CAMP = scp([95, 415]);                              // panneau électrique (Électricité), 2 panneaux du réacteur, caméras (Sécurité)
 const CAMZ = CORR, inCam = (px, py) => CAMZ.some(a => px >= a.x && px <= a.x + a.w && py >= a.y && py <= a.y + a.h);   // les caméras couvrent les couloirs
 const pc = m => { let n = 0; while (m) { n += m & 1; m >>= 1; } return n; };
 export const _t = { ok, move, route, los, ST, FLOOR, TB };

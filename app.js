@@ -1627,7 +1627,7 @@ let stD={};
 function stopStats(){unStats.forEach(f=>f());unStats=[]}
 function startStats(){
   stopStats();const D=stD={};
-  [["presence","presence"],["users","users"],["lobbies","lobbies"],["friends","friends"],["stats/gamesPlayed","games"],["stats/byGame","byGame"],["stats/hours","hours"],["settings/maintenance","maintenance"]]
+  [["presence","presence"],["users","users"],["lobbies","lobbies"],["friends","friends"],["stats/gamesPlayed","games"],["stats/byGame","byGame"],["stats/hours","hours"],["stats/maintenance","maintenance"]]
     .forEach(([p,k])=>unStats.push(onValue(R(p),s=>{D[k]=s.val();renderStats(D);renderAdmin(D)},()=>toast("Statistiques : accès refusé, vérifie les règles"))));
 }
 function renderStats(D){
@@ -1918,7 +1918,7 @@ function paintMaintenance(){
  });
 }
 // Synchronisation en direct pour tous les joueurs, même sans ouvrir le panneau admin.
-onValue(R("settings/maintenance"),s=>{stD.maintenance=s.val()||{};paintMaintenance();if(me&&me.owner&&adm)renderMaintenanceAdmin();if(cur==="lobby"&&lobby&&isMaintained(lobby.game))renderLobby();},()=>{});
+onValue(R("stats/maintenance"),s=>{stD.maintenance=s.val()||{};paintMaintenance();if(me&&me.owner&&adm)renderMaintenanceAdmin();if(cur==="lobby"&&lobby&&isMaintained(lobby.game))renderLobby();},()=>{});
 // ---------- Panneau admin (owners) : onglet 2 du menu Stats ----------
 const admErr=()=>toast("Action refusée : les règles Firebase doivent autoriser les owners à écrire dans lobbies, games et stats");
 function setStTab(i){$("stView").hidden=!!i;$("admView").hidden=!i;
@@ -1947,7 +1947,7 @@ function renderMaintenanceAdmin(){
   btn.onclick=async()=>{
    btn.disabled=true;
    try{
-    await set(R("settings/maintenance/"+g),!state[g]);
+    await set(R("stats/maintenance/"+g),!state[g]);
     if(!state[g]){
      const current=stD.lobbies||{};
      const closing=Object.entries(current).filter(([,l])=>l&&l.game===g);

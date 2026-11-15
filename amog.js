@@ -51,6 +51,7 @@ const CORR_POLYS = [
 ];
 const MAP_POLYS = [...ROOM_POLYS.map(r=>r.p),...CORR_POLYS];
 const polygonPath=(ctx,p)=>{ctx.moveTo(p[0][0],p[0][1]);for(let i=1;i<p.length;i++)ctx.lineTo(p[i][0],p[i][1]);ctx.closePath();};
+const bbox=p=>{let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;for(const [x,y] of p){minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y);}return {x:minX,y:minY,w:maxX-minX,h:maxY-minY};};
 const ROOMS=ROOM_POLYS.map(r=>({n:r.n,...bbox(r.p)}));
 const CORR=CORR_POLYS.map(p=>bbox(p));
 const FLOOR=[...ROOMS,...CORR];

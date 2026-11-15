@@ -1,6 +1,6 @@
 /* MoDa : « Amog Us » 🚀 : trouve les imposteurs avant qu'ils éliminent tout l'équipage !
    - 4 joueurs minimum (bots 🤖 compris, jusqu'à 10). 4-7 joueurs : 1 imposteur · 8-10 joueurs : 2 imposteurs.
-   - Équipiers : font leurs 6 tâches parmi 14 postes différents (reste sur place 1,5 à 3,6 s selon la tâche) · Imposteurs : éliminent en silence (cooldown 12 s).
+   - Équipiers : font leurs 6 tâches parmi 14 postes différents : chaque poste lance un vrai mini-jeu à réussir (câbles à relier, code à taper, etc.) ; les bots, eux, restent sur place 1,5 à 3,6 s · Imposteurs : éliminent en silence (cooldown 12 s).
    - Un corps trouvé (SIGNALER) ou le bouton d'urgence de la cafétéria (1 fois par joueur) lance une réunion : on vote
      pour éjecter quelqu'un (ou on passe). Les morts deviennent des fantômes : ils traversent les murs et peuvent finir leurs tâches.
    - Victoire équipage : toutes les tâches faites OU tous les imposteurs éjectés. Victoire imposteurs : autant d'imposteurs que d'équipiers.
@@ -67,9 +67,10 @@ export async function startAmog(env) {
   ids.forEach((u, i) => {
     const a = i / ids.length * 6.283, s = ST.map((_, k) => k).sort(() => Math.random() - .5).slice(0, NT);
     P[u] = { n: players[u].name, c: players[u].color, x: TB[0] + Math.cos(a) * 58, y: TB[1] + Math.sin(a) * 58, a: 1, f: 1, imp: imps.has(u) ? 1 : 0, kcd: KCD0, ch: 0, chS: -1, asg: s.reduce((m, k) => m | 1 << k, 0), dn: 0, em: 0, gone: 0, iv: -1, cm: 0 };
-    I[u] = { ax: 0, ay: 0, uc: 0, kc: 0, wu: 0, wk: 0, v: null, vc: 0, sc: 0, wv: 0, ws: 0, sty: 0 };
+    I[u] = { ax: 0, ay: 0, uc: 0, kc: 0, wu: 0, wk: 0, v: null, vc: 0, sc: 0, wv: 0, ws: 0, sty: 0, td: 0, tc: 0 };
   });
   const ev = (px, py, ty, ...r) => evs.push({ e: [Math.round(px), Math.round(py), ty, ++evId, ...r], u: pubN + 4 });
+  const doneTask = u => { const q = P[u]; if (q.chS < 0) return false; q.dn |= 1 << q.chS; if (!q.imp) ev(q.x, q.y, 2, ids.indexOf(u)); q.chS = -1; return true; };   // un joueur humain valide sa tâche en réussissant le mini-jeu
 
   const un = onValue(RF(`games/${c}/inputs`), s => Object.entries(s.val() || {}).forEach(([u, v]) => {
     if (!P[u] || seen[u] === v) return; seen[u] = v;
@@ -81,6 +82,11 @@ export async function startAmog(env) {
       const vc = +a[5], sc = +a[6], sty = +a[7];
       if (vc === vc && vc !== q.vc) { q.vc = vc; q.wv = .3; }
       if (sc === sc && sc !== q.sc) { q.sc = sc; q.sty = sty === 1 ? 1 : 0; q.ws = .3; }
+    }
+    if (a[8] !== undefined) {                                             // mini-jeu de tâche : « fini » (a[8]) ou « abandon » (a[9])
+      const td = +a[8], tc = +a[9];
+      if (td === td && td !== q.td) { q.td = td; if (ph === "p" && !isBot(u) && !P[u].gone) doneTask(u); }
+      if (tc === tc && tc !== q.tc) { q.tc = tc; if (!isBot(u)) P[u].chS = -1; }
     }
     if (a[4]) { const [m, tg] = a[4].split("_"); if (+m === mid && ph === "m") q.v = +tg; }
   }));
@@ -232,6 +238,7 @@ export async function startAmog(env) {
         if (q.chS >= 0) {                                                 // tâche en cours : on reste sur place
           const s = ST[q.chS];
           if ((mg > .5 && q.ch > .35) || Math.hypot(q.x - s[0], q.y - s[1]) > 48) q.chS = -1;
+          else if (!isBot(u)) q.ch += DT;                                 // humain : la tâche n'avance pas toute seule, c'est le mini-jeu qui la valide
           else if ((q.ch += DT) >= (TTS[q.chS] || TT)) { q.dn |= 1 << q.chS; q.chS = -1; if (!q.imp) ev(q.x, q.y, 2, ids.indexOf(u)); }
         }
         if (q.chS < 0 && mg > .02) { move(q, i.ax * SPD * DT, i.ay * SPD * DT); if (Math.abs(i.ax) > .1) q.f = i.ax > 0 ? 1 : -1; }
@@ -252,7 +259,7 @@ export async function startAmog(env) {
     let tot = 0, dn = 0; ids.forEach(u => { const q = P[u]; if (!q.imp && !q.gone) { tot += NT; dn += pc(q.dn); } });
     const o = {
       k: "amog", t: +t.toFixed(1), ph,
-      p: ids.map(u => { const q = P[u]; return [Math.round(q.x), Math.round(q.y), q.a, q.f, Math.ceil(q.kcd), Math.round(q.chS >= 0 ? q.ch / (TTS[q.chS] || TT) * 100 : 0), q.iv >= 0 ? 1 : 0]; }),
+      p: ids.map(u => { const q = P[u]; return [Math.round(q.x), Math.round(q.y), q.a, q.f, Math.ceil(q.kcd), (q.chS >= 0 ? Math.max(1, Math.min(isBot(u) ? 100 : 90, Math.round(q.ch / (TTS[q.chS] || TT) * 100))) : 0), q.iv >= 0 ? 1 : 0]; }),
       bd: bodies.map(b => [Math.round(b.x), Math.round(b.y), b.i]), ts: ids.map(u => [P[u].asg, P[u].dn]), tp: [dn, tot],
       ro: ids.map(u => P[u].imp ? 1 : 0).join(""), ev: evs.map(o2 => o2.e), kf: kf.map(e => e[0]), cm: ids.map((u, i) => P[u].cm ? i : -1).filter(i => i >= 0), sb: sab ? [sab.t === "r" ? 1 : 0, Math.ceil(sab.r), sab.f] : 0, sc: Math.ceil(sbcd), ...x
     };
@@ -304,6 +311,7 @@ export function createAmogClient(env) {
   const { R: RF, set, onValue, $, beep, getMe, getCode } = env;
   const cv = $("cv"), x = cv.getContext("2d"), ov = $("ov");
   let active = false, raf = 0, snaps = [], pl = null, lastEv = 0, parts = [], useSeq = 0, killSeq = 0, vote = "", sentStr = "", sentAt = 0;
+  let mg = null, mgDis = false, doneSeq = 0, cancelSeq = 0;
   let stick = null, tPrev = 0, myIdx = -1, ovT = "", bg = null, mid = 0, rects = [], ls = null;
   const keys = new Set();
   let bigMap = false, flash = null, floats = [], lastPh = "", mStart = 0, rStart = 0, mMax = 0, lastTick = -1; const dustT = {};
@@ -313,7 +321,8 @@ export function createAmogClient(env) {
     let ix = 0, iy = 0;
     if (stick) { const m = Math.hypot(stick.dx, stick.dy); if (m > .18) { const k = Math.min(1, (m - .18) / .7) / m; ix = stick.dx * k; iy = stick.dy * k; } }
     else { ix = (keys.has("R") ? 1 : 0) - (keys.has("L") ? 1 : 0); iy = (keys.has("D") ? 1 : 0) - (keys.has("U") ? 1 : 0); if (ix && iy) { ix *= .7071; iy *= .7071; } }
-    const str = `${ix.toFixed(2)},${iy.toFixed(2)},${useSeq},${killSeq},${vote},${ventSeq},${sabSeq},${sabTy}`;
+    if (mg) ix = iy = 0;                                                  // pendant un mini-jeu on ne bouge pas
+    const str = `${ix.toFixed(2)},${iy.toFixed(2)},${useSeq},${killSeq},${vote},${ventSeq},${sabSeq},${sabTy},${doneSeq},${cancelSeq}`;
     if (str === sentStr || (!force && now - sentAt < 55)) return;
     sentStr = str; sentAt = now;
     set(RF(`games/${getCode()}/inputs/${getMe().uid}`), str).catch(() => { });
@@ -327,6 +336,7 @@ export function createAmogClient(env) {
 
   addEventListener("keydown", e => {
     if (!active || /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+    if (mg) { if (e.key === "Escape") { e.preventDefault(); mgCancel(); } else if (mg.g.key && !mg.fin) { mg.g.key(e.key); e.preventDefault(); } return; }
     if (e.key === " " || e.key === "e" || e.key === "E") { e.preventDefault(); if (!e.repeat) doUse(); return; }
     if (e.key === "k" || e.key === "K" || e.key === "Shift") { e.preventDefault(); if (!e.repeat) doKill(); return; }
     if (e.key === "m" || e.key === "M") { e.preventDefault(); if (!e.repeat && ls && ls.ph === "p") bigMap = !bigMap; return; }
@@ -345,6 +355,12 @@ export function createAmogClient(env) {
       if (r) { vote = `${mid}_${r.t}`; sendInput(performance.now(), true); beep(520, .06, "square", .04); }
       return;
     }
+    if (mg) {                                                             // mini-jeu en cours : tous les appuis lui appartiennent
+      const q = { x: p.x - MGX, y: p.y - MGY };
+      if (q.x > MGW - 44 && q.x < MGW && q.y > 0 && q.y < 44) return mgCancel();
+      if (!mg.fin && q.x >= 0 && q.x <= MGW && q.y >= 44 && q.y <= MGH - 46) { mg.drag = e.pointerId; try { cv.setPointerCapture(e.pointerId); } catch { } if (mg.g.down) mg.g.down(q); }
+      return;
+    }
     if (bigMap) { bigMap = false; return; }
     if (ls && ls.ph === "p" && p.x >= 7 && p.x <= 207 && p.y >= H - 150 && p.y <= H - 7) { bigMap = true; return; }   // un appui sur la mini-carte l'agrandit
     if (e.button === 2) return doUse();
@@ -358,12 +374,13 @@ export function createAmogClient(env) {
     stick = { id: e.pointerId, ox: p.x, oy: p.y, dx: 0, dy: 0 };
   });
   cv.addEventListener("pointermove", e => {
+    if (mg && mg.drag === e.pointerId) { if (mg.g.move) mg.g.move({ x: rel(e).x - MGX, y: rel(e).y - MGY }); return; }
     if (!stick || e.pointerId !== stick.id) return;
     const p = rel(e); let dx = p.x - stick.ox, dy = p.y - stick.oy; const d = Math.hypot(dx, dy), m = 55;
     if (d > m) { stick.ox += dx / d * (d - m); stick.oy += dy / d * (d - m); dx = dx / d * m; dy = dy / d * m; }
     stick.dx = dx / m; stick.dy = dy / m;
   });
-  const end = e => { if (stick && e.pointerId === stick.id) stick = null; };
+  const end = e => { if (mg && mg.drag === e.pointerId) { mg.drag = null; if (mg.g.up) mg.g.up({ x: rel(e).x - MGX, y: rel(e).y - MGY }); return; } if (stick && e.pointerId === stick.id) stick = null; };
   cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end);
   cv.addEventListener("contextmenu", e => { if (active) e.preventDefault(); });
   document.addEventListener("visibilitychange", () => { if (document.hidden) { keys.clear(); stick = null; } });
@@ -574,6 +591,254 @@ export function createAmogClient(env) {
   }
   const txt = (s, px, py, font, col, al = "center") => { x.font = font; x.fillStyle = col; x.textAlign = al; x.textBaseline = "middle"; x.fillText(s, px, py); };
 
+  // ----- mini-jeux : chaque poste de tâche = un vrai petit jeu à réussir. Le client envoie « fini », l'hôte valide -----
+  const MGX = 130, MGY = 64, MGW = 540, MGH = 400, MC = { R: "#ff5d5d", Y: "#ffd23f", B: "#4cc9f0", P: "#ff6b81", G: "#7ae582", V: "#b79bff", O: "#ff9f43" };
+  const rnd1 = (a, b) => a + Math.random() * (b - a), cl01 = v => Math.max(0, Math.min(1, v));
+  const shuf = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const inC = (p, cx, cy, r) => Math.hypot(p.x - cx, p.y - cy) < r, inR = (p, rx, ry, w, h) => p.x >= rx && p.x <= rx + w && p.y >= ry && p.y <= ry + h;
+  const angd = d => Math.abs(((d + Math.PI) % 6.283185 + 6.283185) % 6.283185 - Math.PI);
+  const mbtn = (lb, bx, by, w, h, col, on) => { x.fillStyle = on ? col : "rgba(255,255,255,.1)"; rr(x, bx, by, w, h, 10); x.fill(); x.lineWidth = 2; x.strokeStyle = col; x.stroke(); txt(lb, bx + w / 2, by + h / 2, "700 17px 'DM Sans',sans-serif", on ? "#10102a" : "#fff"); };
+  const bigBtn = (cx, cy, r, lb, col, on) => { x.fillStyle = on ? col : "rgba(255,255,255,.1)"; x.beginPath(); x.arc(cx, cy, r, 0, 7); x.fill(); x.lineWidth = 4; x.strokeStyle = col; x.stroke(); txt(lb, cx, cy, "800 15px 'DM Sans',sans-serif", on ? "#10102a" : "#fff"); };
+  const slider = (sx, sy, len, v, col) => { x.strokeStyle = "rgba(255,255,255,.25)"; x.lineWidth = 8; x.beginPath(); x.moveTo(sx, sy); x.lineTo(sx + len, sy); x.stroke(); x.strokeStyle = col; x.beginPath(); x.moveTo(sx, sy); x.lineTo(sx + len * v, sy); x.stroke(); x.fillStyle = "#fff"; x.beginPath(); x.arc(sx + len * v, sy, 13, 0, 7); x.fill(); x.lineWidth = 3; x.strokeStyle = col; x.stroke(); };
+  const GAMES = {
+    wires() {                                                             // Brancher les câbles : relier les couleurs
+      const cols = [MC.R, MC.Y, MC.B, MC.P], rt = shuf([0, 1, 2, 3]), con = [0, 0, 0, 0]; let dr = null;
+      const L = i => [90, 95 + i * 70], Rr = j => [450, 95 + j * 70];
+      return {
+        hint: "Relie chaque câble à la prise de la même couleur (glisse)",
+        down(p) { dr = null; for (let i = 0; i < 4; i++) if (!con[i] && inC(p, ...L(i), 28)) dr = { i, x: p.x, y: p.y }; },
+        move(p) { if (dr) { dr.x = p.x; dr.y = p.y; } },
+        up(p) { if (!dr) return; for (let j = 0; j < 4; j++) if (inC(p, ...Rr(j), 32) && rt[j] === dr.i) { con[dr.i] = 1; beep(520, .05, "square", .04); } dr = null; },
+        get ok() { return con.every(Boolean); },
+        draw() {
+          x.lineWidth = 9;
+          for (let i = 0; i < 4; i++) if (con[i]) { const j = rt.indexOf(i), [lx, ly] = L(i), [rx, ry] = Rr(j); x.strokeStyle = cols[i]; x.beginPath(); x.moveTo(lx, ly); x.bezierCurveTo(lx + 140, ly, rx - 140, ry, rx, ry); x.stroke(); }
+          if (dr) { const [lx, ly] = L(dr.i); x.strokeStyle = cols[dr.i]; x.beginPath(); x.moveTo(lx, ly); x.lineTo(dr.x, dr.y); x.stroke(); }
+          for (let i = 0; i < 4; i++) { const [lx, ly] = L(i), [rx, ry] = Rr(i); x.fillStyle = cols[i]; x.beginPath(); x.arc(lx, ly, 17, 0, 7); x.fill(); x.fillStyle = cols[rt[i]]; x.beginPath(); x.arc(rx, ry, 17, 0, 7); x.fill(); x.lineWidth = 3; x.strokeStyle = "#0a0820"; x.stroke(); }
+        }
+      };
+    },
+    align() {                                                             // Aligner les moteurs : deux curseurs sur leur repère
+      const mk = () => { const t = rnd1(.15, .85); let v = t + (Math.random() < .5 ? -1 : 1) * rnd1(.3, .5); if (v < .05 || v > .95) v = t > .5 ? t - .4 : t + .4; return { t, v, lk: 0 }; };
+      const S = [mk(), mk()], X = [180, 360]; let dr = -1;
+      return {
+        hint: "Fais glisser chaque curseur jusqu'au repère jaune",
+        down(p) { dr = -1; for (let i = 0; i < 2; i++) if (!S[i].lk && Math.abs(p.x - X[i]) < 36 && Math.abs(p.y - (90 + S[i].v * 240)) < 30) dr = i; },
+        move(p) { if (dr < 0) return; const s = S[dr]; s.v = cl01((p.y - 90) / 240); if (Math.abs(s.v - s.t) < .02) { s.v = s.t; s.lk = 1; dr = -1; beep(560, .08, "sine", .05, 800); } },
+        up() { dr = -1; },
+        get ok() { return S[0].lk && S[1].lk; },
+        draw() {
+          S.forEach((s, i) => {
+            x.strokeStyle = "rgba(255,255,255,.25)"; x.lineWidth = 10; x.beginPath(); x.moveTo(X[i], 90); x.lineTo(X[i], 330); x.stroke();
+            const ty = 90 + s.t * 240; x.strokeStyle = MC.Y; x.lineWidth = 3; x.beginPath(); x.moveTo(X[i] - 34, ty); x.lineTo(X[i] + 34, ty); x.stroke();
+            x.fillStyle = s.lk ? MC.G : "#fff"; x.beginPath(); x.arc(X[i], 90 + s.v * 240, 15, 0, 7); x.fill();
+            txt(s.lk ? "✔ aligné" : `Moteur ${i + 1}`, X[i] + 80, 90 + s.t * 240, "700 13px 'DM Sans',sans-serif", s.lk ? MC.G : "#b9b2ff", "left");
+          });
+        }
+      };
+    },
+    cool() {                                                              // Refroidir le réacteur : maintenir pour garder la zone verte
+      let T = .95, got = 0, hold = false;
+      return {
+        hint: "Maintiens le bouton : garde la zone verte pendant 3 s",
+        down(p) { if (inC(p, 400, 200, 62)) hold = true; }, move() { }, up() { hold = false; },
+        get ok() { return got >= 3; },
+        draw(dt) {
+          T = cl01(T + (hold ? -.3 : .22) * dt); const inb = T > .28 && T < .52; if (inb) got += dt;
+          const yy = v => 330 - (10 + v * 240);
+          x.fillStyle = "rgba(122,229,130,.28)"; x.fillRect(112, yy(.52), 66, yy(.28) - yy(.52));
+          x.strokeStyle = "#fff"; x.lineWidth = 3; rr(x, 125, 70, 40, 262, 18); x.stroke();
+          x.fillStyle = `hsl(${210 - T * 210},85%,55%)`; rr(x, 129, 330 - (10 + T * 240), 32, 10 + T * 240, 12); x.fill();
+          bigBtn(400, 200, 62, hold ? "REFROIDIT…" : "MAINTENIR", MC.B, hold);
+          x.fillStyle = "rgba(255,255,255,.15)"; rr(x, 300, 300, 200, 14, 7); x.fill(); x.fillStyle = inb ? MC.G : MC.B; rr(x, 300, 300, Math.max(14, 200 * Math.min(1, got / 3)), 14, 7); x.fill();
+        }
+      };
+    },
+    fuel() {                                                              // Faire le plein : maintenir pour remplir le réservoir
+      let F = 0, hold = false;
+      return {
+        hint: "Maintiens le bouton jusqu'à ce que le réservoir soit plein (ça fuit si tu lâches)",
+        down(p) { if (inC(p, 400, 200, 62)) hold = true; }, move() { }, up() { hold = false; },
+        get ok() { return F >= 1; },
+        draw(dt) {
+          F = cl01(F + (hold ? .26 : -.06) * dt);
+          x.strokeStyle = "#fff"; x.lineWidth = 4; rr(x, 140, 80, 110, 250, 14); x.stroke();
+          x.fillStyle = MC.O; x.globalAlpha = .85; x.fillRect(144, 326 - 242 * F, 102, 242 * F); x.globalAlpha = 1;
+          txt(`${Math.round(F * 100)} %`, 195, 205, "800 24px 'Bricolage Grotesque',sans-serif", "#fff");
+          bigBtn(400, 200, 62, hold ? "REMPLIT…" : "MAINTENIR", MC.O, hold);
+        }
+      };
+    },
+    crate() {                                                             // Trier les caisses : glisser chaque caisse dans le bon bac
+      const cl = [MC.O, MC.B, MC.V], nm = ["orange", "bleu", "violet"], BX = [30, 205, 380];
+      const items = shuf([0, 0, 1, 1, 2, 2]).map((c, i) => { const px = 95 + (i % 3) * 175, py = 95 + Math.floor(i / 3) * 70; return { c, x: px, y: py, hx: px, hy: py, done: 0 }; });
+      let dr = null;
+      return {
+        hint: "Glisse chaque caisse dans le bac de sa couleur",
+        down(p) { dr = null; for (let i = items.length - 1; i >= 0; i--) { const o = items[i]; if (!o.done && Math.abs(p.x - o.x) < 30 && Math.abs(p.y - o.y) < 26) { dr = o; break; } } },
+        move(p) { if (dr) { dr.x = p.x; dr.y = p.y; } },
+        up() { if (!dr) return; const b = BX.findIndex(bx => inR({ x: dr.x, y: dr.y }, bx, 245, 130, 90)); if (b === dr.c) { const n = items.filter(o => o.done && o.c === b).length; dr.done = 1; dr.x = BX[b] + 38 + n * 54; dr.y = 300; beep(480, .06, "square", .04); } else { dr.x = dr.hx; dr.y = dr.hy; } dr = null; },
+        get ok() { return items.every(o => o.done); },
+        draw() {
+          BX.forEach((bx, i) => { x.strokeStyle = cl[i]; x.lineWidth = 3; x.fillStyle = "rgba(255,255,255,.06)"; rr(x, bx, 245, 130, 90, 10); x.fill(); x.stroke(); txt(`Bac ${nm[i]}`, bx + 65, 262, "700 12px 'DM Sans',sans-serif", cl[i]); });
+          items.forEach(o => { x.fillStyle = cl[o.c]; x.globalAlpha = .9; rr(x, o.x - 25, o.y - 20, 50, 40, 6); x.fill(); x.globalAlpha = 1; x.strokeStyle = "#0a0820"; x.lineWidth = 2; x.stroke(); x.beginPath(); x.moveTo(o.x - 25, o.y - 20); x.lineTo(o.x + 25, o.y + 20); x.stroke(); });
+        }
+      };
+    },
+    scan() {                                                              // Scanner médical : taper le code du patient
+      const code = Array.from({ length: 5 }, () => 1 + Math.floor(Math.random() * 9)).join(""); let inp = "", bad = 0, fin = false;
+      const press = d => { if (fin) return; if (code[inp.length] === d) { inp += d; beep(500 + inp.length * 60, .05, "square", .04); if (inp.length === code.length) fin = true; } else { inp = ""; bad = 1; beep(150, .15, "sawtooth", .05); } };
+      return {
+        hint: "Saisis le code du patient (boutons ou clavier)",
+        down(p) { for (let i = 0; i < 9; i++) if (inR(p, 330 + (i % 3) * 66, 90 + Math.floor(i / 3) * 66, 58, 58)) press(String(i + 1)); },
+        key(k) { if (/^[1-9]$/.test(k)) press(k); },
+        get ok() { return fin; },
+        draw(dt) {
+          bad = Math.max(0, bad - dt * 2);
+          txt("Code patient", 170, 90, "700 14px 'DM Sans',sans-serif", "#b9b2ff");
+          txt(code.split("").join(" "), 170, 130, "800 34px 'Bricolage Grotesque',sans-serif", MC.Y);
+          txt("Ta saisie", 170, 200, "700 14px 'DM Sans',sans-serif", "#b9b2ff");
+          for (let i = 0; i < 5; i++) { x.fillStyle = bad > 0 ? "rgba(255,59,92,.4)" : "rgba(255,255,255,.1)"; rr(x, 76 + i * 34, 220, 30, 40, 6); x.fill(); if (inp[i]) txt(inp[i], 91 + i * 34, 241, "800 22px 'DM Sans',sans-serif", MC.G); }
+          for (let i = 0; i < 9; i++) mbtn(String(i + 1), 330 + (i % 3) * 66, 90 + Math.floor(i / 3) * 66, 58, 58, MC.B, false);
+        }
+      };
+    },
+    dl() {                                                                // Télécharger les plans : cliquer les fichiers dans l'ordre
+      const N = shuf([1, 2, 3, 4, 5, 6, 7, 8, 9]); let nx = 1, bad = -1, bt = 0;
+      const T = i => [135 + (i % 3) * 94, 80 + Math.floor(i / 3) * 84];
+      return {
+        hint: "Clique les fichiers dans l'ordre : 1, 2, 3 … 9",
+        down(p) { for (let i = 0; i < 9; i++) { const [tx, ty] = T(i); if (N[i] >= nx && inR(p, tx, ty, 84, 74)) { if (N[i] === nx) { nx++; beep(400 + nx * 40, .05, "square", .04); } else { bad = i; bt = .4; beep(150, .1, "sawtooth", .05); } } } },
+        get ok() { return nx > 9; },
+        draw(dt) {
+          bt = Math.max(0, bt - dt);
+          for (let i = 0; i < 9; i++) { const [tx, ty] = T(i), d = N[i] < nx, b = bt > 0 && bad === i; x.fillStyle = d ? "rgba(122,229,130,.25)" : b ? "rgba(255,59,92,.5)" : "rgba(76,201,240,.22)"; rr(x, tx, ty, 84, 74, 10); x.fill(); x.lineWidth = 2; x.strokeStyle = d ? MC.G : b ? "#ff3b5c" : MC.B; x.stroke(); txt(d ? "✔" : String(N[i]), tx + 42, ty + 37, "800 28px 'Bricolage Grotesque',sans-serif", d ? MC.G : "#fff"); }
+        }
+      };
+    },
+    calib() {                                                             // Calibrer le détecteur : faire coller l'onde à la cible
+      const tg = [rnd1(.2, .85), rnd1(.2, .85)], v = [tg[0] > .5 ? .1 : .9, tg[1] > .5 ? .1 : .9], YS = [292, 326]; let dr = -1, hold = 0;
+      const wy = (a, f, px) => 150 + Math.sin(px * (.03 + f * .07)) * (12 + a * 55);
+      return {
+        hint: "Règle l'amplitude et la fréquence pour que l'onde bleue colle à la jaune",
+        down(p) { dr = -1; for (let i = 0; i < 2; i++) if (Math.abs(p.y - YS[i]) < 22 && p.x > 60 && p.x < 480) { dr = i; v[i] = cl01((p.x - 90) / 360); } },
+        move(p) { if (dr >= 0) v[dr] = cl01((p.x - 90) / 360); }, up() { dr = -1; },
+        get ok() { return hold >= .8; },
+        draw(dt) {
+          const m = Math.abs(v[0] - tg[0]) < .05 && Math.abs(v[1] - tg[1]) < .05; hold = m ? hold + dt : 0;
+          x.fillStyle = "rgba(0,0,0,.35)"; rr(x, 40, 70, 460, 160, 10); x.fill();
+          x.lineWidth = 3; x.setLineDash([6, 6]); x.strokeStyle = MC.Y; x.beginPath(); for (let px = 44; px <= 496; px += 3) px === 44 ? x.moveTo(px, wy(tg[0], tg[1], px)) : x.lineTo(px, wy(tg[0], tg[1], px)); x.stroke(); x.setLineDash([]);
+          x.strokeStyle = m ? MC.G : MC.B; x.lineWidth = 4; x.beginPath(); for (let px = 44; px <= 496; px += 3) px === 44 ? x.moveTo(px, wy(v[0], v[1], px)) : x.lineTo(px, wy(v[0], v[1], px)); x.stroke();
+          txt("Amplitude", 50, YS[0] - 20, "600 12px 'DM Sans',sans-serif", "#b9b2ff", "left"); txt("Fréquence", 50, YS[1] - 20, "600 12px 'DM Sans',sans-serif", "#b9b2ff", "left");
+          slider(90, YS[0], 360, v[0], MC.B); slider(90, YS[1], 360, v[1], MC.B);
+        }
+      };
+    },
+    purge() {                                                             // Purger le circuit : ouvrir 3 vannes puis tirer le levier
+      const val = [0, 0, 0]; let lv = 0, dr = false, fin = false;
+      return {
+        hint: "Ouvre les 3 vannes (clic), puis tire le levier jusqu'en bas",
+        down(p) { for (let i = 0; i < 3; i++) if (!val[i] && inC(p, 130, 110 + i * 85, 34)) { val[i] = 1; beep(380, .08, "triangle", .05); } if (val.every(Boolean) && !fin && Math.abs(p.x - 400) < 44 && Math.abs(p.y - (90 + lv * 230)) < 36) dr = true; },
+        move(p) { if (dr) { lv = cl01((p.y - 90) / 230); if (lv >= .97) { lv = 1; fin = true; dr = false; } } }, up() { dr = false; },
+        get ok() { return fin; },
+        draw(dt) {
+          if (!dr && !fin) lv = Math.max(0, lv - 1.3 * dt);
+          for (let i = 0; i < 3; i++) { const vy = 110 + i * 85; x.fillStyle = val[i] ? "rgba(122,229,130,.3)" : "rgba(255,59,92,.25)"; x.beginPath(); x.arc(130, vy, 34, 0, 7); x.fill(); x.strokeStyle = val[i] ? MC.G : "#ff6b81"; x.lineWidth = 4; x.stroke(); x.save(); x.translate(130, vy); x.rotate(val[i] ? 1.57 : 0); x.beginPath(); x.moveTo(-20, 0); x.lineTo(20, 0); x.moveTo(0, -20); x.lineTo(0, 20); x.stroke(); x.restore(); txt(val[i] ? "ouverte" : "fermée", 200, vy, "600 12px 'DM Sans',sans-serif", val[i] ? MC.G : "#ff8fa3", "left"); }
+          x.strokeStyle = "rgba(255,255,255,.25)"; x.lineWidth = 14; x.beginPath(); x.moveTo(400, 90); x.lineTo(400, 320); x.stroke();
+          const lk = val.every(Boolean); x.fillStyle = fin ? MC.G : lk ? MC.Y : "#666"; x.beginPath(); x.arc(400, 90 + lv * 230, 26, 0, 7); x.fill(); x.lineWidth = 3; x.strokeStyle = "#fff"; x.stroke();
+          txt(lk ? "⬇" : "🔒", 400, 90 + lv * 230, "700 18px 'DM Sans',sans-serif", "#10102a");
+        }
+      };
+    },
+    trash() {                                                             // Vider les déchets : ramasser tous les déchets
+      const EM = ["🍌", "📦", "🥫", "🧦", "🍎", "🧻", "🥤", "🦴"];
+      const it = EM.map((e, i) => ({ e, x: 80 + (i % 4) * 125 + rnd1(-18, 18), y: 110 + Math.floor(i / 4) * 120 + rnd1(-14, 14), r: rnd1(-.5, .5), d: 0 }));
+      return {
+        hint: "Clique sur chaque déchet pour l'évacuer",
+        down(p) { for (const o of it) if (!o.d && inC(p, o.x, o.y, 34)) { o.d = 1; beep(300 + Math.random() * 200, .05, "triangle", .05); break; } },
+        get ok() { return it.every(o => o.d); },
+        draw() {
+          x.strokeStyle = "rgba(255,255,255,.3)"; x.lineWidth = 3; rr(x, 40, 280, 460, 60, 10); x.stroke(); txt(`${it.filter(o => o.d).length}/${it.length} évacués`, 270, 310, "700 15px 'DM Sans',sans-serif", MC.Y);
+          it.forEach(o => { if (o.d) return; x.save(); x.translate(o.x, o.y); x.rotate(o.r); txt(o.e, 0, 0, "46px sans-serif", "#fff"); x.restore(); });
+        }
+      };
+    },
+    shield() {                                                            // Activer le bouclier : allumer tous les panneaux rouges
+      const P = [[270, 195], [270, 112], [345, 153], [345, 237], [270, 278], [195, 237], [195, 153]], st = P.map(() => Math.random() < .35 ? 1 : 0); if (st.every(Boolean)) st[0] = 0;
+      return {
+        hint: "Clique sur tous les panneaux rouges pour les activer",
+        down(p) { P.forEach((c, i) => { if (!st[i] && inC(p, c[0], c[1], 38)) { st[i] = 1; beep(420 + i * 40, .06, "sine", .05); } }); },
+        get ok() { return st.every(Boolean); },
+        draw() {
+          P.forEach((c, i) => { x.beginPath(); for (let k = 0; k < 6; k++) { const an = k * 1.0472 - 1.5708; x.lineTo(c[0] + Math.cos(an) * 38, c[1] + Math.sin(an) * 38); } x.closePath(); x.fillStyle = st[i] ? "rgba(76,201,240,.6)" : "rgba(255,59,92,.6)"; x.fill(); x.lineWidth = 3; x.strokeStyle = st[i] ? MC.B : "#ff3b5c"; x.stroke(); });
+        }
+      };
+    },
+    up() {                                                                // Envoyer les données : répéter la séquence de lumières
+      const seq = Array.from({ length: 4 }, () => Math.floor(Math.random() * 4)), pc = [MC.R, MC.G, MC.B, MC.Y], PX = i => [170 + (i % 2) * 110, 85 + Math.floor(i / 2) * 110];
+      let mode = 0, t0 = 0, pos = 0, lit = -1, lt = 0, fin = false, msg = "Regarde la séquence…";
+      return {
+        hint: "Mémorise la séquence puis répète-la",
+        down(p) { if (mode !== 1 || fin) return; for (let i = 0; i < 4; i++) { const [px, py] = PX(i); if (inR(p, px, py, 100, 100)) { lit = i; lt = .25; beep(300 + i * 100, .12, "sine", .05); if (i === seq[pos]) { pos++; if (pos === seq.length) fin = true; } else { mode = 0; t0 = 0; pos = 0; msg = "Raté : regarde encore la séquence…"; } } } },
+        get ok() { return fin; },
+        draw(dt, now) {
+          if (mode === 0) { if (!t0) t0 = now; const e = now - t0 - 700; if (e < 0) lit = -1; else { const idx = Math.floor(e / 800); if (idx >= seq.length) { mode = 1; lit = -1; msg = "À toi !"; } else lit = e % 800 < 550 ? seq[idx] : -1; } }
+          else { lt -= dt; if (lt <= 0) lit = -1; }
+          for (let i = 0; i < 4; i++) { const [px, py] = PX(i); x.fillStyle = pc[i]; x.globalAlpha = lit === i ? 1 : .28; rr(x, px, py, 100, 100, 14); x.fill(); x.globalAlpha = 1; }
+          txt(msg, 270, 62, "700 15px 'DM Sans',sans-serif", "#ffe9a8"); txt(`${pos}/${seq.length}`, 270, 322, "700 14px 'DM Sans',sans-serif", "#b9b2ff");
+        }
+      };
+    },
+    sample() {                                                            // Analyser un échantillon : repérer le tube différent (2 fois)
+      let round = 0, odd = 0, cols = [], bad = 0, h = 0;
+      const gen = () => { h = rnd1(0, 360); odd = Math.floor(Math.random() * 5); cols = Array.from({ length: 5 }, (_, i) => `hsl(${i === odd ? (h + 70) % 360 : h},72%,55%)`); }; gen();
+      return {
+        hint: "Un échantillon est contaminé : clique sur le tube différent (2 fois)",
+        down(p) { for (let i = 0; i < 5; i++) if (inR(p, 95 + i * 80, 90, 56, 210)) { if (i === odd) { round++; if (round < 2) gen(); beep(600, .08, "sine", .05, 900); } else { gen(); bad = .8; beep(150, .15, "sawtooth", .05); } } },
+        get ok() { return round >= 2; },
+        draw(dt) {
+          bad = Math.max(0, bad - dt);
+          for (let i = 0; i < 5; i++) { const tx = 95 + i * 80; x.fillStyle = "rgba(255,255,255,.08)"; rr(x, tx, 90, 56, 210, 22); x.fill(); x.fillStyle = cols[i]; rr(x, tx + 5, 150, 46, 145, 18); x.fill(); x.strokeStyle = "#fff"; x.lineWidth = 3; rr(x, tx, 90, 56, 210, 22); x.stroke(); }
+          txt(bad > 0 ? "Mauvais tube ! Nouvel échantillon…" : `Analyse ${Math.min(round + 1, 2)}/2`, 270, 66, "700 15px 'DM Sans',sans-serif", bad > 0 ? "#ff6b81" : "#ffe9a8");
+        }
+      };
+    },
+    ant() {                                                               // Orienter l'antenne : trouver le meilleur signal en tournant le cadran
+      const tg = rnd1(-3, 3); let a = tg + Math.PI * .8 * (Math.random() < .5 ? 1 : -1), dr = false, hold = 0;
+      const set = p => { a = Math.atan2(p.y - 190, p.x - 190); };
+      return {
+        hint: "Tourne le cadran (glisse) jusqu'à avoir le signal maximum, puis tiens",
+        down(p) { dr = true; set(p); }, move(p) { if (dr) set(p); }, up() { dr = false; },
+        get ok() { return hold >= 1; },
+        draw(dt) {
+          const d = angd(a - tg), s = Math.pow(1 - d / Math.PI, 3), m = d < .13; hold = m ? hold + dt : 0;
+          x.strokeStyle = "rgba(255,255,255,.3)"; x.lineWidth = 6; x.beginPath(); x.arc(190, 190, 100, 0, 7); x.stroke();
+          for (let i = 0; i < 24; i++) { const an = i * .2618; x.lineWidth = 2; x.beginPath(); x.moveTo(190 + Math.cos(an) * 100, 190 + Math.sin(an) * 100); x.lineTo(190 + Math.cos(an) * 90, 190 + Math.sin(an) * 90); x.stroke(); }
+          x.strokeStyle = m ? MC.G : MC.Y; x.lineWidth = 7; x.beginPath(); x.moveTo(190, 190); x.lineTo(190 + Math.cos(a) * 100, 190 + Math.sin(a) * 100); x.stroke(); x.fillStyle = m ? MC.G : MC.Y; x.beginPath(); x.arc(190 + Math.cos(a) * 100, 190 + Math.sin(a) * 100, 13, 0, 7); x.fill(); x.beginPath(); x.arc(190, 190, 10, 0, 7); x.fill();
+          for (let i = 0; i < 8; i++) { x.fillStyle = s * 8 > i ? (i > 5 ? MC.G : i > 2 ? MC.Y : "#ff6b81") : "rgba(255,255,255,.12)"; rr(x, 360, 290 - i * 28, 80, 22, 5); x.fill(); }
+          txt("Signal", 400, 78, "700 14px 'DM Sans',sans-serif", "#b9b2ff"); txt(`${Math.round(s * 100)} %`, 400, 305, "800 18px 'DM Sans',sans-serif", "#fff");
+          if (m) { x.fillStyle = "rgba(255,255,255,.15)"; rr(x, 120, 318, 140, 10, 5); x.fill(); x.fillStyle = MC.G; rr(x, 120, 318, Math.max(8, 140 * Math.min(1, hold)), 10, 5); x.fill(); }
+        }
+      };
+    }
+  };
+  const mgNew = (k, now) => ({ k, t0: now, lt: now, g: GAMES[KIND[k]](), fin: 0, drag: null });
+  const mgCancel = () => { if (!mg) return; mg = null; mgDis = true; cancelSeq++; sendInput(performance.now(), true); };
+  const mgDraw = now => {
+    const m = mg, c = TCOL[m.k], dt = Math.min(.05, (now - m.lt) / 1000); m.lt = now;
+    x.fillStyle = "rgba(4,3,14,.72)"; x.fillRect(0, 0, W, H);
+    x.save(); x.translate(MGX, MGY);
+    x.fillStyle = "#14123a"; rr(x, 0, 0, MGW, MGH, 16); x.fill(); x.lineWidth = 3; x.strokeStyle = c; x.stroke();
+    txt(ST[m.k][2], MGW / 2, 24, "800 20px 'Bricolage Grotesque',sans-serif", "#fff");
+    x.fillStyle = "rgba(255,255,255,.12)"; rr(x, MGW - 40, 8, 30, 30, 8); x.fill(); txt("✕", MGW - 25, 23, "700 16px 'DM Sans',sans-serif", "#fff");
+    x.save(); x.beginPath(); x.rect(0, 44, MGW, MGH - 90); x.clip(); x.lineCap = "round"; x.lineJoin = "round"; m.g.draw(dt, now); x.restore();
+    txt(m.g.hint, MGW / 2, MGH - 22, "600 13px 'DM Sans',sans-serif", "#b9b2ff");
+    if (!m.fin && m.g.ok) { m.fin = now; beep(660, .12, "sine", .05, 990); }
+    if (m.fin) { x.fillStyle = "rgba(10,60,50,.72)"; rr(x, 0, 0, MGW, MGH, 16); x.fill(); txt("✔ Tâche terminée !", MGW / 2, MGH / 2, "800 30px 'Bricolage Grotesque',sans-serif", "#7dffd9"); }
+    x.restore();
+    if (m.fin && now - m.fin > 750) { mg = null; mgDis = true; doneSeq++; sendInput(performance.now(), true); }
+  };
+
   function useInfo(s) {
     const q = s.p[myIdx]; if (!q) return ["UTILISER", 1];
     if (q[6]) return ["EN CONDUIT", 1];
@@ -763,7 +1028,9 @@ export function createAmogClient(env) {
     }
     if (ls.ph === "p") minimap(tk, mp, ghost, imp, now, camX, camY, vw, vh, pos);
     if (ls.ph === "p" && !cam) txt(roomAt(mp[0], mp[1]).toUpperCase(), CX, 538, "800 13px 'Bricolage Grotesque',sans-serif", "rgba(255,255,255,.35)");
-    if (ls.ph === "p" && me && me[5] > 0) { let tk2 = -1; for (let k = 0; k < ST.length; k++) if ((tk[0] >> k & 1) && !(tk[1] >> k & 1) && Math.hypot(mp[0] - ST[k][0], mp[1] - ST[k][1]) < 48) { tk2 = k; break; } if (tk2 >= 0) taskPanel(tk2, me[5] / 100, now); }
+    if (mg && (ls.ph !== "p" || !me || me[6] || (!me[5] && now - mg.t0 > 1500))) mg = null;   // réunion, mort en conduit ou tâche coupée par l'hôte : on ferme
+    if (!me || !me[5]) { if (!mg) mgDis = false; }
+    if (!mg && !mgDis && ls.ph === "p" && me && me[5] > 0) { let tk2 = -1; for (let k = 0; k < ST.length; k++) if ((tk[0] >> k & 1) && !(tk[1] >> k & 1) && Math.hypot(mp[0] - ST[k][0], mp[1] - ST[k][1]) < 48) { tk2 = k; break; } if (tk2 >= 0) { mg = mgNew(tk2, now); stick = null; keys.clear(); } }
     if (ls.ph === "p") {
       const [lb, dim] = useInfo(ls); btn(USEB, lb, "#2e7dff", dim, lb);      // le fantôme a aussi son bouton (tâches)
       if (imp && !ghost) {
@@ -774,6 +1041,7 @@ export function createAmogClient(env) {
       }
     }
     if (bigMap && ls.ph === "p") bigmap(tk, mp, ghost, imp, now, pos);
+    if (mg) mgDraw(now);
     if (flash) { const el = now - flash.t; if (el > flash.d) flash = null; else { x.fillStyle = `rgba(${flash.c},${(flash.a * (1 - el / flash.d)).toFixed(3)})`; x.fillRect(0, 0, W, H); if (flash.m) txt(flash.m, CX, H / 2, "800 34px 'Bricolage Grotesque',sans-serif", "#fff"); } }
     if (stick && ls.ph === "p") {
       x.fillStyle = "rgba(255,255,255,.08)"; x.strokeStyle = "rgba(255,255,255,.28)"; x.lineWidth = 2; x.beginPath(); x.arc(stick.ox, stick.oy, 55, 0, 7); x.fill(); x.stroke();
@@ -786,8 +1054,8 @@ export function createAmogClient(env) {
 
   return {
     enter(c) {
-      active = true; snaps = []; pl = null; lastEv = 0; parts = []; bigMap = false; flash = null; floats = []; lastPh = ""; mStart = rStart = mMax = 0; lastTick = -1; useSeq = killSeq = ventSeq = sabSeq = sabTy = 0; vote = ""; sentStr = ""; sentAt = 0; stick = null; keys.clear(); tPrev = 0; myIdx = -1; ovT = "\u0000"; mid = 0; rects = []; ls = null; camOn = false; zm = 1;
-      $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : utiliser / signaler · K ou Maj : tuer · V : conduit · 1 / 2 : saboter (imposteur) · M : grande carte · fantôme : traverse les murs et finit ses tâches · glisse sur mobile";
+      active = true; snaps = []; pl = null; lastEv = 0; parts = []; bigMap = false; flash = null; floats = []; lastPh = ""; mStart = rStart = mMax = 0; lastTick = -1; useSeq = killSeq = ventSeq = sabSeq = sabTy = doneSeq = cancelSeq = 0; mg = null; mgDis = false; vote = ""; sentStr = ""; sentAt = 0; stick = null; keys.clear(); tPrev = 0; myIdx = -1; ovT = "\u0000"; mid = 0; rects = []; ls = null; camOn = false; zm = 1;
+      $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : utiliser / signaler · K ou Maj : tuer · V : conduit · 1 / 2 : saboter (imposteur) · M : grande carte · tâches = mini-jeux (Échap pour quitter) · fantôme : traverse les murs et finit ses tâches · glisse sur mobile";
       const myUid = getMe().uid;
       set(RF(`games/${c}/inputs/${myUid}`), "0,0,0,0,").catch(() => { });
       const un = onValue(RF(`games/${c}/state`), snap => {
@@ -799,7 +1067,7 @@ export function createAmogClient(env) {
       });
       raf = requestAnimationFrame(frame);
       return () => {
-        active = false; un(); if (raf) cancelAnimationFrame(raf); raf = 0; keys.clear(); stick = null; ov.textContent = ""; ovT = ""; bg = camM = visG = mmBase = ghostTint = null; gradC.clear(); vigC.clear();   // libère la mémoire des images
+        active = false; un(); if (raf) cancelAnimationFrame(raf); raf = 0; mg = null; keys.clear(); stick = null; ov.textContent = ""; ovT = ""; bg = camM = visG = mmBase = ghostTint = null; gradC.clear(); vigC.clear();   // libère la mémoire des images
         x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.setLineDash([]); x.textBaseline = "alphabetic"; x.textAlign = "start"; x.shadowBlur = 0;
       };
     }

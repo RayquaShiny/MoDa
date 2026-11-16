@@ -4,7 +4,7 @@ export async function startBlockDash(env){
  const {R,set,update,remove,onValue,getCode,getLobby,getMe,bots,played}=env,c=getCode(),lob=getLobby()||{},players=bots?bots(lob):lob.players||{},ids=Object.keys(players);
  if(ids.length<2)return env.toast("Block Dash se joue à au moins 2 joueurs.");
  await remove(R(`games/${c}`));await update(R(`lobbies/${c}`),{status:"playing"});
- const P={},I={},seen={},rows=[];ids.forEach((u,i)=>{P[u]={n:players[u].name,c:players[u].color,x:2,a:1,d:0,j:0,s:0};I[u]={x:0,j:0,s:0}});
+ const P={},I={},seen={},rows=[];ids.forEach((u,i)=>{P[u]={n:players[u].name,c:players[u].color,x:2,a:1,d:0,j:0,s:0};I[u]={x:2,j:0,s:0}});
  let t=0,speed=105,next=0,rid=0,pub=0,ended=false,un=()=>{};
  const makeRow=()=>{let a=Array(LANES).fill(0),pattern=Math.floor(Math.random()*4);
    if(pattern===0){let gap=Math.floor(Math.random()*LANES);a=a.map((_,i)=>i===gap?0:1)}
@@ -14,7 +14,7 @@ export async function startBlockDash(env){
    return{id:++rid,z:760,a};
  };
  const pub=extra=>set(R(`games/${c}/state`),JSON.stringify({k:"blockdash",t:+t.toFixed(1),v:+speed.toFixed(1),rows:rows.map(r=>[r.id,+r.z.toFixed(1),r.a]),p:ids.map(u=>{let q=P[u];return[u,q.x,q.a,+q.d.toFixed(1),q.j>0?1:0,q.s>0?1:0] }),...extra}));
- const inputUn=onValue(R(`games/${c}/inputs`),s=>Object.entries(s.val()||{}).forEach(([u,v])=>{if(!I[u]||seen[u]===v)return;seen[u]=v;let a=String(v).split(","),x=+a[0],j=+a[1],sm=+a[2];if(Number.isFinite(x))I[u].x=Math.max(-1,Math.min(1,x));if(j!==I[u].j)I[u].wantJ=.3;if(sm!==I[u].s)I[u].wantS=.3;I[u].j=j;I[u].s=sm}));
+ const inputUn=onValue(R(`games/${c}/inputs`),s=>Object.entries(s.val()||{}).forEach(([u,v])=>{if(!I[u]||seen[u]===v)return;seen[u]=v;let a=String(v).split(","),x=+a[0],j=+a[1],sm=+a[2];if(Number.isFinite(x))I[u].x=Math.max(0,Math.min(4,Math.round(x)));if(j!==I[u].j)I[u].wantJ=.3;if(sm!==I[u].s)I[u].wantS=.3;I[u].j=j;I[u].s=sm}));
  for(let i=0;i<5;i++){rows.push(makeRow());rows[i].z=170+i*145}
  for(let n=3;n>0;n--){await pub({cd:n});await new Promise(r=>setTimeout(r,1000));if(getCode()!==c){inputUn();return}}
  let last=performance.now(),acc=0,raf=0;
@@ -22,11 +22,10 @@ export async function startBlockDash(env){
   if(getCode()!==c||ended){cancelAnimationFrame(raf);inputUn();return}
   t+=DT;speed=Math.min(245,105+t*1.45);
   if(t>=next){rows.push(makeRow());next=t+Math.max(.72,1.55-t*.006)}
-  rows.forEach(r=>r.z-=speed*DT);
-  rows.filter(r=>r.z<85).forEach(r=>ids.forEach(u=>{let q=P[u];if(!q.a||q.d>r.id) return;let typ=r.a[q.x];if(typ===0)return;if(typ===2&&q.j>0)return;if(typ===3&&q.s>0){r.a[q.x]=0;return}q.a=0}));
+  rows.forEach(r=>{let old=r.z;r.z-=speed*DT;if(old>85&&r.z<=85)ids.forEach(u=>{let q=P[u];if(!q.a)return;let typ=r.a[q.x];if(typ===0)return;if(typ===2&&q.j>0)return;if(typ===3&&q.s>0){r.a[q.x]=0;return}q.a=0})});
   rows.splice(0,rows.filter(r=>r.z<-35).length);
   ids.forEach(u=>{let q=P[u],i=I[u];if(!q.a)return;
-   q.x=Math.max(0,Math.min(4,q.x+Math.sign(i.x)*DT*5));
+   q.x=i.x;
    if(i.wantJ>0){i.wantJ-=DT;q.j=.72;i.wantJ=0}
    if(i.wantS>0){i.wantS-=DT;q.s=.28;i.wantS=0}
    q.j=Math.max(0,q.j-DT);q.s=Math.max(0,q.s-DT);q.d+=speed*DT;

@@ -25,6 +25,7 @@ export async function startBlockDash(env){
   rows.forEach(r=>{let old=r.z;r.z-=speed*DT;if(old>85&&r.z<=85)ids.forEach(u=>{let q=P[u];if(!q.a)return;let typ=r.a[q.x];if(typ===0)return;if(typ===2&&q.j>0)return;if(typ===3&&q.s>0){r.a[q.x]=0;return}q.a=0})});
   rows.splice(0,rows.filter(r=>r.z<-35).length);
   ids.forEach(u=>{let q=P[u],i=I[u];if(!q.a)return;
+   if(String(u).startsWith("bot_")){const target=rows.filter(r=>r.z>85&&r.z<260).sort((x,y)=>x.z-y.z)[0];if(target){const typ=target.a[q.x];if(typ){const safe=target.a.findIndex(v=>v===0);if(safe>=0){q.x=safe;i.x=safe}else if(typ===2){q.j=.75}else if(typ===3){q.s=.32}else{const alt=target.a.findIndex(v=>v===2||v===3);if(alt>=0){q.x=alt;i.x=alt}else q.a=0}}}}
    q.x=i.x;
    if(i.wantJ>0){i.wantJ-=DT;q.j=.72;i.wantJ=0}
    if(i.wantS>0){i.wantS-=DT;q.s=.28;i.wantS=0}

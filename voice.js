@@ -18,8 +18,10 @@ export function createVoice(env) {
   function connect(u, init) {
     if (peers[u]) return peers[u];
     const pc = new RTCPeerConnection(ICE), P = peers[u] = { pc, init, q: [], rd: false, chain: Promise.resolve(), g: null, pan: null, el: null, src: null };
-    const tr = pc.addTransceiver("audio", { direction: "sendrecv" }); P.tr = tr;
-    if (mic) tr.sender.replaceTrack(mic.getAudioTracks()[0]).catch(() => { });
+    if (init) {   // seul celui qui appelle crée l'émetteur audio ; celui qui répond réutilise celui de l'offre (voir handle), sinon son micro partirait sur un émetteur jamais négocié
+      const tr = pc.addTransceiver("audio", { direction: "sendrecv" }); P.tr = tr;
+      if (mic) tr.sender.replaceTrack(mic.getAudioTracks()[0]).catch(() => { });
+    }
     pc.onicecandidate = e => { if (e.candidate) send(u, { c: e.candidate.toJSON() }); };
     pc.ontrack = e => attach(u, e.streams[0] || new MediaStream([e.track]));
     pc.onconnectionstatechange = () => { if (pc.connectionState === "failed" || pc.connectionState === "closed") drop(u); emit(); };
@@ -47,6 +49,8 @@ export function createVoice(env) {
       try {
         if (m.o) {
           await pc.setRemoteDescription(m.o); P.rd = true;
+          const t = pc.getTransceivers().find(x => x.receiver && x.receiver.track && x.receiver.track.kind === "audio" && !x.stopped);   // l'émetteur audio créé par l'offre
+          if (t) { P.tr = t; try { t.direction = "sendrecv"; } catch { } if (mic) await t.sender.replaceTrack(mic.getAudioTracks()[0]).catch(() => { }); }
           for (const c of P.q.splice(0)) await pc.addIceCandidate(c).catch(() => { });
           await pc.setLocalDescription(await pc.createAnswer());
           send(from, { a: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } });
@@ -123,7 +127,7 @@ export function createVoice(env) {
     async toggleMic() {
       if (!on) return;
       if (!mic) {
-        try { mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); micWanted = true; const t = mic.getAudioTracks()[0]; Object.values(peers).forEach(P => P.tr.sender.replaceTrack(t).catch(() => { })); }
+        try { mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); micWanted = true; const t = mic.getAudioTracks()[0]; Object.values(peers).forEach(P => P.tr && P.tr.sender.replaceTrack(t).catch(() => { })); }
         catch { toast("Micro indisponible : autorise-le dans les réglages du navigateur"); }
       } else { micWanted = !micWanted; mic.getAudioTracks()[0].enabled = micWanted; }
       emit();

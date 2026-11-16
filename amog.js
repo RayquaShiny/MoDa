@@ -15,20 +15,20 @@ const K = 1, WW = 1452, WH = 822, sc = v => v, scp = a => a.slice();     // la c
 const TB = [775, 205];                                                   // table d'urgence (cafétéria)
 // Plan fidèle au vaisseau « The Skeld » d'Among Us : 14 salles reliées par des couloirs (octogone de la cafétéria compris)
 const ROOMS = [
-  ["Moteur haut", 190, 128, 145, 162], ["Réacteur", 60, 300, 145, 205], ["Sécurité", 335, 305, 90, 165], ["Moteur bas", 185, 515, 150, 165],
-  ["Médbay", 445, 250, 140, 175], ["Cafétéria", 600, 75, 350, 260], ["Armes", 1010, 105, 150, 165], ["O2", 960, 290, 85, 110],
-  ["Navigation", 1270, 305, 120, 145], ["Admin", 855, 410, 150, 155], ["Boucliers", 1010, 540, 150, 170], ["Comms", 840, 665, 160, 120],
-  ["Stockage", 630, 495, 200, 295], ["Électricité", 475, 455, 140, 210]
+  ["Moteur haut", 190, 128, 145, 162], ["Réacteur", 60, 320, 145, 165], ["Sécurité", 335, 320, 90, 150], ["Moteur bas", 185, 515, 150, 165],
+  ["Médbay", 460, 265, 110, 160], ["Cafétéria", 600, 75, 330, 260], ["Armes", 1010, 105, 150, 165], ["O2", 960, 305, 85, 95],
+  ["Navigation", 1270, 305, 120, 145], ["Admin", 865, 430, 115, 135], ["Boucliers", 1010, 540, 150, 170], ["Comms", 860, 665, 120, 120],
+  ["Stockage", 630, 495, 200, 295], ["Électricité", 475, 455, 125, 210]
 ].map(r => ({ n: r[0], x: r[1], y: r[2], w: r[3], h: r[4] }));
-const CORR = [[335, 170, 265, 60], [480, 230, 60, 25], [240, 290, 60, 225], [205, 350, 130, 95], [335, 560, 110, 50], [395, 560, 50, 155], [395, 665, 240, 50],
-  [755, 380, 50, 115], [805, 410, 50, 60], [950, 170, 60, 60], [1060, 270, 55, 40], [1045, 300, 145, 85], [1190, 345, 80, 60], [1065, 385, 50, 155], [830, 580, 180, 60], [920, 635, 50, 35]
+const CORR = [[335, 170, 265, 60], [480, 230, 60, 40], [240, 290, 60, 225], [205, 350, 130, 95], [335, 560, 110, 50], [395, 560, 50, 155], [395, 665, 240, 50],
+  [755, 380, 50, 115], [805, 410, 60, 60], [930, 170, 80, 60], [1060, 270, 55, 40], [1045, 300, 145, 85], [1190, 345, 80, 60], [1065, 385, 50, 155], [830, 580, 180, 60], [920, 635, 50, 35]
 ].map(r => ({ x: r[0], y: r[1], w: r[2], h: r[3] }));                  // couloirs
 const EXTRA = [[650, 32, 250, 43], [650, 335, 250, 45]].map(r => ({ x: r[0], y: r[1], w: r[2], h: r[3] }));   // coins coupés de la cafétéria (octogone)
 const FLOOR = [...ROOMS, ...CORR, ...EXTRA];                              // salles + couloirs
 // portes : [x, y, largeur, hauteur, numéro de salle] : un sabotage les ferme 10 s
-const DOORS = [[588, 170, 24, 60, 5], [938, 170, 24, 60, 5], [755, 368, 50, 24, 5], [843, 410, 24, 60, 9], [755, 483, 50, 24, 12], [618, 665, 24, 50, 12], [818, 580, 24, 60, 12],
-  [475, 652, 140, 24, 13], [480, 234, 60, 24, 4], [323, 350, 24, 95, 2], [193, 350, 24, 95, 1], [240, 282, 60, 24, 0], [240, 503, 60, 24, 3], [1060, 258, 55, 24, 6], [998, 170, 24, 60, 6],
-  [1258, 345, 24, 60, 8], [1065, 528, 50, 24, 10], [998, 580, 24, 60, 10], [1033, 300, 24, 85, 7], [920, 650, 50, 24, 11]];
+const DOORS = [[588, 170, 24, 60, 5], [938, 170, 24, 60, 5], [755, 368, 50, 24, 5], [853, 410, 24, 60, 9], [755, 483, 50, 24, 12], [618, 665, 24, 50, 12], [818, 580, 24, 60, 12],
+  [475, 652, 125, 24, 13], [480, 234, 60, 24, 4], [323, 350, 24, 95, 2], [193, 350, 24, 95, 1], [240, 282, 60, 24, 0], [240, 503, 60, 24, 3], [1060, 258, 55, 24, 6], [998, 170, 24, 60, 6],
+  [1258, 345, 24, 60, 8], [1065, 528, 50, 24, 10], [998, 580, 24, 60, 10], [1033, 305, 24, 80, 7], [920, 650, 50, 24, 11]];
 let DMH = 0;                                                              // portes fermées vues par l'hôte (bit i = porte i)
 const dblk = (m, px, py) => { for (let i = 0; i < DOORS.length; i++) if (m >> i & 1) { const d = DOORS[i]; if (px >= d[0] && px <= d[0] + d[2] && py >= d[1] && py <= d[1] + d[3]) return true; } return false; };
 const DCD = 18, DTT = 10, SABI = { l: 0, r: 1, o: 2, m: 3 };            // portes : recharge et durée de fermeture ; type de sabotage → numéro
@@ -38,13 +38,13 @@ const ST = [
   [580, 490, "Brancher les fils (Électricité)", -1], [630, 150, "Brancher les fils (Cafétéria)", -1], [900, 445, "Brancher les fils (Admin)", -1],
   [665, 530, "Brancher les fils (Stockage)", -1], [1295, 330, "Brancher les fils (Navigation)", -1], [365, 335, "Brancher les fils (Sécurité)", -1],
   [790, 650, "Carburant 1/2 : Stockage", -1], [210, 265, "Carburant 2/2 : Moteur haut", 8], [300, 545, "Carburant 2/2 : Moteur bas", 8],
-  [590, 630, "Calibrer le distributeur", -1], [1355, 400, "Tracer la route", -1], [1355, 335, "Stabiliser la direction", -1],
+  [575, 630, "Calibrer le distributeur", -1], [1355, 400, "Tracer la route", -1], [1355, 335, "Stabiliser la direction", -1],
   [1018, 348, "Nettoyer le filtre O2", -1], [1100, 225, "Détruire les astéroïdes", -1],
   [560, 545, "Dévier l'énergie 1/2 : Électricité", -1], [1060, 165, "Dévier l'énergie 2/2 : Armes", 16], [1135, 590, "Dévier l'énergie 2/2 : Boucliers", 16],
-  [1300, 395, "Dévier l'énergie 2/2 : Navigation", 16], [870, 720, "Dévier l'énergie 2/2 : Comms", 16],
-  [905, 300, "Vider les ordures (Cafétéria)", -1], [660, 650, "Vider les ordures (Stockage)", -1], [990, 312, "Vider la goulotte (O2)", -1],
+  [1300, 395, "Dévier l'énergie 2/2 : Navigation", 16], [890, 725, "Dévier l'énergie 2/2 : Comms", 16],
+  [905, 300, "Vider les ordures (Cafétéria)", -1], [660, 650, "Vider les ordures (Stockage)", -1], [990, 325, "Vider la goulotte (O2)", -1],
   [545, 300, "Analyser l'échantillon", -1], [540, 390, "Scanner médical", -1], [1080, 660, "Activer les boucliers", -1], [175, 400, "Démarrer le réacteur", -1],
-  [975, 480, "Passer la carte (Admin)", -1], [880, 120, "Télécharger 1/2 : Cafétéria", -1], [915, 500, "Envoyer 2/2 : Admin", 29]
+  [955, 470, "Passer la carte (Admin)", -1], [880, 120, "Télécharger 1/2 : Cafétéria", -1], [915, 500, "Envoyer 2/2 : Admin", 29]
 ];
 const PRE = new Set(ST.map(t => t[3]).filter(v => v >= 0));              // étapes « 1/2 » : elles ne sont jamais tirées seules
 const av = (asg, dn, k) => !!(asg >> k & 1) && !(dn >> k & 1) && (ST[k][3] < 0 || !!(dn >> ST[k][3] & 1));   // poste à faire maintenant (assigné, pas fini, étape précédente faite)
@@ -77,8 +77,8 @@ function route(px, py, tx, ty) {                                          // che
   while (i < pts.length) { let j = pts.length - 1; while (j > i && !clr(ax, ay, pts[j][0], pts[j][1])) j--; o.push(pts[j]); ax = pts[j][0]; ay = pts[j][1]; i = j + 1; }
   return o;
 }
-const VENTS = [[235, 200], [95, 390], [230, 640], [385, 445], [500, 330], [500, 610], [660, 110], [1135, 130], [880, 545]], VN = [1, 2, 0, 4, 5, 3, 7, 8, 6];   // conduits : trois circuits de 3
-const LP = [520, 490], RP = [[125, 340], [125, 470]], OP = [[985, 375], [975, 545]], MP = [975, 745], CAMP = [390, 385];   // lumières (Électricité), 2 panneaux du réacteur, 2 panneaux O2 (O2 et Admin), panneau des comms, caméras (Sécurité)
+const VENTS = [[235, 200], [95, 390], [230, 640], [385, 445], [500, 330], [500, 610], [660, 110], [1135, 130], [895, 545]], VN = [1, 2, 0, 4, 5, 3, 7, 8, 6];   // conduits : trois circuits de 3
+const LP = [520, 490], RP = [[125, 355], [125, 465]], OP = [[985, 375], [955, 545]], MP = [950, 745], CAMP = [390, 385];   // lumières (Électricité), 2 panneaux du réacteur, 2 panneaux O2 (O2 et Admin), panneau des comms, caméras (Sécurité)
 const CAMZ = CORR, inCam = (px, py) => CAMZ.some(a => px >= a.x && px <= a.x + a.w && py >= a.y && py <= a.y + a.h);   // les caméras couvrent les couloirs
 const pc = m => { let n = 0; while (m) { n += m & 1; m >>= 1; } return n; };
 export const _t = { ok, move, route, los, ST, FLOOR, TB };

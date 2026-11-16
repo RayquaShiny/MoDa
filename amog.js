@@ -1,6 +1,6 @@
 /* MoDa : « Amog Us » 🚀 : trouve les imposteurs avant qu'ils éliminent tout l'équipage !
    - 4 joueurs minimum (bots 🤖 compris, jusqu'à 10). 4-7 joueurs : 1 imposteur · 8-10 joueurs : 2 imposteurs.
-   - Équipiers : font leurs 6 tâches parmi 14 postes différents : chaque poste lance un vrai mini-jeu à réussir (câbles à relier, code à taper, etc.) ; les bots, eux, restent sur place 1,5 à 3,6 s · Imposteurs : éliminent en silence (cooldown 12 s).
+   - Équipiers : font leurs 6 tâches parmi les 31 postes du Skeld (certaines en 2 étapes) : chaque poste lance un vrai mini-jeu à réussir (câbles à relier, code à taper, etc.) ; les bots, eux, restent sur place 1,5 à 3,6 s · Imposteurs : éliminent en silence (cooldown 12 s), sabotent (lumières, réacteur, O2, communications) et ferment les portes.
    - Un corps trouvé (SIGNALER) ou le bouton d'urgence de la cafétéria (1 fois par joueur) lance une réunion : on vote
      pour éjecter quelqu'un (ou on passe). Les morts deviennent des fantômes : ils traversent les murs et peuvent finir leurs tâches.
    - Victoire équipage : toutes les tâches faites OU tous les imposteurs éjectés. Victoire imposteurs : autant d'imposteurs que d'équipiers.
@@ -9,137 +9,76 @@
    - Même fonctionnement que Sumo Arena : l'hôte simule (30 pas/s) et publie games/<code>/state ; chaque joueur écrit
      « ax,ay,compteurUtiliser,compteurTuer,vote » dans games/<code>/inputs/<uid>. Aucun nouveau chemin Firebase. */
 
-const W = 800, H = 560, RAD = 11, BR = 15, SPD = 125, DT = 1 / 30;
+const W = 800, H = 560, RAD = 11, BR = 15, SPD = 125, DT = 1 / 30;   // W × H = fenêtre de vue (le canvas) ; la carte fait WW × WH et la caméra suit le joueur
 const KCD0 = 8, KCD = 12, KR = 52, TT = 1.6, MT = 40, RT = 8, VIS = 290;
-const K=1.75,WW=1400,WH=800,sc=v=>Math.round(v*K),scp=a=>a.map(sc);
-const TB=[700,203];
-// Polygones relevés sur le plan de référence du Skeld (1000 × 563 px).
-const ROOM_POLYS = [
-{n:"Réacteur",p:[[60,294],[178,259],[192,277],[192,456],[161,503],[60,461]]},
-{n:"Moteur haut",p:[[179,123],[323,123],[323,220],[287,220],[287,258],[179,258]]},
-{n:"Moteur bas",p:[[179,493],[322,493],[322,540],[428,540],[428,655],[378,655],[378,626],[179,626],[179,601],[175,601]]},
-{n:"Sécurité",p:[[286,287],[410,287],[410,454],[323,454],[323,414],[286,414]]},
-{n:"Médbay",p:[[424,224],[567,224],[567,412],[456,412],[424,350]]},
-{n:"Cafétéria",p:[[577,29],[826,29],[931,134],[931,217],[871,217],[871,367],[641,367],[577,305]]},
-{n:"Armes",p:[[976,101],[1091,101],[1117,155],[1117,263],[1039,263],[976,221]]},
-{n:"O2",p:[[888,283],[1002,283],[1002,385],[888,385]]},
-{n:"Navigation",p:[[1225,291],[1324,291],[1378,339],[1378,400],[1323,433],[1225,399]]},
-{n:"Admin",p:[[773,409],[977,409],[977,545],[951,571],[812,571],[773,538]]},
-{n:"Électricité",p:[[456,438],[613,438],[613,609],[560,633],[456,609]]},
-{n:"Stockage",p:[[617,531],[806,531],[806,757],[700,757],[617,672]]},
-{n:"Comms",p:[[811,624],[966,624],[966,756],[811,756]]},
-{n:"Boucliers",p:[[976,547],[1119,547],[1119,669],[1050,683],[976,657]]}
+const K = 1, WW = 1452, WH = 822, sc = v => v, scp = a => a.slice();     // la carte reprend le plan du Skeld (1452 × 822) : 1 unité = 1 px du plan
+const TB = [775, 205];                                                   // table d'urgence (cafétéria)
+// Plan fidèle au vaisseau « The Skeld » d'Among Us : 14 salles reliées par des couloirs (octogone de la cafétéria compris)
+const ROOMS = [
+  ["Moteur haut", 190, 128, 145, 162], ["Réacteur", 60, 300, 145, 205], ["Sécurité", 335, 305, 90, 165], ["Moteur bas", 185, 515, 150, 165],
+  ["Médbay", 445, 250, 140, 175], ["Cafétéria", 600, 75, 350, 260], ["Armes", 1010, 105, 150, 165], ["O2", 960, 290, 85, 110],
+  ["Navigation", 1270, 305, 120, 145], ["Admin", 855, 410, 150, 155], ["Boucliers", 1010, 540, 150, 170], ["Comms", 840, 665, 160, 120],
+  ["Stockage", 630, 495, 200, 295], ["Électricité", 475, 455, 140, 210]
+].map(r => ({ n: r[0], x: r[1], y: r[2], w: r[3], h: r[4] }));
+const CORR = [[335, 170, 265, 60], [480, 230, 60, 25], [240, 290, 60, 225], [205, 350, 130, 95], [335, 560, 110, 50], [395, 560, 50, 155], [395, 665, 240, 50],
+  [755, 380, 50, 115], [805, 410, 50, 60], [950, 170, 60, 60], [1060, 270, 55, 40], [1045, 300, 145, 85], [1190, 345, 80, 60], [1065, 385, 50, 155], [830, 580, 180, 60], [920, 635, 50, 35]
+].map(r => ({ x: r[0], y: r[1], w: r[2], h: r[3] }));                  // couloirs
+const EXTRA = [[650, 32, 250, 43], [650, 335, 250, 45]].map(r => ({ x: r[0], y: r[1], w: r[2], h: r[3] }));   // coins coupés de la cafétéria (octogone)
+const FLOOR = [...ROOMS, ...CORR, ...EXTRA];                              // salles + couloirs
+// portes : [x, y, largeur, hauteur, numéro de salle] : un sabotage les ferme 10 s
+const DOORS = [[588, 170, 24, 60, 5], [938, 170, 24, 60, 5], [755, 368, 50, 24, 5], [843, 410, 24, 60, 9], [755, 483, 50, 24, 12], [618, 665, 24, 50, 12], [818, 580, 24, 60, 12],
+  [475, 652, 140, 24, 13], [480, 234, 60, 24, 4], [323, 350, 24, 95, 2], [193, 350, 24, 95, 1], [240, 282, 60, 24, 0], [240, 503, 60, 24, 3], [1060, 258, 55, 24, 6], [998, 170, 24, 60, 6],
+  [1258, 345, 24, 60, 8], [1065, 528, 50, 24, 10], [998, 580, 24, 60, 10], [1033, 300, 24, 85, 7], [920, 650, 50, 24, 11]];
+let DMH = 0;                                                              // portes fermées vues par l'hôte (bit i = porte i)
+const dblk = (m, px, py) => { for (let i = 0; i < DOORS.length; i++) if (m >> i & 1) { const d = DOORS[i]; if (px >= d[0] && px <= d[0] + d[2] && py >= d[1] && py <= d[1] + d[3]) return true; } return false; };
+const DCD = 18, DTT = 10, SABI = { l: 0, r: 1, o: 2, m: 3 };            // portes : recharge et durée de fermeture ; type de sabotage → numéro
+// postes de tâche du Skeld : [x, y, nom, étape précédente (-1 = aucune)] : les tâches en 2 étapes se font dans l'ordre
+const ST = [
+  [290, 190, "Aligner les moteurs (haut)", -1], [225, 580, "Aligner les moteurs (bas)", -1],
+  [580, 490, "Brancher les fils (Électricité)", -1], [630, 150, "Brancher les fils (Cafétéria)", -1], [900, 445, "Brancher les fils (Admin)", -1],
+  [665, 530, "Brancher les fils (Stockage)", -1], [1295, 330, "Brancher les fils (Navigation)", -1], [365, 335, "Brancher les fils (Sécurité)", -1],
+  [790, 650, "Carburant 1/2 : Stockage", -1], [210, 265, "Carburant 2/2 : Moteur haut", 8], [300, 545, "Carburant 2/2 : Moteur bas", 8],
+  [590, 630, "Calibrer le distributeur", -1], [1355, 400, "Tracer la route", -1], [1355, 335, "Stabiliser la direction", -1],
+  [1018, 348, "Nettoyer le filtre O2", -1], [1100, 225, "Détruire les astéroïdes", -1],
+  [560, 545, "Dévier l'énergie 1/2 : Électricité", -1], [1060, 165, "Dévier l'énergie 2/2 : Armes", 16], [1135, 590, "Dévier l'énergie 2/2 : Boucliers", 16],
+  [1300, 395, "Dévier l'énergie 2/2 : Navigation", 16], [870, 720, "Dévier l'énergie 2/2 : Comms", 16],
+  [905, 300, "Vider les ordures (Cafétéria)", -1], [660, 650, "Vider les ordures (Stockage)", -1], [990, 312, "Vider la goulotte (O2)", -1],
+  [545, 300, "Analyser l'échantillon", -1], [540, 390, "Scanner médical", -1], [1080, 660, "Activer les boucliers", -1], [175, 400, "Démarrer le réacteur", -1],
+  [975, 480, "Passer la carte (Admin)", -1], [880, 120, "Télécharger 1/2 : Cafétéria", -1], [915, 500, "Envoyer 2/2 : Admin", 29]
 ];
-const CORR_POLYS = [
-[[322,158],[577,158],[577,220],[322,220]],
-[[190,323],[286,323],[286,414],[190,414]],
-[[410,287],[456,287],[456,412],[410,412]],
-[[567,252],[641,252],[641,367],[567,367]],
-[[931,158],[976,158],[976,221],[931,221]],
-[[700,367],[773,367],[773,412],[700,412]],
-[[871,280],[889,280],[889,385],[871,385]],
-[[1002,308],[1225,308],[1225,386],[1002,386]],
-[[613,531],[773,531],[773,571],[613,571]],
-[[806,624],[811,624],[811,672],[806,672]],
-[[560,609],[700,609],[700,672],[560,672]],
-[[428,626],[617,626],[617,686],[428,686]],
-[[966,657],[1050,657],[1050,686],[966,686]],
-[[1039,263],[1071,263],[1071,283],[1002,283],[1002,308],[976,308],[976,263]],
-[[641,367],[700,367],[700,531],[641,531]],
-[[567,412],[613,412],[613,531],[567,531]],
-[[322,454],[456,454],[456,493],[322,493]]
-];
-const MAP_POLYS = [...ROOM_POLYS.map(r=>r.p),...CORR_POLYS];
-const polygonPath=(ctx,p)=>{ctx.moveTo(p[0][0],p[0][1]);for(let i=1;i<p.length;i++)ctx.lineTo(p[i][0],p[i][1]);ctx.closePath();};
-const bbox=p=>{let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;for(const [x,y] of p){minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y);}return {x:minX,y:minY,w:maxX-minX,h:maxY-minY};};
-const ROOMS=ROOM_POLYS.map(r=>({n:r.n,...bbox(r.p)}));
-const CORR=CORR_POLYS.map(p=>bbox(p));
-const FLOOR=[...ROOMS,...CORR];
-const DOORS=[
- {id:0,n:"Médbay",x:sc(330*.8),y:sc(274*.8),w:sc(10*.8),h:sc(24*.8)},
- {id:1,n:"Cafétéria / Admin",x:sc(555*.8),y:sc(263*.8),w:sc(28*.8),h:sc(9*.8)},
- {id:2,n:"Armes",x:sc(695*.8),y:sc(122*.8),w:sc(9*.8),h:sc(26*.8)},
- {id:3,n:"Navigation",x:sc(850*.8),y:sc(244*.8),w:sc(9*.8),h:sc(28*.8)},
- {id:4,n:"Électricité",x:sc(380*.8),y:sc(306*.8),w:sc(9*.8),h:sc(26*.8)},
- {id:5,n:"Stockage",x:sc(545*.8),y:sc(375*.8),w:sc(28*.8),h:sc(9*.8)}
-];
-let CLOSED_DOORS=new Set();
-const doorBlocked=(px,py)=>DOORS.some(d=>CLOSED_DOORS.has(d.id)&&px+RAD>d.x&&px-RAD<d.x+d.w&&py+RAD>d.y&&py-RAD<d.y+d.h);
-const ST=[
- [151,112,"Aligner les moteurs"],[268,280,"Brancher les câbles"],[73,222,"Refroidir le réacteur"],
- [394,360,"Trier les caisses"],[280,165,"Scanner médical"],[590,95,"Télécharger les plans"],
- [704,177,"Calibrer le détecteur"],[535,185,"Purger le circuit"],[151,330,"Faire le plein"],
- [493,405,"Vider les déchets"],[600,343,"Activer le bouclier"],[497,286,"Envoyer les données"],
- [210,230,"Analyser un échantillon"],[725,215,"Orienter l'antenne"]
-].map(t=>[sc(t[0]*.8),sc(t[1]*.8),t[2]]);
-const NT = 6;                                                             // tâches par équipier (sur 14 postes)
-const TTS = [2.7, 3.6, 3.0, 2.4, 3.3, 1.8, 1.5, 1.5, 2.1, 2.4, 3.0, 2.7, 3.6, 2.1];                    // durée de chaque tâche (même ordre que ST)
+const PRE = new Set(ST.map(t => t[3]).filter(v => v >= 0));              // étapes « 1/2 » : elles ne sont jamais tirées seules
+const av = (asg, dn, k) => !!(asg >> k & 1) && !(dn >> k & 1) && (ST[k][3] < 0 || !!(dn >> ST[k][3] & 1));   // poste à faire maintenant (assigné, pas fini, étape précédente faite)
+const NT = 6;                                                             // tâches tirées par équipier (+ leurs étapes préalables)
+const TTS = [3, 3, 2.4, 2.4, 2.4, 2.4, 2.4, 2.4, 3.6, 3, 3, 3, 3.3, 3, 2.7, 3.3, 1.8, 2.1, 2.1, 2.1, 2.1, 2.4, 2.4, 2.1, 3.3, 3, 2.7, 3.6, 1.8, 2.4, 2.4];   // durée de chaque tâche pour les bots (même ordre que ST)
 let GRID = null;                                                          // grille 1 px : 1 = sol (rend at/ok/los beaucoup plus rapides)
-const at=(px,py)=>{
- if(!GRID){
-  GRID=new Uint8Array(WW*WH);
-  for(const poly of MAP_POLYS){
-   let minY=WH-1,maxY=0;for(const p of poly){minY=Math.min(minY,p[1]);maxY=Math.max(maxY,p[1]);}
-   for(let y=Math.max(0,minY);y<=Math.min(WH-1,maxY);y++){
-    const scan=y+.5,xs=[];
-    for(let i=0,j=poly.length-1;i<poly.length;j=i++){const A=poly[i],B=poly[j];if((A[1]>scan)!==(B[1]>scan))xs.push(A[0]+(scan-A[1])*(B[0]-A[0])/(B[1]-A[1]));}
-    xs.sort((u,v)=>u-v);for(let k=0;k+1<xs.length;k+=2){const x0=Math.max(0,Math.ceil(xs[k])),x1=Math.min(WW-1,Math.floor(xs[k+1]));if(x1>=x0)GRID.fill(1,y*WW+x0,y*WW+x1+1);}
-   }
-  }
- }
- return px>=0&&py>=0&&px<WW&&py<WH&&GRID[(py|0)*WW+(px|0)]===1;
+const at = (px, py) => {
+  if (!GRID) { GRID = new Uint8Array(WW * WH); FLOOR.forEach(a => { for (let j = a.y; j <= a.y + a.h && j < WH; j++) GRID.fill(1, j * WW + a.x, j * WW + Math.min(WW - 1, a.x + a.w) + 1); }); }
+  return px >= 0 && py >= 0 && px < WW && py < WH && GRID[(py | 0) * WW + (px | 0)] === 1 && !(DMH && dblk(DMH, px, py));
 };
-const ok = (px, py) => !doorBlocked(px, py) && at(px - RAD, py - RAD) && at(px + RAD, py - RAD) && at(px - RAD, py + RAD) && at(px + RAD, py + RAD);
+const ok = (px, py) => at(px - RAD, py - RAD) && at(px + RAD, py - RAD) && at(px - RAD, py + RAD) && at(px + RAD, py + RAD) && at(px, py - RAD) && at(px, py + RAD) && at(px - RAD, py) && at(px + RAD, py);   // 8 points : un mur fin ne peut pas être enjambé
 const move = (q, dx, dy) => {
   if (!q.a) { q.x = Math.max(RAD, Math.min(WW - RAD, q.x + dx)); q.y = Math.max(RAD, Math.min(WH - RAD, q.y + dy)); return; }   // fantôme : traverse les murs (reste dans la carte)
   if (ok(q.x + dx, q.y + dy)) { q.x += dx; q.y += dy; } else if (ok(q.x + dx, q.y)) q.x += dx; else if (ok(q.x, q.y + dy)) q.y += dy;
 };
 const los = (ax, ay, bx, by) => { const n = Math.ceil(Math.hypot(bx - ax, by - ay) / 8); for (let i = 1; i < n; i++) { const f = i / n; if (!at(ax + (bx - ax) * f, ay + (by - ay) * f)) return false; } return true; }; // ligne de vue : aucun mur entre les deux
-const CS = 10, GW = Math.ceil(WW / CS), GH = Math.ceil(WH / CS);
-const clr = (ax, ay, bx, by) => { const n = Math.ceil(Math.hypot(bx - ax, by - ay) / 5); for (let i = 1; i <= n; i++) { const f = i / n; if (!ok(ax + (bx - ax) * f, ay + (by - ay) * f)) return false; } return true; };
-const cell = (x, y) => (Math.floor(y / CS) * GW + Math.floor(x / CS));
-const cx = i => (i % GW) * CS + CS / 2, cy = i => ((i / GW) | 0) * CS + CS / 2;
-const nearestWalkable = (x, y) => {
-  const sx = Math.max(0, Math.min(GW - 1, Math.floor(x / CS))), sy = Math.max(0, Math.min(GH - 1, Math.floor(y / CS)));
-  let best = -1, bd = Infinity;
-  for (let r = 0; r <= 8 && best < 0; r++) for (let yy = Math.max(0, sy-r); yy <= Math.min(GH-1, sy+r); yy++) for (let xx = Math.max(0, sx-r); xx <= Math.min(GW-1, sx+r); xx++) {
-    if (Math.max(Math.abs(xx-sx),Math.abs(yy-sy)) !== r) continue;
-    const id = yy * GW + xx, px = cx(id), py = cy(id), d = (px-x)**2+(py-y)**2;
-    if (d < bd && ok(px,py)) { best=id; bd=d; }
+const CS = 20, GW = Math.ceil(WW / CS), GH = Math.ceil(WH / CS);
+const clr = (ax, ay, bx, by) => { const n = Math.ceil(Math.hypot(bx - ax, by - ay) / 6); for (let i = 1; i <= n; i++) { const f = i / n; if (!ok(ax + (bx - ax) * f, ay + (by - ay) * f)) return false; } return true; };
+function route(px, py, tx, ty) {                                          // chemin le plus court dans les couloirs (recherche en largeur sur une grille de 20 px, puis lissage)
+  if (clr(px, py, tx, ty)) return [[tx, ty]];
+  const cell = (a, b) => Math.min(GH - 1, b / CS | 0) * GW + Math.min(GW - 1, a / CS | 0), cx = i => (i % GW) * CS + CS / 2, cy = i => ((i / GW) | 0) * CS + CS / 2;
+  const s = cell(px, py), t = cell(tx, ty), prev = new Int32Array(GW * GH).fill(-2), q = [s]; prev[s] = -1;
+  for (let h = 0; h < q.length && prev[t] === -2; h++) {
+    const i = q[h], x0 = i % GW, y0 = (i / GW) | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x0 + dx, ny = y0 + dy; if (nx < 0 || ny < 0 || nx >= GW || ny >= GH) continue; const n = ny * GW + nx; if (prev[n] !== -2) continue; if (n !== t && !ok(cx(n), cy(n))) continue; prev[n] = i; q.push(n); }
   }
-  return best;
-};
-function route(px, py, tx, ty) {
-  if (!at(px,py) || !at(tx,ty)) return [];
-  if (clr(px,py,tx,ty)) return [[tx,ty]];
-  const si=nearestWalkable(px,py), ti=nearestWalkable(tx,ty);
-  if (si<0 || ti<0) return [];
-  const total=GW*GH, prev=new Int32Array(total).fill(-2), q=new Int32Array(total); let head=0,tail=0;
-  q[tail++]=si; prev[si]=-1;
-  const dirs=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
-  while(head<tail && prev[ti]===-2) {
-    const id=q[head++], x=id%GW, y=(id/GW)|0;
-    for(const [dx,dy] of dirs) {
-      const nx=x+dx,ny=y+dy;
-      if(nx<0||ny<0||nx>=GW||ny>=GH) continue;
-      const ni=ny*GW+nx;if(prev[ni]!==-2)continue;
-      const ax=cx(id),ay=cy(id),bx=cx(ni),by=cy(ni);
-      if(!ok(bx,by) || (dx&&dy&&(!ok(cx(y*GW+nx),cy(y*GW+nx))||!ok(cx(ny*GW+x),cy(ny*GW+x)))))continue;
-      prev[ni]=id;q[tail++]=ni;
-    }
-  }
-  if(prev[ti]===-2)return [];
-  const pts=[];for(let id=ti;id!==-1;id=prev[id])pts.push([cx(id),cy(id)]);pts.reverse();
-  const out=[];let ax=px,ay=py,i=0;
-  while(i<pts.length){let j=pts.length-1;while(j>i&&!clr(ax,ay,pts[j][0],pts[j][1]))j--;out.push(pts[j]);ax=pts[j][0];ay=pts[j][1];i=j+1;}
-  if(clr(ax,ay,tx,ty))out.push([tx,ty]);
-  return out;
+  if (prev[t] === -2) return [[tx, ty]];
+  const pts = []; for (let i = t; i !== -1; i = prev[i]) pts.push([cx(i), cy(i)]); pts.reverse(); pts.push([tx, ty]);
+  const o = []; let ax = px, ay = py, i = 0;
+  while (i < pts.length) { let j = pts.length - 1; while (j > i && !clr(ax, ay, pts[j][0], pts[j][1])) j--; o.push(pts[j]); ax = pts[j][0]; ay = pts[j][1]; i = j + 1; }
+  return o;
 }
-const VENTS = [
- [180,124],[112,250],[180,414],[258,260],[382,248],[383,385],[530,130],
- [675,340],[500,480],[900,255],[745,145],[755,450],[665,220],[495,420]
-].map(v=>[sc(v[0]*.8),sc(v[1]*.8)]), VN = [1,2,0,5,3,4,8,10,6,11,7,9,13,12];
-const LP = [380,385].map(v=>sc(v*.8)), RP = [[100,280],[130,300]].map(([x,y])=>[sc(x*.8),sc(y*.8)]), CAMP = [250,240].map(v=>sc(v*.8));
+const VENTS = [[235, 200], [95, 390], [230, 640], [385, 445], [500, 330], [500, 610], [660, 110], [1135, 130], [880, 545]], VN = [1, 2, 0, 4, 5, 3, 7, 8, 6];   // conduits : trois circuits de 3
+const LP = [520, 490], RP = [[125, 340], [125, 470]], OP = [[985, 375], [975, 545]], MP = [975, 745], CAMP = [390, 385];   // lumières (Électricité), 2 panneaux du réacteur, 2 panneaux O2 (O2 et Admin), panneau des comms, caméras (Sécurité)
 const CAMZ = CORR, inCam = (px, py) => CAMZ.some(a => px >= a.x && px <= a.x + a.w && py >= a.y && py <= a.y + a.h);   // les caméras couvrent les couloirs
 const pc = m => { let n = 0; while (m) { n += m & 1; m >>= 1; } return n; };
 export const _t = { ok, move, route, los, ST, FLOOR, TB };
@@ -151,17 +90,16 @@ export async function startAmog(env) {
   const op = lob.opts || {}, SPD = [110, 140, 175][op.as === 0 || op.as === 2 ? op.as : 1], MT = [20, 40, 60][op.av === 0 || op.av === 2 ? op.av : 1];   // réglages de l'hôte : vitesse, durée du vote
   const isBot = u => u.indexOf("bot_") === 0, rnd = a => a[Math.floor(Math.random() * a.length)];
   if (ids.length < 4) return toast("Il faut au moins 4 joueurs pour lancer Amog Us (ajoute des bots 🤖 dans le lobby)");
-  CLOSED_DOORS.clear();
   await remove(RF(`games/${c}`));
   await update(RF(`lobbies/${c}`), { status: "playing" });
 
   const nImp = op.ai >= 1 ? Math.max(1, Math.min(op.ai | 0, Math.floor((ids.length - 1) / 2))) : ids.length >= 8 ? 2 : 1, imps = new Set(ids.slice().sort(() => Math.random() - .5).slice(0, nImp));
   const P = {}, I = {}, seen = {}, bs = {};
   const gb = u => bs[u] || (bs[u] = { p: [], w: 0, k: 0, sus: {}, fl: 0 });   // mémoire d'un bot : sus = suspicion par joueur (≥ 10 : a vu le crime)
-  let sab = null, sbcd = 20, t = 0, ph = "c", mid = 0, mt = 0, rt = 0, mcaller = -1, mrep = 0, near = new Set(), bodies = [], evs = [], kf = [], pubN = 0, evId = 0, over = null, rs = null;
+  let sab = null, sbcd = 20, dcd = 15, dcl = [], t = 0, ph = "c", mid = 0, mt = 0, rt = 0, mcaller = -1, mrep = 0, near = new Set(), bodies = [], evs = [], kf = [], pubN = 0, evId = 0, over = null, rs = null;
   ids.forEach((u, i) => {
-    const a = i / ids.length * 6.283, s = ST.map((_, k) => k).sort(() => Math.random() - .5).slice(0, NT);
-    P[u] = { n: players[u].name, c: players[u].color, x: TB[0] + Math.cos(a) * 58, y: TB[1] + Math.sin(a) * 58, a: 1, f: 1, imp: imps.has(u) ? 1 : 0, kcd: KCD0, ch: 0, chS: -1, asg: s.reduce((m, k) => m | 1 << k, 0), dn: 0, em: 0, gone: 0, iv: -1, cm: 0 };
+    const a = i / ids.length * 6.283, s = ST.map((_, k) => k).filter(k => !PRE.has(k)).sort(() => Math.random() - .5).slice(0, NT);
+    P[u] = { n: players[u].name, c: players[u].color, x: TB[0] + Math.cos(a) * 58, y: TB[1] + Math.sin(a) * 58, a: 1, f: 1, imp: imps.has(u) ? 1 : 0, kcd: KCD0, ch: 0, chS: -1, asg: s.reduce((m, k) => m | 1 << k | (ST[k][3] >= 0 ? 1 << ST[k][3] : 0), 0), dn: 0, em: 0, gone: 0, iv: -1, cm: 0, rh: -1 };
     I[u] = { ax: 0, ay: 0, uc: 0, kc: 0, wu: 0, wk: 0, v: null, vc: 0, sc: 0, wv: 0, ws: 0, sty: 0, td: 0, tc: 0 };
   });
   const ev = (px, py, ty, ...r) => evs.push({ e: [Math.round(px), Math.round(py), ty, ++evId, ...r], u: pubN + 4 });
@@ -176,7 +114,7 @@ export async function startAmog(env) {
     if (a[5] !== undefined) {                                             // conduit (V) et sabotage (1 / 2)
       const vc = +a[5], sc = +a[6], sty = +a[7];
       if (vc === vc && vc !== q.vc) { q.vc = vc; q.wv = .3; }
-      if (sc === sc && sc !== q.sc) { q.sc = sc; q.sty = sty === 2 ? 2 : sty === 1 ? 1 : 0; q.ws = .3; }
+      if (sc === sc && sc !== q.sc) { q.sc = sc; q.sty = sty >= 0 && sty < 40 ? sty | 0 : 0; q.ws = .3; }
     }
     if (a[8] !== undefined) {                                             // mini-jeu de tâche : « fini » (a[8]) ou « abandon » (a[9])
       const td = +a[8], tc = +a[9];
@@ -188,13 +126,13 @@ export async function startAmog(env) {
 
   const chk = () => {
     let ai = 0, ac = 0, tot = 0, dn = 0;
-    ids.forEach(u => { const q = P[u]; if (q.a && !q.gone) q.imp ? ai++ : ac++; if (!q.imp && !q.gone) { tot += NT; dn += pc(q.dn); } });
+    ids.forEach(u => { const q = P[u]; if (q.a && !q.gone) q.imp ? ai++ : ac++; if (!q.imp && !q.gone) { tot += pc(q.asg); dn += pc(q.dn); } });
     return !ai ? "c" : ai >= ac ? "i" : tot && dn >= tot ? "c" : null;
   };
 
   const meet = (u, bd) => {
     near = new Set(bd ? ids.filter(o => P[o].a && !P[o].gone && Math.hypot(P[o].x - bd.x, P[o].y - bd.y) < 190) : []);   // qui traînait près du corps
-    sab = null; CLOSED_DOORS.clear(); ids.forEach(o => { P[o].iv = -1; P[o].cm = 0; });          // une réunion annule le sabotage et ferme les conduits / caméras
+    sab = null; dcl = []; DMH = 0; dcd = Math.max(dcd, 6); ids.forEach(o => { P[o].iv = -1; P[o].cm = 0; P[o].rh = -1; });          // une réunion annule le sabotage et ferme les conduits / caméras
     ph = "m"; mid++; mt = MT; mcaller = ids.indexOf(u); mrep = bd ? 1 : 0; bodies = [];
     ids.forEach(o => { if (isBot(o) && !P[o].imp) near.forEach(k => { if (k !== o) { const sp = gb(o).sus; sp[k] = (sp[k] || 0) + (k === u ? 1 : 3); } }); });
     ev(P[u].x, P[u].y, 3, mcaller, mrep);
@@ -245,13 +183,15 @@ export async function startAmog(env) {
       const bd = bodies.find(b => Math.hypot(b.x - q.x, b.y - q.y) < 72); if (bd) { meet(u, bd); return true; }
       if (q.em < 1 && Math.hypot(q.x - TB[0], q.y - TB[1]) < 50) { q.em++; meet(u, null); return true; }
       if (!q.imp && sab) {                                                // réparer un sabotage
-        if (sab.t === "d") { const d = DOORS.find(z => z.id === sab.id); if (d && Math.hypot(q.x - (d.x + d.w / 2), q.y - (d.y + d.h / 2)) < 62) { sab = null; CLOSED_DOORS.clear(); ev(d.x + d.w / 2, d.y + d.h / 2, 2, ids.indexOf(u)); return true; } }
-        if (sab.t === "l" && Math.hypot(q.x - LP[0], q.y - LP[1]) < 44) { sab = null; ev(LP[0], LP[1], 2, ids.indexOf(u)); return true; }
-        if (sab.t === "r") for (let k = 0; k < 2; k++) if (!(sab.f >> k & 1) && Math.hypot(q.x - RP[k][0], q.y - RP[k][1]) < 44) { sab.f |= 1 << k; ev(RP[k][0], RP[k][1], 2, ids.indexOf(u)); if (sab.f === 3) sab = null; return true; }
+        const nr = p => Math.hypot(q.x - p[0], q.y - p[1]) < 44;
+        if (sab.t === "l" && nr(LP)) { sab = null; ev(LP[0], LP[1], 2, ids.indexOf(u)); return true; }
+        if (sab.t === "m" && nr(MP)) { sab = null; ev(MP[0], MP[1], 2, ids.indexOf(u)); return true; }
+        if (sab.t === "o") for (let k = 0; k < 2; k++) if (!(sab.f >> k & 1) && nr(OP[k])) { sab.f |= 1 << k; ev(OP[k][0], OP[k][1], 2, ids.indexOf(u)); if (sab.f === 3) sab = null; return true; }
+        if (sab.t === "r") for (let k = 0; k < 2; k++) if (nr(RP[k])) { if (q.rh !== k) ev(RP[k][0], RP[k][1], 2, ids.indexOf(u)); q.rh = k; q.chS = -1; return true; }   // réacteur : il faut MAINTENIR le panneau (rester immobile)
       }
       if (Math.hypot(q.x - CAMP[0], q.y - CAMP[1]) < 44) { q.cm = q.cm ? 0 : 1; q.chS = -1; return true; }   // caméras : on les regarde tant qu'on ne bouge pas
     }
-    if (q.chS < 0) for (let s = 0; s < ST.length; s++) if ((q.asg >> s & 1) && !(q.dn >> s & 1) && Math.hypot(q.x - ST[s][0], q.y - ST[s][1]) < 42) { q.chS = s; q.ch = 0; return true; }
+    if (q.chS < 0) for (let s = 0; s < ST.length; s++) if (av(q.asg, q.dn, s) && !(sab && sab.t === "m" && !q.imp) && Math.hypot(q.x - ST[s][0], q.y - ST[s][1]) < 42) { q.chS = s; q.ch = 0; return true; }
     return false;
   };
 
@@ -262,13 +202,22 @@ export async function startAmog(env) {
     for (let k = 0; k < VENTS.length; k++) if (Math.hypot(q.x - VENTS[k][0], q.y - VENTS[k][1]) < 36) { q.iv = k; q.chS = -1; q.cm = 0; ev(q.x, q.y, 4, ids.indexOf(u)); witness(u, q); return true; }
     return false;
   };
-  const sabotage = (u, ty) => {                                           // 0 = lumières, 1 = réacteur, 2 = portes
-    const q = P[u]; if (!q.imp || !q.a || q.gone || sab || sbcd > 0 || ph !== "p") return false;
-    if (ty === 2) {
-      const d = DOORS.slice().sort((a, b) => Math.hypot(a.x + a.w / 2 - q.x, a.y + a.h / 2 - q.y) - Math.hypot(b.x + b.w / 2 - q.x, b.y + b.h / 2 - q.y))[0];
-      sab = { t: "d", r: 9, id: d.id }; CLOSED_DOORS = new Set([d.id]);
-    } else sab = ty === 1 ? { t: "r", r: 35, f: 0 } : { t: "l", r: 25, f: 0 };
-    sbcd = 30; ev(0, 0, 5, ty); return true;
+  const dmask = () => dcl.reduce((m, d) => m | d.m, 0);
+  const pushOut = (q, d, ri) => {                                         // un joueur pris dans une porte qui se ferme est repoussé du côté le plus proche
+    const r = ROOMS[ri], rcx = r.x + r.w / 2, rcy = r.y + r.h / 2, cx = d[0] + d[2] / 2, cy = d[1] + d[3] / 2;
+    if (d[2] < d[3]) { const s = Math.sign(rcx - cx) || 1, o = d[2] / 2 + RAD + 2, a = cx + s * o, b = cx - s * o; q.x = Math.abs(q.x - a) < Math.abs(q.x - b) ? a : b; q.y = Math.max(d[1] + RAD, Math.min(d[1] + d[3] - RAD, q.y)); }
+    else { const s = Math.sign(rcy - cy) || 1, o = d[3] / 2 + RAD + 2, a = cy + s * o, b = cy - s * o; q.y = Math.abs(q.y - a) < Math.abs(q.y - b) ? a : b; q.x = Math.max(d[0] + RAD, Math.min(d[0] + d[2] - RAD, q.x)); }
+  };
+  const closeRoom = ri => {                                               // ferme toutes les portes d'une salle pendant DTT secondes
+    let m = 0; DOORS.forEach((d, i) => { if (d[4] === ri) m |= 1 << i; });
+    dcl.push({ m, r: DTT }); DMH = dmask();
+    ids.forEach(u => { const q = P[u]; if (q.gone || !q.a) return; DOORS.forEach((d, i) => { if ((m >> i & 1) && q.x > d[0] - RAD && q.x < d[0] + d[2] + RAD && q.y > d[1] - RAD && q.y < d[1] + d[3] + RAD) pushOut(q, d, ri); }); });
+  };
+  const sabotage = (u, ty) => {                                           // 0 lumières (25 s) · 1 réacteur (35 s, 2 panneaux tenus ensemble) · 2 O2 (35 s, 2 panneaux) · 3 communications (45 s) · 10+n : portes de la salle n
+    const q = P[u]; if (!q.imp || !q.a || q.gone || ph !== "p") return false;
+    if (ty >= 10) { const ri = ty - 10; if (dcd > 0 || ri >= ROOMS.length) return false; closeRoom(ri); dcd = DCD; ev(0, 0, 5, ty); return true; }
+    if (sab || sbcd > 0) return false;
+    sab = ty === 1 ? { t: "r", r: 35, f: 0 } : ty === 2 ? { t: "o", r: 35, f: 0 } : ty === 3 ? { t: "m", r: 45, f: 0 } : { t: "l", r: 25, f: 0 }; sbcd = 30; ev(0, 0, 5, ty); return true;
   };
 
   // bots : les équipiers font leurs tâches et signalent les corps ; les imposteurs chassent un équipier isolé
@@ -289,11 +238,14 @@ export async function startAmog(env) {
       if (bd) { if (!b.rep) b.rep = Math.random() < .7 ? 1 : -1; if (b.rep > 0) { if (bdd < 60) { i.wu = .3; return; } if (!b.p.length || b.k++ % 20 === 0) go(bd.x, bd.y); follow(q, i, b); return; } } else b.rep = 0;
     }
     if (q.a && !q.imp && sab) {                                           // sabotage : les équipiers (bots) courent réparer
-      const k0 = ids.indexOf(u);
-      if (sab.t === "r") { let k = k0 % 2; if (sab.f >> k & 1) k ^= 1; if (!(sab.f >> k & 1)) { const p = RP[k]; if (Math.hypot(q.x - p[0], q.y - p[1]) < 28) { i.wu = .3; return; } if (!b.p.length || b.k++ % 20 === 0) go(p[0], p[1]); follow(q, i, b); return; } }
-      else if (k0 % 3 === 0) { if (Math.hypot(q.x - LP[0], q.y - LP[1]) < 28) { i.wu = .3; return; } if (!b.p.length || b.k++ % 20 === 0) go(LP[0], LP[1]); follow(q, i, b); return; }
+      const k0 = ids.indexOf(u), goUse = p => { if (Math.hypot(q.x - p[0], q.y - p[1]) < 28) { if (!(sab.t === "r" && q.rh >= 0)) i.wu = .3; return; } if (!b.p.length || b.k++ % 20 === 0) go(p[0], p[1]); follow(q, i, b); };
+      if (sab.t === "r") { let k = k0 % 2; if ((sab.f >> k & 1) && q.rh !== k) k ^= 1; if (!(sab.f >> k & 1) || q.rh === k) { goUse(RP[k]); return; } }
+      else if (sab.t === "o") { let k = k0 % 2; if (sab.f >> k & 1) k ^= 1; if (!(sab.f >> k & 1)) { goUse(OP[k]); return; } }
+      else if (sab.t === "m") { if (k0 % 3 === 0) { goUse(MP); return; } }
+      else if (k0 % 3 === 0) { goUse(LP); return; }
     }
-    if (q.imp && q.a && !sab && sbcd <= 0 && Math.random() < .004) { i.ws = .3; i.sty = Math.random() < .22 ? 2 : Math.random() < .45 ? 1 : 0; }   // l'imposteur (bot) sabote de temps en temps
+    if (q.imp && q.a && !sab && sbcd <= 0 && Math.random() < .004) { i.ws = .3; i.sty = rnd([0, 0, 1, 2, 3]); }   // l'imposteur (bot) sabote de temps en temps
+    if (q.imp && q.a && dcd <= 0 && Math.random() < .002) { const tv = ids.filter(o => P[o].a && !P[o].imp && !P[o].gone); if (tv.length) { const z = P[rnd(tv)], ri = ROOMS.findIndex(r => z.x >= r.x && z.x <= r.x + r.w && z.y >= r.y && z.y <= r.y + r.h); if (ri >= 0) { i.ws = .3; i.sty = 10 + ri; } } }   // ou ferme les portes sur un équipier
     if (q.imp && q.kcd <= 0) {                                            // chasse : seulement ceux qu'il voit vraiment
       let v = null, vd = 300; ids.forEach(o => { const z = P[o]; if (z.a && !z.imp && !z.gone) { const d = Math.hypot(z.x - q.x, z.y - q.y); if (d < vd && los(q.x, q.y, z.x, z.y)) { vd = d; v = o; } } });
       if (v) {
@@ -303,8 +255,8 @@ export async function startAmog(env) {
       }
     }
     {                                                                     // tâches (les imposteurs font semblant, avec la barre de progression)
-      let s = -1; for (let k = 0; k < ST.length; k++) if ((q.asg >> k & 1) && !(q.dn >> k & 1)) { s = k; break; }
-      if (s >= 0 && !(q.imp && bodies.some(bd => Math.hypot(bd.x - q.x, bd.y - q.y) < 90))) { if (Math.hypot(q.x - ST[s][0], q.y - ST[s][1]) < 28) { i.wu = .3; return; } if (!b.p.length || b.k++ % 30 === 0) go(ST[s][0], ST[s][1]); follow(q, i, b); return; }
+      let s = -1; for (let k = 0; k < ST.length; k++) if (av(q.asg, q.dn, k)) { s = k; break; }
+      if (s >= 0 && !(sab && sab.t === "m" && !q.imp) && !(q.imp && bodies.some(bd => Math.hypot(bd.x - q.x, bd.y - q.y) < 90))) { if (Math.hypot(q.x - ST[s][0], q.y - ST[s][1]) < 28) { i.wu = .3; return; } if (!b.p.length || b.k++ % 30 === 0) go(ST[s][0], ST[s][1]); follow(q, i, b); return; }
     }
     if (!b.p.length) {
       if (b.idle) {
@@ -321,7 +273,9 @@ export async function startAmog(env) {
     if (ph === "p") {
       t += DT;
       if (sbcd > 0) sbcd = Math.max(0, sbcd - DT);
-      if (sab && (sab.r -= DT) <= 0) { if (sab.t === "r") over = "i"; sab = null; CLOSED_DOORS.clear(); }   // sabotage expiré : les portes se rouvrent
+      if (dcd > 0) dcd = Math.max(0, dcd - DT);
+      if (dcl.length) { dcl.forEach(d => d.r -= DT); if (dcl.some(d => d.r <= 0)) { dcl = dcl.filter(d => d.r > 0); DMH = dmask(); } }
+      if (sab && (sab.r -= DT) <= 0) { if (sab.t === "r" || sab.t === "o") over = "i"; sab = null; }   // réacteur ou O2 non réparé : les imposteurs gagnent   // réacteur non réparé : les imposteurs gagnent
       ids.forEach(u => { if (isBot(u)) bot(u); });
       ids.forEach(u => {
         if (ph !== "p") return;
@@ -343,6 +297,10 @@ export async function startAmog(env) {
         }
         if (q.chS < 0 && mg > .02) { move(q, i.ax * SPD * DT, i.ay * SPD * DT); if (Math.abs(i.ax) > .1) q.f = i.ax > 0 ? 1 : -1; }
       });
+      if (sab && sab.t === "r") {                                         // réacteur : les 2 panneaux doivent être tenus en même temps
+        let h = 0; ids.forEach(u => { const q = P[u]; if (q.rh >= 0) { if (!q.a || q.gone || q.imp || Math.hypot(q.x - RP[q.rh][0], q.y - RP[q.rh][1]) > 52 || Math.hypot(I[u].ax, I[u].ay) > .3) q.rh = -1; else h |= 1 << q.rh; } });
+        sab.f = h; if (h === 3) sab = null;
+      } else ids.forEach(u => { P[u].rh = -1; });
       over = over || chk();
     } else if (ph === "m") {
       mt -= DT;
@@ -356,12 +314,12 @@ export async function startAmog(env) {
 
   const pub = (x = {}) => {
     pubN++; evs = evs.filter(o => o.u >= pubN); kf = kf.filter(e => e[1] > pubN);
-    let tot = 0, dn = 0; ids.forEach(u => { const q = P[u]; if (!q.imp && !q.gone) { tot += NT; dn += pc(q.dn); } });
+    let tot = 0, dn = 0; ids.forEach(u => { const q = P[u]; if (!q.imp && !q.gone) { tot += pc(q.asg); dn += pc(q.dn); } });
     const o = {
       k: "amog", t: +t.toFixed(1), ph,
       p: ids.map(u => { const q = P[u]; return [Math.round(q.x), Math.round(q.y), q.a, q.f, Math.ceil(q.kcd), (q.chS >= 0 ? Math.max(1, Math.min(isBot(u) ? 100 : 90, Math.round(q.ch / (TTS[q.chS] || TT) * 100))) : 0), q.iv >= 0 ? 1 : 0]; }),
       bd: bodies.map(b => [Math.round(b.x), Math.round(b.y), b.i]), ts: ids.map(u => [P[u].asg, P[u].dn]), tp: [dn, tot],
-      ro: ids.map(u => P[u].imp ? 1 : 0).join(""), ev: evs.map(o2 => o2.e), kf: kf.map(e => e[0]), cm: ids.map((u, i) => P[u].cm ? i : -1).filter(i => i >= 0), sb: sab ? [sab.t === "r" ? 1 : sab.t === "d" ? 2 : 0, Math.ceil(sab.r), sab.t === "d" ? sab.id : sab.f] : 0, dr: sab && sab.t === "d" ? [sab.id, Math.ceil(sab.r)] : 0, sc: Math.ceil(sbcd), ...x
+      ro: ids.map(u => P[u].imp ? 1 : 0).join(""), ev: evs.map(o2 => o2.e), kf: kf.map(e => e[0]), cm: ids.map((u, i) => P[u].cm ? i : -1).filter(i => i >= 0), sb: sab ? [SABI[sab.t], Math.ceil(sab.r), sab.f] : 0, sc: Math.ceil(sbcd), dr: dmask(), dc: Math.ceil(dcd), ...x
     };
     if (ph === "m") o.mt = { r: Math.ceil(mt), id: mid, c: mcaller, b: mrep, v: ids.map(u => I[u].v != null ? 1 : 0) };
     if (ph === "r") o.rs = rs;
@@ -404,14 +362,14 @@ const mixC = {};
 const roomAt = (px, py) => { const r = ROOMS.find(a => px >= a.x && px <= a.x + a.w && py >= a.y && py <= a.y + a.h); return r ? r.n : "Couloir"; };
 const mix = (h, k) => { const key = h + k; if (mixC[key]) return mixC[key]; const m = hex(h).map(v => Math.round(k > 0 ? v * (1 - k) : v + (255 - v) * -k)); return mixC[key] = `rgb(${m[0]},${m[1]},${m[2]})`; };
 const rr = (g, px, py, w, h, r) => { g.beginPath(); g.moveTo(px + r, py); g.arcTo(px + w, py, px + w, py + h, r); g.arcTo(px + w, py + h, px, py + h, r); g.arcTo(px, py + h, px, py, r); g.arcTo(px, py, px + w, py, r); g.closePath(); };
-const USEB = { x: 730, y: 488, r: 48 }, KILLB = { x: 622, y: 500, r: 38 }, VENTB = { x: 622, y: 436, r: 26 }, S1B = { x: 548, y: 508, r: 26 }, S2B = { x: 548, y: 446, r: 26 }, S3B = { x: 476, y: 508, r: 26 };
+const USEB = { x: 730, y: 488, r: 48 }, KILLB = { x: 622, y: 500, r: 38 }, VENTB = { x: 622, y: 436, r: 26 }, S1B = { x: 548, y: 508, r: 26 }, S2B = { x: 548, y: 446, r: 26 };
 let mpL = [400, 285], ghL = false;   // ma position et mon état au dernier dessin (pour les effets visibles seulement de près)
 
 export function createAmogClient(env) {
   const { R: RF, set, onValue, $, beep, getMe, getCode } = env;
   const cv = $("cv"), x = cv.getContext("2d"), ov = $("ov");
   let active = false, raf = 0, snaps = [], pl = null, lastEv = 0, parts = [], useSeq = 0, killSeq = 0, vote = "", sentStr = "", sentAt = 0;
-  let mg = null, mgDis = false, doneSeq = 0, cancelSeq = 0;
+  let mg = null, mgDis = false, doneSeq = 0, cancelSeq = 0, sabMenu = false, cdm = 0;
   let stick = null, tPrev = 0, myIdx = -1, ovT = "", bg = null, mid = 0, rects = [], ls = null;
   const keys = new Set();
   let bigMap = false, flash = null, floats = [], lastPh = "", mStart = 0, rStart = 0, mMax = 0, lastTick = -1; const dustT = {};
@@ -431,8 +389,17 @@ export function createAmogClient(env) {
   const doUse = () => { if (!active || !ls || ls.ph !== "p") return; useSeq++; sendInput(performance.now(), true); };
   const doKill = () => { if (!active || !ls || ls.ph !== "p" || !isImp()) return; killSeq++; sendInput(performance.now(), true); };
   const doVent = () => { if (!active || !ls || ls.ph !== "p" || !isImp()) return; ventSeq++; sendInput(performance.now(), true); };
-  const doSab = t => { if (!active || !ls || ls.ph !== "p" || !isImp() || ls.sb || ls.sc > 0) return; sabSeq++; sabTy = t; sendInput(performance.now(), true); };
+  const doSab = t => { if (!active || !ls || ls.ph !== "p" || !isImp() || (t >= 10 ? ls.dc > 0 : (ls.sb || ls.sc > 0))) return; sabSeq++; sabTy = t; sendInput(performance.now(), true); };
   const hit = (p, b) => Math.hypot(p.x - b.x, p.y - b.y) < b.r + 8;
+  const sabPts = sb => sb[0] === 0 ? [LP] : sb[0] === 1 ? RP.filter((p, i) => !(sb[2] >> i & 1)) : sb[0] === 2 ? OP.filter((p, i) => !(sb[2] >> i & 1)) : [MP];   // panneaux à réparer
+  const sabText = sb => [`💡 Lumières coupées : répare le panneau ⚡ (${sb[1]} s)`, `☢️ RÉACTEUR : ${sb[1]} s : maintiens les 2 panneaux en même temps (reste immobile) !`, `🫁 O2 : ${sb[1]} s : active les 2 panneaux (O2 et Admin) !`, `📡 Communications coupées : répare le panneau (${sb[1]} s)`][sb[0]] || "";
+  const losc = (ax, ay, bx, by) => { const n = Math.ceil(Math.hypot(bx - ax, by - ay) / 8); for (let i = 1; i < n; i++) { const f = i / n, px = ax + (bx - ax) * f, py = ay + (by - ay) * f; if (!at(px, py) || (cdm && dblk(cdm, px, py))) return false; } return true; };   // ligne de vue côté client : murs et portes fermées
+  const sabItems = () => {                                                // icônes du menu de sabotage (positions à l'écran)
+    const k = .5, ox = (W - WW * k) / 2, oy = 50, sd = !!ls.sb || ls.sc > 0, dd = ls.dc > 0;
+    const it = [{ t: 0, p: LP, ic: "💡", off: sd }, { t: 1, p: RP[0], ic: "☢️", off: sd }, { t: 2, p: OP[0], ic: "🫁", off: sd }, { t: 3, p: MP, ic: "📡", off: sd }];
+    ROOMS.forEach((r, i) => it.push({ t: 10 + i, p: [r.x + r.w / 2, r.y + r.h / 2], ic: "🚪", off: dd, nm: r.n }));
+    return it.map(o => ({ ...o, sx: ox + o.p[0] * k, sy: oy + o.p[1] * k }));
+  };
 
   addEventListener("keydown", e => {
     if (!active || /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
@@ -441,7 +408,8 @@ export function createAmogClient(env) {
     if (e.key === "k" || e.key === "K" || e.key === "Shift") { e.preventDefault(); if (!e.repeat) doKill(); return; }
     if (e.key === "m" || e.key === "M") { e.preventDefault(); if (!e.repeat && ls && ls.ph === "p") bigMap = !bigMap; return; }
     if (e.key === "v" || e.key === "V") { e.preventDefault(); if (!e.repeat) doVent(); return; }
-    if (e.key === "1" || e.key === "2" || e.key === "3") { if (!e.repeat) doSab(+e.key - 1); return; }
+    if (/^[1-4]$/.test(e.key)) { if (!e.repeat) doSab(+e.key - 1); return; }
+    if (e.key === "g" || e.key === "G") { e.preventDefault(); if (!e.repeat && isImp() && ls && ls.ph === "p") sabMenu = !sabMenu; return; }
     const k = KEYS[e.key.length > 1 ? e.key : e.key.toLowerCase()]; if (k) { e.preventDefault(); keys.add(k); }
   });
   addEventListener("keyup", e => { const k = KEYS[e.key.length > 1 ? e.key : e.key.toLowerCase()]; if (k) keys.delete(k); });
@@ -461,15 +429,14 @@ export function createAmogClient(env) {
       if (!mg.fin && q.x >= 0 && q.x <= MGW && q.y >= 44 && q.y <= MGH - 46) { mg.drag = e.pointerId; try { cv.setPointerCapture(e.pointerId); } catch { } if (mg.g.down) mg.g.down(q); }
       return;
     }
+    if (sabMenu) { const it = sabItems().find(o => Math.hypot(p.x - o.sx, p.y - o.sy) < 20); sabMenu = false; if (it && !it.off) doSab(it.t); return; }
     if (bigMap) { bigMap = false; return; }
     if (ls && ls.ph === "p" && p.x >= 7 && p.x <= 207 && p.y >= H - 150 && p.y <= H - 7) { bigMap = true; return; }   // un appui sur la mini-carte l'agrandit
     if (e.button === 2) return doUse();
     if (hit(p, USEB)) return doUse();
     if (isImp() && hit(p, KILLB)) return doKill();
     if (isImp() && hit(p, VENTB)) return doVent();
-    if (isImp() && hit(p, S1B)) return doSab(0);
-    if (isImp() && hit(p, S2B)) return doSab(1);
-    if (isImp() && hit(p, S3B)) return doSab(2);
+    if (isImp() && hit(p, S1B)) { sabMenu = true; return; }
     if (stick) return;
     try { cv.setPointerCapture(e.pointerId); } catch { }
     stick = { id: e.pointerId, ox: p.x, oy: p.y, dx: 0, dy: 0 };
@@ -493,7 +460,7 @@ export function createAmogClient(env) {
     if (ty === 1) { spark(ex, ey, 14, "#ff3b5c", 160); beep(90, .3, "sawtooth", .06, 40); if (e[4] === myIdx) { vib(200); flash = { t: tNow, c: "255,30,60", d: 1100, a: .55, m: "💀 Tu as été éliminé" }; } else if (Math.hypot(ex - mpL[0], ey - mpL[1]) < 260) flash = { t: tNow, c: "255,30,60", d: 380, a: .22 }; }
     else if (ty === 2) { spark(ex, ey, 6, "#3ee6c4", 90); if (e[4] === myIdx) { beep(660, .12, "sine", .05, 990); floats.push({ x: ex, y: ey - 30, t: "✔ Fait !", l: 1 }); } }
     else if (ty === 3) { beep(300, .6, "sawtooth", .06, 700); vib(150); }
-    else if (ty === 4) { if (ghL || (Math.hypot(ex - mpL[0], ey - mpL[1]) < VIS && los(mpL[0], mpL[1], ex, ey))) { spark(ex, ey, 10, "#8a85b8", 70); beep(140, .18, "triangle", .05, 70); } }   // quelqu'un entre ou sort d'un conduit
+    else if (ty === 4) { if (ghL || (Math.hypot(ex - mpL[0], ey - mpL[1]) < VIS && losc(mpL[0], mpL[1], ex, ey))) { spark(ex, ey, 10, "#8a85b8", 70); beep(140, .18, "triangle", .05, 70); } }   // quelqu'un entre ou sort d'un conduit
     else if (ty === 5) { beep(220, .7, "square", .07, 120); vib(120); if (!flash) flash = { t: tNow, c: "255,170,30", d: 700, a: .3 }; }                                    // sabotage !
   };
 
@@ -506,8 +473,9 @@ export function createAmogClient(env) {
   }
 
   // ----- dessin -----
-  const KIND = ["align", "wires", "cool", "crate", "scan", "dl", "calib", "purge", "fuel", "trash", "shield", "up", "sample", "ant"];   // type d'animation de chaque poste
-  const TCOL = ["#ff9f43", "#ffd23f", "#ff6b81", "#b79bff", "#3ee6c4", "#4cc9f0", "#7ae582", "#4cc9f0", "#ff9f43", "#ffd23f", "#b79bff", "#7ae582", "#ff6b81", "#3ee6c4"];   // couleur de chaque poste de tâche
+  const KIND = ["align", "align", "wires", "wires", "wires", "wires", "wires", "wires", "fuel", "fuel", "fuel", "calib", "chart", "steer", "filter", "aster", "divert", "breaker", "breaker", "breaker", "breaker", "trash", "trash", "chute", "sample", "scan", "shield", "reactor", "card", "dl", "up"];   // mini-jeu / animation de chaque poste
+  const KCOL = { align: "#ff9f43", wires: "#ffd23f", fuel: "#ff9f43", calib: "#7ae582", chart: "#4cc9f0", steer: "#4cc9f0", filter: "#7ae582", aster: "#ff6b81", divert: "#ffd23f", breaker: "#ffd23f", trash: "#b79bff", chute: "#b79bff", sample: "#ff6b81", scan: "#3ee6c4", shield: "#b79bff", reactor: "#ff3b5c", card: "#4c8dff", dl: "#4cc9f0", up: "#7ae582" };
+  const TCOL = KIND.map(k => KCOL[k]);                                    // couleur de chaque poste de tâche
   const RTINT = ["#ff8a3d", "#ff3b5c", "#3ee6c4", "#ff8a3d", "#3ee6c4", "#4c8dff", "#ff6b81", "#7ae582", "#4cc9f0", "#ffd23f", "#4cc9f0", "#b79bff", "#c79a52", "#ffd23f"];                         // ambiance de chaque salle
   function bolt(g, cx, cy, s2, col) { g.fillStyle = col; g.beginPath(); [[.25, -1], [-.55, .1], [-.08, .1], [-.28, 1], [.55, -.2], [.08, -.2]].forEach((p, i) => g[i ? "lineTo" : "moveTo"](cx + p[0] * s2, cy + p[1] * s2)); g.closePath(); g.fill(); }
   function rad(g, cx, cy, r, col) { g.fillStyle = col; for (let k = 0; k < 3; k++) { const an = k * 2.0944 - 1.5708; g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, r, an - .5, an + .5); g.closePath(); g.fill(); } g.beginPath(); g.arc(cx, cy, r * .22, 0, 7); g.fill(); }
@@ -527,87 +495,44 @@ export function createAmogClient(env) {
     const sp = g.createRadialGradient(WW / 2, WH / 2, 100, WW / 2, WH / 2, WW * .7); sp.addColorStop(0, "#14103a"); sp.addColorStop(1, "#04030d"); g.fillStyle = sp; g.fillRect(0, 0, WW, WH);
     for (let i = 0; i < 320; i++) { const r = rnd() < .08 ? 1.7 : .6 + rnd() * .8; g.globalAlpha = .25 + rnd() * .6; g.fillStyle = rnd() < .2 ? "#ffd9a8" : "#cfd6ff"; g.beginPath(); g.arc(rnd() * WW, rnd() * WH, r, 0, 7); g.fill(); }   // espace étoilé autour du vaisseau
     g.globalAlpha = 1;
-    // Coque et sol calculés depuis les mêmes contours polygonaux.
-    const hullCanvas=document.createElement("canvas");hullCanvas.width=WW;hullCanvas.height=WH;
-    const hg=hullCanvas.getContext("2d");hg.beginPath();MAP_POLYS.forEach(p=>polygonPath(hg,p));
-    hg.fillStyle="#fff";hg.fill("nonzero");hg.lineJoin="round";hg.lineCap="round";hg.lineWidth=24;hg.strokeStyle="#fff";hg.stroke();
-    const wallCanvas=document.createElement("canvas");wallCanvas.width=WW;wallCanvas.height=WH;
-    const wg=wallCanvas.getContext("2d");wg.drawImage(hullCanvas,0,0);wg.globalCompositeOperation="source-in";
-    const wallGrad=wg.createLinearGradient(0,0,WW,WH);wallGrad.addColorStop(0,"#7771c9");wallGrad.addColorStop(.5,"#39356f");wallGrad.addColorStop(1,"#6560ad");
-    wg.fillStyle=wallGrad;wg.fillRect(0,0,WW,WH);
-    g.save();g.shadowColor="rgba(0,0,0,.78)";g.shadowBlur=24;g.drawImage(wallCanvas,0,0);g.shadowBlur=0;g.drawImage(wallCanvas,0,0);g.restore();
-    g.save();g.beginPath();MAP_POLYS.forEach(p=>polygonPath(g,p));g.clip();
-    const floorGrad=g.createLinearGradient(0,0,WW,WH);floorGrad.addColorStop(0,"#28264e");floorGrad.addColorStop(1,"#17172f");
-    g.fillStyle=floorGrad;g.fillRect(0,0,WW,WH);g.strokeStyle="rgba(174,181,255,.055)";g.lineWidth=1;
-    for(let xx=0;xx<WW;xx+=40){g.beginPath();g.moveTo(xx+.5,0);g.lineTo(xx+.5,WH);g.stroke();}
-    for(let yy=0;yy<WH;yy+=40){g.beginPath();g.moveTo(0,yy+.5);g.lineTo(WW,yy+.5);g.stroke();}g.restore();
-    ROOM_POLYS.forEach((r,i)=>{g.beginPath();polygonPath(g,r.p);g.strokeStyle="rgba(151,158,235,.62)";g.lineWidth=3;g.stroke();const b=bbox(r.p);g.fillStyle=RTINT[i];g.globalAlpha=.75;const count=Math.max(1,Math.floor(b.w/70));for(let k=0;k<count;k++)g.fillRect(b.x+(k+.5)*b.w/count-5,b.y+5,10,3);g.globalAlpha=1;});
-    // Mobilier épuré : éléments courts, centrés et contenus dans chaque salle.
+    g.save(); g.shadowColor = "rgba(0,0,0,.7)"; g.shadowBlur = 30; g.fillStyle = "#26225a"; FLOOR.forEach(a => g.fillRect(a.x - 16, a.y - 16, a.w + 32, a.h + 32)); g.restore();   // coque : plusieurs couches pour le relief
+    g.fillStyle = "#4a4496"; FLOOR.forEach(a => g.fillRect(a.x - 11, a.y - 11, a.w + 22, a.h + 22));
+    g.fillStyle = "#2f2b6e"; FLOOR.forEach(a => g.fillRect(a.x - 6, a.y - 6, a.w + 12, a.h + 12));
+    g.fillStyle = "#6e66c8"; FLOOR.forEach(a => g.fillRect(a.x - 2, a.y - 2, a.w + 4, a.h + 4));
+    const fl = g.createLinearGradient(0, 0, WW, WH); fl.addColorStop(0, "#221f4a"); fl.addColorStop(1, "#191638");
+    g.fillStyle = fl; FLOOR.forEach(a => g.fillRect(a.x, a.y, a.w, a.h));
+    g.save(); g.beginPath(); FLOOR.forEach(a => g.rect(a.x, a.y, a.w, a.h)); g.clip();
+    ROOMS.forEach((r, i) => { const rg = g.createRadialGradient(r.x + r.w / 2, r.y + r.h / 2, 10, r.x + r.w / 2, r.y + r.h / 2, r.w * .75); rg.addColorStop(0, RTINT[i] + "33"); rg.addColorStop(1, RTINT[i] + "00"); g.fillStyle = rg; g.fillRect(r.x, r.y, r.w, r.h); });
+    g.strokeStyle = "rgba(160,150,255,.07)"; g.lineWidth = 1;
+    for (let i = 0; i < WW; i += 50) { g.beginPath(); g.moveTo(i + .5, 0); g.lineTo(i + .5, WH); g.stroke(); }
+    for (let j = 0; j < WH; j += 50) { g.beginPath(); g.moveTo(0, j + .5); g.lineTo(WW, j + .5); g.stroke(); }
+    g.fillStyle = "rgba(255,255,255,.025)"; for (let i = 0; i < WW; i += 100) for (let j = 0; j < WH; j += 100) g.fillRect(i, j, 50, 50);   // damier discret
+    CORR.forEach(cr => { g.strokeStyle = "rgba(62,230,196,.28)"; g.lineWidth = 3; g.setLineDash([18, 14]); g.beginPath(); if (cr.w >= cr.h) { g.moveTo(cr.x + 10, cr.y + cr.h / 2); g.lineTo(cr.x + cr.w - 10, cr.y + cr.h / 2); } else { g.moveTo(cr.x + cr.w / 2, cr.y + 10); g.lineTo(cr.x + cr.w / 2, cr.y + cr.h - 10); } g.stroke(); g.setLineDash([]); });
+    const ringAt = (cx, cy, r, col, lw, al) => { g.globalAlpha = al; g.strokeStyle = col; g.lineWidth = lw; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.stroke(); g.globalAlpha = 1; };
     const rc = n => ROOMS.find(r => r.n === n);
-    const detail = (name, color, count = 2) => {
-      const r = rc(name); if (!r) return;
-      const maxW = Math.max(18, Math.min(r.w * .48, 62));
-      const maxH = Math.max(12, Math.min(r.h * .18, 24));
-      for (let k = 0; k < count; k++) {
-        const px = r.x + r.w * ((k + 1) / (count + 1));
-        const py = r.y + r.h * .56;
-        g.fillStyle = "rgba(4,7,20,.72)"; rr(g, px - maxW/2 + 2, py - maxH/2 + 3, maxW, maxH, 5); g.fill();
-        g.fillStyle = "#24294a"; rr(g, px - maxW/2, py - maxH/2, maxW, maxH, 5); g.fill();
-        g.strokeStyle = color; g.lineWidth = 2; g.stroke();
-        g.fillStyle = color; g.globalAlpha = .6; rr(g, px - maxW*.34, py - maxH*.28, maxW*.68, maxH*.28, 2); g.fill(); g.globalAlpha = 1;
-      }
-    };
-    detail("Réacteur", "#ff6b81", 1); detail("Moteur haut", "#ff9f43", 1);
-    detail("Moteur bas", "#ff9f43", 1); detail("Sécurité", "#3ee6c4", 2);
-    detail("Médbay", "#3ee6c4", 2); detail("Armes", "#ff6b81", 1);
-    detail("O2", "#7ae582", 1); detail("Navigation", "#4cc9f0", 2);
-    detail("Admin", "#ffd23f", 1); detail("Électricité", "#ffd23f", 2);
-    detail("Stockage", "#d4a83b", 2); detail("Comms", "#b79bff", 1);
-    detail("Boucliers", "#4cc9f0", 2);
-    // Table centrale et bouton d'urgence de la Cafétéria.
-    { const r = rc("Cafétéria"), cx = r.x + r.w/2, cy = r.y + r.h/2;
-      g.fillStyle = "#222348"; g.beginPath(); g.ellipse(cx, cy, Math.min(r.w*.16, 58), Math.min(r.h*.16, 42), 0, 0, 7); g.fill();
-      g.strokeStyle = "#8b83d0"; g.lineWidth = 4; g.stroke();
-      g.fillStyle = "#ff667f"; g.beginPath(); g.arc(TB[0], TB[1], 13, 0, 7); g.fill();
-      g.strokeStyle = "#ffc0cb"; g.lineWidth = 3; g.stroke();
-    }
+    { const r = rc("Moteur haut"), r2 = rc("Moteur bas"); [r, r2].forEach(rm => [[.3, .6], [.72, .6]].forEach(([fx, fy]) => { const cx = rm.x + rm.w * fx, cy = rm.y + rm.h * fy; ringAt(cx, cy, 44, "#ff8a3d", 4, .35); ringAt(cx, cy, 28, "#ff8a3d", 2, .3); ringAt(cx, cy, 12, "#ffd23f", 3, .4); g.strokeStyle = "#ff8a3d"; g.lineWidth = 3; g.globalAlpha = .3; for (let k = 0; k < 6; k++) { const an = k * 1.047; g.beginPath(); g.moveTo(cx + Math.cos(an) * 14, cy + Math.sin(an) * 14); g.lineTo(cx + Math.cos(an) * 28, cy + Math.sin(an) * 28); g.stroke(); } g.globalAlpha = 1; })); }   // Moteurs : turbines peintes
+    ringAt(TB[0], TB[1], 118, "#4c8dff", 5, .25); ringAt(TB[0], TB[1], 92, "#4c8dff", 2, .3); ringAt(TB[0], TB[1], 62, "#9bb8ff", 2, .25);   // Cafétéria : tapis rond
+    { const r = rc("Électricité"); g.strokeStyle = "rgba(255,210,63,.3)"; g.lineWidth = 4; g.beginPath(); g.moveTo(r.x, r.y + r.h - 50); g.lineTo(LP[0], r.y + r.h - 50); g.lineTo(LP[0], LP[1] + 18); g.moveTo(r.x + r.w, r.y + 40); g.lineTo(LP[0] + 50, r.y + 40); g.lineTo(LP[0] + 50, LP[1]); g.lineTo(LP[0] + 20, LP[1]); g.stroke(); }   // Électricité : conduits
+    { const r = rc("Réacteur"), cx = r.x + r.w * .62, cy = r.y + r.h * .5, cg = g.createRadialGradient(cx, cy, 5, cx, cy, 90); cg.addColorStop(0, "rgba(255,59,92,.45)"); cg.addColorStop(1, "rgba(255,59,92,0)"); g.fillStyle = cg; g.fillRect(cx - 90, cy - 90, 180, 180); ringAt(cx, cy, 50, "#ff3b5c", 4, .4); ringAt(cx, cy, 32, "#ff3b5c", 2, .4); rad(g, cx, cy, 22, "rgba(255,80,110,.5)"); }   // Réacteur : cœur
+    { const r = rc("Stockage"); g.strokeStyle = "rgba(232,185,35,.45)"; g.lineWidth = 3;[[.08, .08, .38, .22], [.54, .08, .38, .22], [.08, .72, .38, .2], [.54, .72, .38, .2]].forEach(([fx, fy, fw, fh]) => { const bx = r.x + r.w * fx, by = r.y + r.h * fy, bw = r.w * fw, bh = r.h * fh; g.strokeRect(bx, by, bw, bh); g.globalAlpha = .5; g.beginPath(); g.moveTo(bx, by); g.lineTo(bx + bw, by + bh); g.moveTo(bx + bw, by); g.lineTo(bx, by + bh); g.stroke(); g.globalAlpha = 1; }); }   // Stockage : zones de caisses peintes
+    { const r = rc("Médbay"), cx = r.x + r.w * .62, cy = r.y + r.h * .5; ringAt(cx, cy, 36, "#3ee6c4", 3, .35); g.fillStyle = "rgba(62,230,196,.3)"; g.fillRect(cx - 5, cy - 16, 10, 32); g.fillRect(cx - 16, cy - 5, 32, 10); }   // Médbay : croix et scanner
+    { const r = rc("Armes"), cx = r.x + r.w / 2, cy = r.y + r.h * .45; ringAt(cx, cy, 34, "#ff6b81", 3, .4); ringAt(cx, cy, 20, "#ff6b81", 2, .4); ringAt(cx, cy, 6, "#ff6b81", 3, .5); }   // Armes : cible
+    { const r = rc("O2"), cx = r.x + r.w / 2, cy = r.y + r.h / 2; ringAt(cx - 22, cy, 14, "#7ae582", 3, .4); ringAt(cx + 22, cy, 14, "#7ae582", 3, .4); }   // O2 : deux réservoirs
+    { const r = rc("Navigation"), cx = r.x + r.w / 2, cy = r.y + r.h / 2; ringAt(cx, cy, 36, "#4cc9f0", 3, .4); g.strokeStyle = "#4cc9f0"; g.globalAlpha = .35; g.lineWidth = 2; g.beginPath(); g.moveTo(cx - 36, cy); g.lineTo(cx + 36, cy); g.moveTo(cx, cy - 36); g.lineTo(cx, cy + 36); g.stroke(); g.globalAlpha = 1; }   // Navigation : cadran
+    { const r = rc("Admin"), cx = r.x + r.w / 2, cy = r.y + r.h / 2; ringAt(cx, cy, 34, "#ffd23f", 3, .35); ringAt(cx, cy, 20, "#ffd23f", 2, .35); }   // Admin : table holographique
+    { const r = rc("Boucliers"), cx = r.x + r.w / 2, cy = r.y + r.h / 2; g.strokeStyle = "#4cc9f0"; g.globalAlpha = .4; g.lineWidth = 3; g.beginPath(); for (let k = 0; k < 6; k++) { const an = k * 1.0472 - 1.5708; g.lineTo(cx + Math.cos(an) * 44, cy + Math.sin(an) * 44); } g.closePath(); g.stroke(); g.globalAlpha = 1; }   // Boucliers : hexagone
+    { const r = rc("Comms"), cx = r.x + r.w / 2, cy = r.y + r.h * .55; ringAt(cx, cy, 30, "#b79bff", 3, .35); ringAt(cx, cy, 18, "#b79bff", 2, .35); }   // Communications : antenne
+    { const r = rc("Sécurité"); g.fillStyle = "rgba(62,230,196,.2)"; for (let k = 0; k < 3; k++) g.fillRect(r.x + 14 + k * 44, r.y + r.h - 42, 36, 22); }   // Sécurité : rangée d'écrans
     const m = document.createElement("canvas"); m.width = WW; m.height = WH; const mg = m.getContext("2d");                      // ombre portée des murs sur le sol
-    mg.fillStyle="#000";mg.fillRect(0,0,WW,WH);mg.globalCompositeOperation="destination-out";mg.beginPath();MAP_POLYS.forEach(p=>polygonPath(mg,p));mg.fill("nonzero");
+    mg.fillStyle = "#000"; mg.fillRect(0, 0, WW, WH); mg.globalCompositeOperation = "destination-out"; FLOOR.forEach(a => mg.fillRect(a.x, a.y, a.w, a.h));
     g.shadowColor = "rgba(0,0,0,.75)"; g.shadowBlur = 26; g.drawImage(m, 0, 0); g.shadowBlur = 0;
+    g.restore();
     ROOMS.forEach((r, i) => {                                             // voyants lumineux le long des murs
       g.fillStyle = RTINT[i]; g.globalAlpha = .85;
       for (let px = r.x + 28; px < r.x + r.w - 20; px += 48) { if (!at(px + 9, r.y - 8)) g.fillRect(px, r.y - 9, 18, 3); if (!at(px + 9, r.y + r.h + 8)) g.fillRect(px, r.y + r.h + 6, 18, 3); }
       g.globalAlpha = 1;
     });
     g.font = "800 22px 'Bricolage Grotesque',sans-serif"; g.textAlign = "center"; g.fillStyle = "rgba(255,255,255,.14)"; ROOMS.forEach(r => g.fillText(r.n.toUpperCase(), r.x + r.w / 2, r.y + r.h - 18));
-    // Seuils et cadres de portes : la géométrie reste alignée sur les ouvertures des couloirs.
-    DOORS.forEach(d => {
-      const horizontal = d.w >= d.h, cx = d.x + d.w / 2, cy = d.y + d.h / 2;
-      g.save();
-      g.lineCap = "round";
-      g.strokeStyle = "rgba(8,7,28,.95)"; g.lineWidth = 9;
-      g.beginPath();
-      if (horizontal) { g.moveTo(d.x - 5, cy); g.lineTo(d.x + d.w + 5, cy); }
-      else { g.moveTo(cx, d.y - 5); g.lineTo(cx, d.y + d.h + 5); }
-      g.stroke();
-      g.strokeStyle = "rgba(167,157,255,.9)"; g.lineWidth = 3;
-      g.beginPath();
-      if (horizontal) { g.moveTo(d.x - 5, cy - 5); g.lineTo(d.x + d.w + 5, cy - 5); g.moveTo(d.x - 5, cy + 5); g.lineTo(d.x + d.w + 5, cy + 5); }
-      else { g.moveTo(cx - 5, d.y - 5); g.lineTo(cx - 5, d.y + d.h + 5); g.moveTo(cx + 5, d.y - 5); g.lineTo(cx + 5, d.y + d.h + 5); }
-      g.stroke();
-      const led = g.createRadialGradient(cx, cy, 1, cx, cy, 15);
-      led.addColorStop(0, "rgba(62,230,196,.5)"); led.addColorStop(1, "rgba(62,230,196,0)");
-      g.fillStyle = led; g.beginPath(); g.arc(cx, cy, 15, 0, 7); g.fill();
-      g.fillStyle = "#7af0d1"; g.beginPath(); g.arc(cx, cy, 3.5, 0, 7); g.fill();
-      g.restore();
-    });
-    // Repères lumineux aux carrefours pour rendre les changements de couloir lisibles.
-    [[170, 90], [170, 245], [410, 150], [510, 285], [630, 320], [410, 405]].forEach(([px, py]) => {
-      const cx = sc(px), cy = sc(py);
-      g.fillStyle = "rgba(10,9,35,.9)"; g.beginPath(); g.arc(cx, cy, 9, 0, 7); g.fill();
-      g.strokeStyle = "rgba(123,240,215,.55)"; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, 6, 0, 7); g.stroke();
-      g.fillStyle = "#7af0d1"; g.globalAlpha = .7; g.beginPath(); g.arc(cx, cy, 2, 0, 7); g.fill(); g.globalAlpha = 1;
-    });
     g.save(); g.shadowColor = "#ff3b5c"; g.shadowBlur = 22; g.fillStyle = "#2a2670"; g.beginPath(); g.arc(TB[0], TB[1], 30, 0, 7); g.fill(); g.restore();   // bouton d'urgence
     g.strokeStyle = "#a99bff"; g.lineWidth = 4; g.beginPath(); g.arc(TB[0], TB[1], 30, 0, 7); g.stroke();
     const bgr = g.createRadialGradient(TB[0] - 3, TB[1] - 3, 2, TB[0], TB[1], 14); bgr.addColorStop(0, "#ff8fa3"); bgr.addColorStop(1, "#d81b3d"); g.fillStyle = bgr; g.beginPath(); g.arc(TB[0], TB[1], 14, 0, 7); g.fill();
@@ -617,6 +542,8 @@ export function createAmogClient(env) {
     [[-17, -11], [2, -11], [-17, 2], [2, 2]].forEach(([dx, dy]) => { g.fillStyle = "#0d3b36"; g.fillRect(CAMP[0] + dx, CAMP[1] + dy, 15, 11); g.fillStyle = "#3ee6c4"; g.globalAlpha = .8; g.fillRect(CAMP[0] + dx + 2, CAMP[1] + dy + 2, 11, 7); g.globalAlpha = 1; });
     g.fillStyle = "#17153a"; rr(g, LP[0] - 17, LP[1] - 17, 34, 34, 7); g.fill(); g.strokeStyle = "#ffd23f"; g.lineWidth = 2; g.stroke(); bolt(g, LP[0], LP[1], 11, "#ffd23f");
     RP.forEach(p => { g.fillStyle = "#17153a"; rr(g, p[0] - 17, p[1] - 17, 34, 34, 7); g.fill(); g.strokeStyle = "#ff6b81"; g.lineWidth = 2; g.stroke(); rad(g, p[0], p[1], 12, "#ff6b81"); });
+    OP.forEach(p => { g.fillStyle = "#17153a"; rr(g, p[0] - 17, p[1] - 17, 34, 34, 7); g.fill(); g.strokeStyle = "#7ae582"; g.lineWidth = 2; g.stroke(); ringAt(p[0] - 5, p[1], 7, "#7ae582", 2, .9); ringAt(p[0] + 5, p[1], 7, "#7ae582", 2, .9); });
+    g.fillStyle = "#17153a"; rr(g, MP[0] - 17, MP[1] - 17, 34, 34, 7); g.fill(); g.strokeStyle = "#b79bff"; g.lineWidth = 2; g.stroke(); ringAt(MP[0], MP[1], 6, "#b79bff", 2, .9); ringAt(MP[0], MP[1], 11, "#b79bff", 2, .6);
     return bg;
   }
   const camMask = () => { if (camM) return camM; camM = document.createElement("canvas"); camM.width = WW; camM.height = WH; const g = camM.getContext("2d"); g.fillStyle = "rgba(4,3,14,.9)"; g.fillRect(0, 0, WW, WH); g.globalCompositeOperation = "destination-out"; g.fillStyle = "#000"; CAMZ.forEach(a => g.fillRect(a.x, a.y, a.w, a.h)); return camM; };
@@ -675,8 +602,8 @@ export function createAmogClient(env) {
     }
     x.drawImage(mmBase, mx - 5, my - 5);
     if (imp && !ghost) { x.fillStyle = "#9b7dff"; VENTS.forEach(v => x.fillRect(mx + v[0] * k - 2, my + v[1] * k - 2, 4, 4)); }
-    ST.forEach((t, i) => { if (!(tk[0] >> i & 1) || (tk[1] >> i & 1)) return; x.fillStyle = imp ? "#ff8fa3" : TCOL[i]; x.beginPath(); x.arc(mx + t[0] * k, my + t[1] * k, 3 + Math.sin(now / 300 + i) * .7, 0, 7); x.fill(); });
-    if (ls.sb && Math.floor(now / 300) % 2) { x.fillStyle = "#ff3b5c"; if (ls.sb[0] === 2) { const d = DOORS.find(z => z.id === ls.sb[2]); if (d) { x.beginPath(); x.arc(mx + (d.x + d.w / 2) * k, my + (d.y + d.h / 2) * k, 5, 0, 7); x.fill(); } } else (ls.sb[0] === 0 ? [LP] : RP.filter((p, i) => !(ls.sb[2] >> i & 1))).forEach(p => { x.beginPath(); x.arc(mx + p[0] * k, my + p[1] * k, 4.5, 0, 7); x.fill(); }); }
+    ST.forEach((t, i) => { if (!av(tk[0], tk[1], i) || (!imp && ls.sb && ls.sb[0] === 3)) return; x.fillStyle = imp ? "#ff8fa3" : TCOL[i]; x.beginPath(); x.arc(mx + t[0] * k, my + t[1] * k, 3 + Math.sin(now / 300 + i) * .7, 0, 7); x.fill(); });
+    if (ls.sb && Math.floor(now / 300) % 2) { x.fillStyle = "#ff3b5c"; sabPts(ls.sb).forEach(p => { x.beginPath(); x.arc(mx + p[0] * k, my + p[1] * k, 4.5, 0, 7); x.fill(); }); }
     if (ghost && pos) pos.forEach((p, i) => { if (i !== myIdx && ls.p[i] && ls.p[i][2] && pl[i]) { x.fillStyle = pl[i][2]; x.beginPath(); x.arc(mx + p[0] * k, my + p[1] * k, 2.5, 0, 7); x.fill(); } });   // les fantômes voient tout le monde
     x.strokeStyle = "rgba(255,255,255,.55)"; x.lineWidth = 1; x.strokeRect(mx + camX * k, my + camY * k, vw * k, vh * k);
     const c = pl && pl[myIdx] ? pl[myIdx][2] : "#fff"; x.fillStyle = c; x.strokeStyle = "#fff"; x.lineWidth = 1.5; x.beginPath(); x.arc(mx + mp[0] * k, my + mp[1] * k, 3.5, 0, 7); x.fill(); x.stroke();
@@ -695,18 +622,31 @@ export function createAmogClient(env) {
     txt("📹", CAMP[0] * k, CAMP[1] * k, "700 14px 'DM Sans',sans-serif", "#3ee6c4");
     if (imp && !ghost) VENTS.forEach(v => { x.fillStyle = "#9b7dff"; x.fillRect(v[0] * k - 5, v[1] * k - 5, 10, 10); });
     ST.forEach((t, i) => {
-      if (!(tk[0] >> i & 1)) return; const dn = tk[1] >> i & 1, px = t[0] * k, py = t[1] * k;
+      if (!(tk[0] >> i & 1) || (!imp && ls.sb && ls.sb[0] === 3)) return; const dn = tk[1] >> i & 1, px = t[0] * k, py = t[1] * k;
       x.globalAlpha = dn ? .5 : 1; x.fillStyle = dn ? "#3a8f6f" : imp ? "#ff8fa3" : TCOL[i]; x.beginPath(); x.arc(px, py, 7 + (dn ? 0 : Math.sin(now / 300 + i) * 1.2), 0, 7); x.fill();
       x.lineWidth = 3; x.strokeStyle = "rgba(0,0,0,.7)"; x.font = "700 10px 'DM Sans',sans-serif"; x.textAlign = "center"; x.textBaseline = "middle";
       const lb = (dn ? "✔ " : "") + t[2]; x.strokeText(lb, px, py + 16); x.fillStyle = dn ? "#9fe0c4" : "#fff"; x.fillText(lb, px, py + 16); x.globalAlpha = 1;
     });
-    if (ls.sb && Math.floor(now / 300) % 2) { x.fillStyle = "#ff3b5c"; if (ls.sb[0] === 2) { const d = DOORS.find(z => z.id === ls.sb[2]); if (d) { x.beginPath(); x.arc((d.x + d.w / 2) * k, (d.y + d.h / 2) * k, 9, 0, 7); x.fill(); } } else (ls.sb[0] === 0 ? [LP] : RP.filter((p, i) => !(ls.sb[2] >> i & 1))).forEach(p => { x.beginPath(); x.arc(p[0] * k, p[1] * k, 9, 0, 7); x.fill(); }); }
+    if (ls.sb && Math.floor(now / 300) % 2) { x.fillStyle = "#ff3b5c"; sabPts(ls.sb).forEach(p => { x.beginPath(); x.arc(p[0] * k, p[1] * k, 9, 0, 7); x.fill(); }); }
     if (ghost && pos) pos.forEach((p, i) => { if (i !== myIdx && ls.p[i] && ls.p[i][2] && pl[i]) { x.fillStyle = pl[i][2]; x.strokeStyle = "#fff"; x.lineWidth = 1.5; x.beginPath(); x.arc(p[0] * k, p[1] * k, 5, 0, 7); x.fill(); x.stroke(); } });
     const c = pl && pl[myIdx] ? pl[myIdx][2] : "#fff", pr = (now / 800) % 1;
     x.strokeStyle = "#fff"; x.globalAlpha = 1 - pr; x.lineWidth = 2; x.beginPath(); x.arc(mp[0] * k, mp[1] * k, 8 + pr * 14, 0, 7); x.stroke(); x.globalAlpha = 1;
     x.fillStyle = c; x.lineWidth = 2; x.beginPath(); x.arc(mp[0] * k, mp[1] * k, 7, 0, 7); x.fill(); x.stroke();
     x.restore();
     txt("Tu es ici : " + roomAt(mp[0], mp[1]) + "  ·  M ou un appui pour fermer", CX, 546, "600 13px 'DM Sans',sans-serif", "#b9b2ff");
+  }
+  function sabmenu(now) {                                                 // menu de sabotage (imposteur) : systèmes et portes sur la carte
+    x.fillStyle = "rgba(4,3,14,.9)"; x.fillRect(0, 0, W, H);
+    txt("🛠️ Sabotage : touche un système ou une porte", CX, 24, "800 19px 'Bricolage Grotesque',sans-serif", "#fff");
+    const k = .5, ox = (W - WW * k) / 2, oy = 50;
+    x.save(); x.translate(ox, oy); x.fillStyle = "#3b3680"; FLOOR.forEach(a2 => x.fillRect(a2.x * k, a2.y * k, a2.w * k, a2.h * k));
+    x.strokeStyle = "rgba(160,150,255,.6)"; x.lineWidth = 2; FLOOR.forEach(a2 => x.strokeRect(a2.x * k, a2.y * k, a2.w * k, a2.h * k)); x.restore();
+    sabItems().forEach(o => {
+      x.save(); x.globalAlpha = o.off ? .3 : 1; x.fillStyle = o.t < 10 ? "#7a1530" : "#1b1850"; x.strokeStyle = o.t < 10 ? "#ff6b81" : "#a99bff"; x.lineWidth = 2; x.beginPath(); x.arc(o.sx, o.sy, 16, 0, 7); x.fill(); x.stroke();
+      txt(o.ic, o.sx, o.sy + 1, "16px sans-serif", "#fff"); if (o.nm) txt(o.nm, o.sx, o.sy + 26, "700 9px 'DM Sans',sans-serif", "rgba(255,255,255,.7)"); x.restore();
+    });
+    const sd = !!ls.sb || ls.sc > 0, dd = ls.dc > 0;
+    txt(`Systèmes : ${ls.sb ? "sabotage en cours" : sd ? `recharge ${ls.sc} s` : "prêts"}  ·  Portes : ${dd ? `recharge ${ls.dc} s` : "prêtes"}  ·  touche ailleurs pour fermer`, CX, 546, "600 12px 'DM Sans',sans-serif", "#b9b2ff");
   }
   function taskAnim(kd, p, t) {                                           // petite animation propre à chaque type de tâche (boîte 76 × 52)
     switch (kd) {
@@ -752,6 +692,148 @@ export function createAmogClient(env) {
   const bigBtn = (cx, cy, r, lb, col, on) => { x.fillStyle = on ? col : "rgba(255,255,255,.1)"; x.beginPath(); x.arc(cx, cy, r, 0, 7); x.fill(); x.lineWidth = 4; x.strokeStyle = col; x.stroke(); txt(lb, cx, cy, "800 15px 'DM Sans',sans-serif", on ? "#10102a" : "#fff"); };
   const slider = (sx, sy, len, v, col) => { x.strokeStyle = "rgba(255,255,255,.25)"; x.lineWidth = 8; x.beginPath(); x.moveTo(sx, sy); x.lineTo(sx + len, sy); x.stroke(); x.strokeStyle = col; x.beginPath(); x.moveTo(sx, sy); x.lineTo(sx + len * v, sy); x.stroke(); x.fillStyle = "#fff"; x.beginPath(); x.arc(sx + len * v, sy, 13, 0, 7); x.fill(); x.lineWidth = 3; x.strokeStyle = col; x.stroke(); };
   const GAMES = {
+    chart() {                                                             // Tracer la route : relier les points dans l'ordre
+      const pts = [[70, 290], [190, 130], [330, 250], [460, 100]].map(([a, b]) => [a + rnd1(-20, 20), b + rnd1(-15, 15)]); let nx = 1, dr = false, tr = [];
+      return {
+        hint: "Trace la route : glisse de point en point, dans l'ordre",
+        down(p) { if (nx < pts.length && inC(p, pts[0][0], pts[0][1], 36)) { dr = true; nx = 1; tr = [pts[0].slice()]; } },
+        move(p) { if (!dr) return; tr.push([p.x, p.y]); if (tr.length > 500) tr.shift(); if (nx < pts.length && inC(p, pts[nx][0], pts[nx][1], 30)) { nx++; beep(440 + nx * 90, .05, "sine", .04); } },
+        up() { dr = false; if (nx < pts.length) { nx = 1; tr = []; } },
+        get ok() { return nx >= pts.length; },
+        draw() {
+          x.setLineDash([6, 8]); x.strokeStyle = "rgba(255,255,255,.3)"; x.lineWidth = 2; x.beginPath(); pts.forEach((q, i) => i ? x.lineTo(q[0], q[1]) : x.moveTo(q[0], q[1])); x.stroke(); x.setLineDash([]);
+          if (tr.length > 1) { x.strokeStyle = MC.G; x.lineWidth = 5; x.beginPath(); tr.forEach((q, i) => i ? x.lineTo(q[0], q[1]) : x.moveTo(q[0], q[1])); x.stroke(); }
+          pts.forEach((q, i) => { const d = i < nx; x.fillStyle = d ? MC.G : "#14123a"; x.beginPath(); x.arc(q[0], q[1], 17, 0, 7); x.fill(); x.lineWidth = 3; x.strokeStyle = i === 0 ? MC.Y : d ? MC.G : MC.B; x.stroke(); txt(i === 0 ? "▶" : String(i), q[0], q[1], "800 15px 'DM Sans',sans-serif", d ? "#10102a" : "#fff"); });
+        }
+      };
+    },
+    steer() {                                                             // Stabiliser la direction : viseur sur la cible
+      const tg = [rnd1(130, 410), rnd1(120, 280)]; let rx = Math.max(40, Math.min(500, tg[0] + (Math.random() < .5 ? -1 : 1) * rnd1(110, 190))), ry = rnd1(100, 300), dr = false, fin = false;
+      return {
+        hint: "Fais glisser le viseur sur la cible",
+        down(p) { if (!fin && inC(p, rx, ry, 44)) dr = true; },
+        move(p) { if (!dr || fin) return; rx = Math.max(30, Math.min(510, p.x)); ry = Math.max(70, Math.min(330, p.y)); if (Math.hypot(rx - tg[0], ry - tg[1]) < 11) { rx = tg[0]; ry = tg[1]; fin = true; dr = false; beep(600, .1, "sine", .05, 900); } },
+        up() { dr = false; },
+        get ok() { return fin; },
+        draw() {
+          [38, 24, 10].forEach(r => { x.strokeStyle = fin ? MC.G : MC.R; x.lineWidth = 3; x.beginPath(); x.arc(tg[0], tg[1], r, 0, 7); x.stroke(); });
+          x.strokeStyle = MC.B; x.lineWidth = 3; x.beginPath(); x.arc(rx, ry, 22, 0, 7); x.moveTo(rx - 34, ry); x.lineTo(rx + 34, ry); x.moveTo(rx, ry - 34); x.lineTo(rx, ry + 34); x.stroke();
+        }
+      };
+    },
+    filter() {                                                            // Nettoyer le filtre O2 : sortir toutes les feuilles
+      const lv = Array.from({ length: 7 }, () => { const a = rnd1(0, 6.283), r = rnd1(0, 80); return { x: 270 + Math.cos(a) * r, y: 200 + Math.sin(a) * r * .8, o: 0, rot: rnd1(0, 3) }; }); let dr = null;
+      return {
+        hint: "Sors toutes les feuilles du filtre (glisse-les dehors)",
+        down(p) { dr = null; for (const l of lv) if (!l.o && Math.abs(p.x - l.x) < 26 && Math.abs(p.y - l.y) < 26) dr = l; },
+        move(p) { if (dr) { dr.x = p.x; dr.y = p.y; } },
+        up() { if (dr) { if (Math.hypot(dr.x - 270, dr.y - 200) > 125) { dr.o = 1; beep(420, .05, "square", .04); } dr = null; } },
+        get ok() { return lv.every(l => l.o); },
+        draw() {
+          x.fillStyle = "rgba(122,229,130,.12)"; x.beginPath(); x.arc(270, 200, 112, 0, 7); x.fill(); x.lineWidth = 6; x.strokeStyle = "#4a4496"; x.stroke();
+          x.lineWidth = 1; x.strokeStyle = "rgba(255,255,255,.12)"; for (let i = -100; i <= 100; i += 25) { x.beginPath(); x.moveTo(270 + i, 100); x.lineTo(270 + i, 300); x.moveTo(170, 200 + i); x.lineTo(370, 200 + i); x.stroke(); }
+          lv.forEach(l => { x.save(); x.translate(l.x, l.y); x.rotate(l.rot); x.fillStyle = l.o ? "#3a8f6f" : MC.G; x.beginPath(); x.ellipse(0, 0, 22, 11, 0, 0, 7); x.fill(); x.strokeStyle = "#1c5b43"; x.lineWidth = 2; x.beginPath(); x.moveTo(-20, 0); x.lineTo(20, 0); x.stroke(); x.restore(); });
+        }
+      };
+    },
+    aster() {                                                             // Détruire les astéroïdes : en toucher 10
+      let hits = 0, sp = 0; const A = [];
+      return {
+        hint: "Touche les astéroïdes pour les détruire",
+        down(p) { for (let i = A.length - 1; i >= 0; i--) if (Math.hypot(p.x - A[i].x, p.y - A[i].y) < A[i].r + 12) { A.splice(i, 1); hits++; beep(280 + hits * 40, .06, "square", .04); break; } },
+        get ok() { return hits >= 10; },
+        draw(dt) {
+          sp -= dt; if (sp <= 0 && A.length < 6) { sp = rnd1(.2, .5); const l = Math.random() < .5; A.push({ x: l ? -20 : 560, y: rnd1(80, 320), vx: (l ? 1 : -1) * rnd1(70, 150), vy: rnd1(-30, 30), r: rnd1(16, 26), a: 0 }); }
+          for (let i = A.length - 1; i >= 0; i--) { const s = A[i]; s.x += s.vx * dt; s.y += s.vy * dt; s.a += dt; if (s.x < -40 || s.x > 580) A.splice(i, 1); }
+          A.forEach(s => { x.save(); x.translate(s.x, s.y); x.rotate(s.a * 1.5); x.fillStyle = "#8a7f6a"; x.beginPath(); for (let k = 0; k < 8; k++) { const an = k * .7854, rr2 = s.r * (k % 2 ? .78 : 1); x.lineTo(Math.cos(an) * rr2, Math.sin(an) * rr2); } x.closePath(); x.fill(); x.strokeStyle = "#5a5142"; x.lineWidth = 2; x.stroke(); x.restore(); });
+          txt(`${Math.min(10, hits)} / 10`, 60, 70, "800 18px 'Bricolage Grotesque',sans-serif", MC.Y);
+        }
+      };
+    },
+    divert() {                                                            // Dévier l'énergie (1/2) : monter les 3 leviers au maximum
+      const L = [0, 0, 0], X = [150, 270, 390]; let dr = -1;
+      return {
+        hint: "Pousse les 3 leviers tout en haut",
+        down(p) { dr = -1; for (let i = 0; i < 3; i++) if (L[i] < 1 && Math.abs(p.x - X[i]) < 36 && Math.abs(p.y - (330 - L[i] * 230)) < 32) dr = i; },
+        move(p) { if (dr < 0) return; L[dr] = cl01((330 - p.y) / 230); if (L[dr] > .96) { L[dr] = 1; dr = -1; beep(560, .07, "sine", .05, 760); } },
+        up() { dr = -1; },
+        get ok() { return L.every(v => v >= 1); },
+        draw() { L.forEach((v, i) => { x.strokeStyle = "rgba(255,255,255,.25)"; x.lineWidth = 10; x.beginPath(); x.moveTo(X[i], 100); x.lineTo(X[i], 330); x.stroke(); x.strokeStyle = v >= 1 ? MC.G : MC.Y; x.beginPath(); x.moveTo(X[i], 330); x.lineTo(X[i], 330 - v * 230); x.stroke(); x.fillStyle = v >= 1 ? MC.G : "#fff"; x.beginPath(); x.arc(X[i], 330 - v * 230, 17, 0, 7); x.fill(); }); }
+      };
+    },
+    breaker() {                                                           // Dévier l'énergie (2/2) : lever le disjoncteur
+      let v = 0, dr = false, fin = false;
+      return {
+        hint: "Lève le disjoncteur jusqu'en haut",
+        down(p) { if (!fin && Math.abs(p.x - 270) < 56 && Math.abs(p.y - (320 - v * 200)) < 44) dr = true; },
+        move(p) { if (dr && !fin) { v = cl01((320 - p.y) / 200); if (v > .96) { v = 1; fin = true; dr = false; beep(620, .1, "sine", .05, 900); } } },
+        up() { dr = false; if (!fin) v = 0; },
+        get ok() { return fin; },
+        draw() {
+          x.fillStyle = "#0d0b26"; rr(x, 220, 100, 100, 240, 14); x.fill(); x.lineWidth = 3; x.strokeStyle = "#4a4496"; x.stroke();
+          x.fillStyle = fin ? MC.G : MC.R; x.beginPath(); x.arc(270, 122, 11, 0, 7); x.fill();
+          x.fillStyle = fin ? MC.G : MC.Y; rr(x, 232, 320 - v * 200 - 22, 76, 44, 10); x.fill(); txt(fin ? "ON" : "OFF", 270, 320 - v * 200, "800 16px 'Bricolage Grotesque',sans-serif", "#10102a");
+        }
+      };
+    },
+    chute() {                                                             // Vider la goulotte : tirer le levier
+      let v = 0, dr = false, fin = false, ft = 0;
+      return {
+        hint: "Tire le levier tout en bas",
+        down(p) { if (!fin && Math.abs(p.x - 400) < 50 && Math.abs(p.y - (110 + v * 200)) < 40) dr = true; },
+        move(p) { if (dr && !fin) { v = cl01((p.y - 110) / 200); if (v > .96) { v = 1; fin = true; dr = false; beep(200, .3, "triangle", .06, 90); } } },
+        up() { dr = false; if (!fin) v = 0; },
+        get ok() { return fin && ft > .8; },
+        draw(dt) {
+          if (fin) ft += dt;
+          x.fillStyle = "#0d0b26"; rr(x, 90, 90, 200, 250, 14); x.fill(); x.strokeStyle = "#4a4496"; x.lineWidth = 3; x.stroke();
+          for (let i = 0; i < 5; i++) { const yy = fin ? 100 + ((i * 50 + ft * 260) % 230) : 130 + i * 40, xx = 130 + (i % 3) * 50; x.fillStyle = [MC.O, MC.B, MC.V, MC.G, MC.P][i]; x.fillRect(xx, yy, 26, 24); }
+          x.strokeStyle = "rgba(255,255,255,.25)"; x.lineWidth = 8; x.beginPath(); x.moveTo(400, 110); x.lineTo(400, 310); x.stroke(); x.fillStyle = MC.Y; rr(x, 365, 110 + v * 200 - 18, 70, 36, 10); x.fill();
+        }
+      };
+    },
+    reactor() {                                                           // Démarrer le réacteur : répéter la séquence (5 manches)
+      const seq = Array.from({ length: 5 }, () => Math.floor(Math.random() * 9)); let lvl = 1, ph = "show", t = -.4, inp = 0, fin = false, fl = -1, flt = 0, bad = 0;
+      const B = i => [150 + (i % 3) * 80, 92 + Math.floor(i / 3) * 80];
+      return {
+        hint: "Regarde la séquence, puis répète-la",
+        down(p) {
+          if (ph !== "in" || fin) return;
+          for (let i = 0; i < 9; i++) { const [bx, by] = B(i); if (inR(p, bx, by, 70, 70)) {
+            fl = i; flt = .25;
+            if (i === seq[inp]) { inp++; beep(400 + inp * 80, .06, "sine", .05); if (inp === lvl) { lvl++; if (lvl > seq.length) fin = true; else { ph = "show"; t = -.5; } } }
+            else { bad = .6; ph = "show"; t = -.7; inp = 0; beep(130, .25, "sawtooth", .05); }
+            return; } }
+        },
+        get ok() { return fin; },
+        draw(dt) {
+          flt = Math.max(0, flt - dt); bad = Math.max(0, bad - dt); let lit = -1;
+          if (ph === "show") { t += dt; const idx = Math.floor(t / .75); if (idx >= lvl) { ph = "in"; inp = 0; t = 0; } else if (t >= 0 && t % .75 < .5) lit = seq[idx]; }
+          for (let i = 0; i < 9; i++) { const [bx, by] = B(i), on = lit === i || (flt > 0 && fl === i); x.fillStyle = bad > 0 ? "rgba(255,59,92,.4)" : on ? MC.G : "rgba(255,255,255,.12)"; rr(x, bx, by, 70, 70, 12); x.fill(); x.lineWidth = 2; x.strokeStyle = on ? MC.G : "#4a4496"; x.stroke(); }
+          txt(`Manche ${Math.min(lvl, seq.length)} / ${seq.length}`, 440, 130, "700 15px 'DM Sans',sans-serif", MC.Y);
+          txt(ph === "show" ? "Observe…" : "À toi !", 440, 160, "800 17px 'Bricolage Grotesque',sans-serif", ph === "show" ? "#b9b2ff" : MC.G);
+        }
+      };
+    },
+    card() {                                                              // Passer la carte : ni trop vite, ni trop lentement
+      let cx = 20, dr = false, t0 = 0, fin = false, msg = "Glisse la carte dans la fente", mt = 0;
+      return {
+        hint: "Glisse la carte de gauche à droite, à vitesse normale",
+        down(p) { if (!fin && Math.abs(p.x - cx - 55) < 70 && Math.abs(p.y - 250) < 50) { dr = true; t0 = performance.now(); } },
+        move(p) {
+          if (!dr) return; cx = Math.max(20, Math.min(410, p.x - 55));
+          if (cx >= 400) { const el = (performance.now() - t0) / 1000; dr = false; if (el < .5) { msg = "Trop rapide !"; cx = 20; } else if (el > 1.6) { msg = "Trop lent !"; cx = 20; } else { fin = true; msg = "Carte acceptée ✔"; } }
+        },
+        up() { if (dr) { dr = false; cx = 20; msg = "Réessaie : glisse jusqu'au bout"; } },
+        get ok() { return fin; },
+        draw() {
+          x.fillStyle = "#1d1a4a"; rr(x, 40, 150, 460, 170, 16); x.fill(); x.strokeStyle = "#4a4496"; x.lineWidth = 3; x.stroke();
+          x.fillStyle = "#07061a"; rr(x, 60, 195, 420, 24, 10); x.fill(); x.fillStyle = fin ? MC.G : MC.R; x.beginPath(); x.arc(470, 170, 8, 0, 7); x.fill();
+          x.fillStyle = "#e8e4ff"; rr(x, cx, 215, 110, 70, 8); x.fill(); x.fillStyle = "#2a2670"; x.fillRect(cx, 228, 110, 12); x.fillStyle = MC.Y; rr(x, cx + 12, 252, 26, 18, 3); x.fill();
+          txt(msg, 270, 112, "700 16px 'DM Sans',sans-serif", fin ? MC.G : "#fff");
+        }
+      };
+    },
     wires() {                                                             // Brancher les câbles : relier les couleurs
       const cols = [MC.R, MC.Y, MC.B, MC.P], rt = shuf([0, 1, 2, 3]), con = [0, 0, 0, 0]; let dr = null;
       const L = i => [90, 95 + i * 70], Rr = j => [450, 95 + j * 70];
@@ -994,10 +1076,10 @@ export function createAmogClient(env) {
     const q = s.p[myIdx]; if (!q) return ["UTILISER", 1];
     if (q[6]) return ["EN CONDUIT", 1];
     if (q[2]) { if (s.bd.some(b => Math.hypot(b[0] - q[0], b[1] - q[1]) < 72)) return ["SIGNALER", 0]; if (Math.hypot(q[0] - TB[0], q[1] - TB[1]) < 50) return ["URGENCE", 0];
-      if (!isImp() && s.sb) { if (s.sb[0] === 0 && Math.hypot(q[0] - LP[0], q[1] - LP[1]) < 44) return ["RÉPARER", 0]; if (s.sb[0] === 1) for (let k = 0; k < 2; k++) if (!(s.sb[2] >> k & 1) && Math.hypot(q[0] - RP[k][0], q[1] - RP[k][1]) < 44) return ["RÉPARER", 0]; if (s.sb[0] === 2) { const d = DOORS.find(z => z.id === s.sb[2]); if (d && Math.hypot(q[0] - d.x - d.w / 2, q[1] - d.y - d.h / 2) < 62) return ["OUVRIR", 0]; } }
+      if (!isImp() && s.sb) { const t = s.sb[0], nr = p => Math.hypot(q[0] - p[0], q[1] - p[1]) < 44; if (t === 0 && nr(LP)) return ["RÉPARER", 0]; if (t === 3 && nr(MP)) return ["RÉPARER", 0]; if (t === 1) for (let k = 0; k < 2; k++) if (nr(RP[k])) return ["MAINTENIR", 0]; if (t === 2) for (let k = 0; k < 2; k++) if (!(s.sb[2] >> k & 1) && nr(OP[k])) return ["RÉPARER", 0]; }
       if (Math.hypot(q[0] - CAMP[0], q[1] - CAMP[1]) < 44) return [s.cm && s.cm.includes(myIdx) ? "QUITTER" : "CAMÉRAS", 0]; }
     const tk = s.ts[myIdx] || [0, 0];
-    for (let k = 0; k < ST.length; k++) if ((tk[0] >> k & 1) && !(tk[1] >> k & 1) && Math.hypot(q[0] - ST[k][0], q[1] - ST[k][1]) < 42) return ["TÂCHE", 0];
+    if (!(!isImp() && s.sb && s.sb[0] === 3)) for (let k = 0; k < ST.length; k++) if (av(tk[0], tk[1], k) && Math.hypot(q[0] - ST[k][0], q[1] - ST[k][1]) < 42) return ["TÂCHE", 0];
     return ["UTILISER", 1];
   }
 
@@ -1075,6 +1157,7 @@ export function createAmogClient(env) {
     const { a, b, f } = sm; ls = snaps[snaps.length - 1].s; const sa = a.s, sb = b.s;
     snaps.forEach(sn => { if (!sn.done && sn.at <= now - 110) { sn.done = true; (sn.s.ev || []).forEach(onEv); } });
     if (!pl) return;
+    cdm = ls.dr | 0; if (ls.ph !== "p") sabMenu = false;
     if (ls.ph !== lastPh) { if (ls.ph === "m") { mStart = now; mMax = 0; lastTick = -1; } else if (ls.ph === "r") rStart = now; if (ls.ph !== "p") bigMap = false; lastPh = ls.ph; }
     if (ls.mt) mid = ls.mt.id;
     const me = sa.p[myIdx], ghost = !!me && !me[2], imp = isImp();
@@ -1082,7 +1165,7 @@ export function createAmogClient(env) {
     const mvg = sa.p.map((qa, i) => { const qb = sb.p[i]; return !!qb && Math.hypot(qb[0] - qa[0], qb[1] - qa[1]) > .5; });   // en train de marcher ? (animation des jambes)
     const mp = pos[myIdx] || [TB[0], TB[1]], cam = !!ls.cm && ls.cm.includes(myIdx), dark = !!ls.sb && ls.sb[0] === 0 && !imp, VV = dark ? 85 : VIS;
     mpL = mp; ghL = ghost;
-    const vis = (px, py) => ghost || (cam && inCam(px, py)) || (Math.hypot(px - mp[0], py - mp[1]) < VV && los(mp[0], mp[1], px, py));   // pas de vision à travers les murs (les fantômes voient tout)
+    const vis = (px, py) => ghost || (cam && inCam(px, py)) || (Math.hypot(px - mp[0], py - mp[1]) < VV && losc(mp[0], mp[1], px, py));   // pas de vision à travers les murs (les fantômes voient tout)
 
     // caméra : suit le joueur ; aux caméras de surveillance on dézoome sur toute la carte
     const zt = cam && ls.ph === "p" ? W / WW : 1;
@@ -1092,6 +1175,7 @@ export function createAmogClient(env) {
     const vw = W / zm, vh = H / zm, camX = Math.max(0, Math.min(WW - vw, camCX - vw / 2)), camY = Math.max(0, Math.min(WH - vh, camCY - vh / 2));
     x.save(); x.scale(zm, zm); x.translate(-camX, -camY);
     x.drawImage(background(), camX, camY, vw, vh, camX, camY, vw, vh);
+    if (ls.dr) DOORS.forEach((d, i) => { if (ls.dr >> i & 1) { hazard(x, d[0], d[1], d[2], d[3]); x.strokeStyle = "#ff3b5c"; x.lineWidth = 3; x.strokeRect(d[0], d[1], d[2], d[3]); } });   // portes fermées
 
     const tk = ls.ts[myIdx] || [0, 0];
     if (vis(TB[0], TB[1])) { const pu = .5 + .5 * Math.sin(now / 420), eg = x.createRadialGradient(TB[0], TB[1], 8, TB[0], TB[1], 48); eg.addColorStop(0, `rgba(255,59,92,${.28 * pu})`); eg.addColorStop(1, "rgba(255,59,92,0)"); x.fillStyle = eg; x.fillRect(TB[0] - 48, TB[1] - 48, 96, 96); }   // bouton d'urgence qui pulse
@@ -1131,7 +1215,7 @@ export function createAmogClient(env) {
     if (ls.ph === "p") {                                                  // « ! » des tâches (visibles même dans le noir) + flèche vers la plus proche
       let nt = null, nd = 1e9;
       ST.forEach((s2, k) => {
-        if (!(tk[0] >> k & 1) || (tk[1] >> k & 1)) return;
+        if (!av(tk[0], tk[1], k) || (!imp && ls.sb && ls.sb[0] === 3)) return;
         const by = Math.sin(now / 250 + k) * 3, d = Math.hypot(s2[0] - mp[0], s2[1] - mp[1]); if (d < nd) { nd = d; nt = s2; }
         const pr = (now / 900 + k * .3) % 1; x.strokeStyle = imp ? "#ffb3c0" : "#ffd23f"; x.globalAlpha = .55 * (1 - pr); x.lineWidth = 2; x.beginPath(); x.arc(s2[0], s2[1], 20 + pr * 16, 0, 7); x.stroke(); x.globalAlpha = 1;
         x.shadowColor = x.fillStyle = imp ? "#ffb3c0" : "#ffd23f"; x.shadowBlur = 10;
@@ -1142,11 +1226,10 @@ export function createAmogClient(env) {
         x.globalAlpha = .85; x.fillStyle = imp ? "#ff8fa3" : "#ffd23f"; x.beginPath(); x.moveTo(9, 0); x.lineTo(-5, -6); x.lineTo(-5, 6); x.closePath(); x.fill(); x.restore(); x.globalAlpha = 1;
       }
     }
-    if (ls.ph === "p" && ls.dr) { const d = DOORS.find(z => z.id === ls.dr[0]); if (d) { x.save(); x.shadowColor = "#ff3b5c"; x.shadowBlur = 18; x.fillStyle = "#b51f45"; rr(x, d.x, d.y, d.w, d.h, 4); x.fill(); x.shadowBlur = 0; x.strokeStyle = "#ffd6df"; x.lineWidth = 2; x.stroke(); x.restore(); } }
     if (ls.ph === "p" && ls.sb) {                                           // sabotage en cours : panneaux à réparer qui clignotent
       const pu = .6 + .4 * Math.sin(now / 160);
       const mark = (p, rd) => { x.globalAlpha = pu; x.fillStyle = "#ff3b5c"; x.beginPath(); x.arc(p[0], p[1], 22, 0, 7); x.fill(); x.globalAlpha = 1; if (rd) rad(x, p[0], p[1], 12, "#fff"); else bolt(x, p[0], p[1], 12, "#fff"); };
-      if (ls.sb[0] === 0) mark(LP, false); else if (ls.sb[0] === 1) { RP.forEach((p, k) => { if (!(ls.sb[2] >> k & 1)) mark(p, true); }); x.fillStyle = `rgba(255,30,60,${.08 + .07 * Math.sin(now / 120)})`; x.fillRect(camX, camY, vw, vh); }
+      sabPts(ls.sb).forEach(p => mark(p, ls.sb[0] === 1 || ls.sb[0] === 2)); if (ls.sb[0] === 1 || ls.sb[0] === 2) { x.fillStyle = `rgba(255,30,60,${.08 + .07 * Math.sin(now / 120)})`; x.fillRect(camX, camY, vw, vh); }
     }
     if (ls.ph === "p" && ls.cm && ls.cm.length && !cam && Math.floor(now / 400) % 2 && vis(CAMP[0], CAMP[1])) { x.fillStyle = "#ff3b5c"; x.beginPath(); x.arc(CAMP[0] + 20, CAMP[1] - 18, 5, 0, 7); x.fill(); }   // voyant rouge : quelqu'un regarde les caméras
     x.restore();
@@ -1161,13 +1244,14 @@ export function createAmogClient(env) {
     x.fillStyle = "rgba(0,0,0,.55)"; rr(x, 10, 10, 210, 22, 11); x.fill();
     if (tot && dn) { const tg = x.createLinearGradient(10, 0, 220, 0); tg.addColorStop(0, "#2bd9b3"); tg.addColorStop(1, "#7dffd9"); x.fillStyle = tg; rr(x, 10, 10, Math.max(22, 210 * dn / tot), 22, 11); x.fill(); }
     txt(`Tâches ${dn}/${tot}`, 115, 22, "700 13px 'DM Sans',sans-serif", "#fff");
-    let ly = 48; const mineT = ST.map((_, k) => k).filter(k => tk[0] >> k & 1);
+    let ly = 48; const cOff = !imp && ls.sb && ls.sb[0] === 3, mineT = cOff ? [] : ST.map((_, k) => k).filter(k => tk[0] >> k & 1);
     x.fillStyle = "rgba(6,5,20,.55)"; rr(x, 6, 38, 200, 24 + mineT.length * 16, 9); x.fill();
-    txt(imp ? "Fausses tâches :" : "Mes tâches :", 14, ly, "700 12px 'DM Sans',sans-serif", imp ? "#ff8fa3" : "#b9b2ff", "left");
+    txt(imp ? "Fausses tâches :" : cOff ? "📡 Tâches indisponibles (comms)" : "Mes tâches :", 14, ly, "700 12px 'DM Sans',sans-serif", imp ? "#ff8fa3" : "#b9b2ff", "left");
     mineT.forEach(k => { const d = tk[1] >> k & 1; ly += 16; x.fillStyle = TCOL[k]; x.globalAlpha = d ? .4 : 1; x.beginPath(); x.arc(17, ly, 3, 0, 7); x.fill(); x.globalAlpha = 1; txt(`${d ? "✔" : "▫"} ${ST[k][2]}`, 25, ly, "600 12px 'DM Sans',sans-serif", d ? "#6b9" : "#fff", "left"); });
     x.textAlign = "right"; x.font = "600 13px 'DM Sans',sans-serif"; x.fillStyle = "#ffe9a8"; x.textBaseline = "middle";
     (ls.kf || []).slice(-4).forEach((t2, i) => x.fillText(t2, W - 12, 18 + i * 18));
-    if (ls.ph === "p" && ls.sb) txt(ls.sb[0] === 1 ? `☢️ RÉACTEUR : ${ls.sb[1]} s : répare les 2 panneaux !` : ls.sb[0] === 2 ? `🚪 PORTE FERMÉE : ${ls.sb[1]} s : approche et utilise pour ouvrir !` : `💡 Lumières coupées : répare le panneau ⚡ (${ls.sb[1]} s)`, CX, 56, "800 16px 'Bricolage Grotesque',sans-serif", "#ff6b81");
+    if (ls.ph === "p" && ls.sb) txt(sabText(ls.sb), CX, 56, "800 15px 'Bricolage Grotesque',sans-serif", "#ff6b81");
+    if (ls.ph === "p" && ls.dr) txt("🚪 Portes verrouillées !", CX, ls.sb ? 76 : 56, "800 14px 'Bricolage Grotesque',sans-serif", "#ffb347");
     if (cam && ls.ph === "p") txt("📹 CAMÉRAS : bouge pour quitter", CX, 516, "700 15px 'DM Sans',sans-serif", "#3ee6c4");
     if (ghost) txt("👻 Tu es un fantôme : traverse les murs et finis tes tâches !", CX, 20, "700 15px 'DM Sans',sans-serif", "#b9b2ff");
     if (ls.ph === "p" && ls.t < 5 && myIdx >= 0) {                          // annonce du rôle au début (fondu)
@@ -1182,17 +1266,18 @@ export function createAmogClient(env) {
     if (ls.ph === "p" && !cam) txt(roomAt(mp[0], mp[1]).toUpperCase(), CX, 538, "800 13px 'Bricolage Grotesque',sans-serif", "rgba(255,255,255,.35)");
     if (mg && (ls.ph !== "p" || !me || me[6] || (!me[5] && now - mg.t0 > 1500))) mg = null;   // réunion, mort en conduit ou tâche coupée par l'hôte : on ferme
     if (!me || !me[5]) { if (!mg) mgDis = false; }
-    if (!mg && !mgDis && ls.ph === "p" && me && me[5] > 0) { let tk2 = -1; for (let k = 0; k < ST.length; k++) if ((tk[0] >> k & 1) && !(tk[1] >> k & 1) && Math.hypot(mp[0] - ST[k][0], mp[1] - ST[k][1]) < 48) { tk2 = k; break; } if (tk2 >= 0) { mg = mgNew(tk2, now); stick = null; keys.clear(); } }
+    if (!mg && !mgDis && ls.ph === "p" && me && me[5] > 0) { let tk2 = -1; for (let k = 0; k < ST.length; k++) if (av(tk[0], tk[1], k) && Math.hypot(mp[0] - ST[k][0], mp[1] - ST[k][1]) < 48) { tk2 = k; break; } if (tk2 >= 0) { mg = mgNew(tk2, now); stick = null; keys.clear(); } }
     if (ls.ph === "p") {
       const [lb, dim] = useInfo(ls); btn(USEB, lb, "#2e7dff", dim, lb);      // le fantôme a aussi son bouton (tâches)
       if (imp && !ghost) {
         const kc = me ? me[4] : 0, inV = !!(me && me[6]), nv = !!me && VENTS.some(v => Math.hypot(me[0] - v[0], me[1] - v[1]) < 36), sd = ls.sc > 0 || !!ls.sb;
         btn(KILLB, "TUER", "#e0243f", kc > 0 || tgt < 0 || inV, kc > 0 ? String(kc) : "TUER");
         btn(VENTB, "🕳️", "#6a4fd8", !inV && !nv, inV ? "↻" : "🕳️");
-        btn(S1B, "💡", "#c98a00", sd, ls.sc > 0 && !ls.sb ? String(ls.sc) : "💡"); btn(S2B, "☢️", "#b3261e", sd, ls.sc > 0 && !ls.sb ? String(ls.sc) : "☢️"); btn(S3B, "🚪", "#8b5cf6", sd, ls.sc > 0 && !ls.sb ? String(ls.sc) : "🚪");
+        btn(S1B, "🛠️", "#c98a00", sd && ls.dc > 0, "🛠️");
       }
     }
     if (bigMap && ls.ph === "p") bigmap(tk, mp, ghost, imp, now, pos);
+    if (sabMenu && ls.ph === "p") sabmenu(now);
     if (mg) mgDraw(now);
     if (flash) { const el = now - flash.t; if (el > flash.d) flash = null; else { x.fillStyle = `rgba(${flash.c},${(flash.a * (1 - el / flash.d)).toFixed(3)})`; x.fillRect(0, 0, W, H); if (flash.m) txt(flash.m, CX, H / 2, "800 34px 'Bricolage Grotesque',sans-serif", "#fff"); } }
     if (stick && ls.ph === "p") {
@@ -1206,8 +1291,8 @@ export function createAmogClient(env) {
 
   return {
     enter(c) {
-      active = true; snaps = []; pl = null; lastEv = 0; parts = []; bigMap = false; flash = null; floats = []; lastPh = ""; mStart = rStart = mMax = 0; lastTick = -1; useSeq = killSeq = ventSeq = sabSeq = sabTy = doneSeq = cancelSeq = 0; mg = null; mgDis = false; vote = ""; sentStr = ""; sentAt = 0; stick = null; keys.clear(); tPrev = 0; myIdx = -1; ovT = "\u0000"; mid = 0; rects = []; ls = null; camOn = false; zm = 1;
-      $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : utiliser / signaler · K ou Maj : tuer · V : conduit · 1 / 2 / 3 : saboter (imposteur) · M : grande carte · tâches = mini-jeux (Échap pour quitter) · fantôme : traverse les murs et finit ses tâches · glisse sur mobile";
+      active = true; sabMenu = false; cdm = 0; snaps = []; pl = null; lastEv = 0; parts = []; bigMap = false; flash = null; floats = []; lastPh = ""; mStart = rStart = mMax = 0; lastTick = -1; useSeq = killSeq = ventSeq = sabSeq = sabTy = doneSeq = cancelSeq = 0; mg = null; mgDis = false; vote = ""; sentStr = ""; sentAt = 0; stick = null; keys.clear(); tPrev = 0; myIdx = -1; ovT = "\u0000"; mid = 0; rects = []; ls = null; camOn = false; zm = 1;
+      $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : utiliser / signaler · K ou Maj : tuer · V : conduit · G ou 🛠️ : menu de sabotage (1 lumières · 2 réacteur · 3 O2 · 4 comms · portes) · M : grande carte · tâches = mini-jeux (Échap pour quitter) · fantôme : traverse les murs et finit ses tâches · glisse sur mobile";
       const myUid = getMe().uid;
       set(RF(`games/${c}/inputs/${myUid}`), "0,0,0,0,").catch(() => { });
       const un = onValue(RF(`games/${c}/state`), snap => {

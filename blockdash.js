@@ -5,7 +5,7 @@ export async function startBlockDash(env){
  if(ids.length<2)return env.toast("Block Dash se joue à au moins 2 joueurs.");
  await remove(R(`games/${c}`));await update(R(`lobbies/${c}`),{status:"playing"});
  const P={},I={},seen={},rows=[];ids.forEach((u,i)=>{P[u]={n:players[u].name,c:players[u].color,x:2,a:1,d:0,j:0,s:0};I[u]={x:2,j:0,s:0}});
- let t=0,speed=105,next=0,rid=0,pub=0,ended=false,un=()=>{};
+ let t=0,speed=105,next=0,rid=0,pubN=0,ended=false,un=()=>{};
  const makeRow=()=>{let a=Array(LANES).fill(0),pattern=Math.floor(Math.random()*4);
    if(pattern===0){let gap=Math.floor(Math.random()*LANES);a=a.map((_,i)=>i===gap?0:1)}
    if(pattern===1){let gap=Math.floor(Math.random()*LANES);a=a.map((_,i)=>i===gap?0:(Math.random()<.28?0:2))}

@@ -5,7 +5,7 @@
 <meta name="theme-color" content="var(--bg)">
 <!-- ⚠️ À CONSERVER À CHAQUE MISE À JOUR : à chaque nouvelle version (chaque modification), la version affichée doit faire +1.
      Changer le numéro aux 3 endroits, toujours identique : ce <meta name="moda-v">, `const VER` dans app.js, et `VERSION` dans sw.js. -->
-<meta name="moda-v" content="51">
+<meta name="moda-v" content="52">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -412,6 +412,9 @@ html.neon .adl{border-top-color:#ff1f4b33}
     <p class="sub">Les actions s'appliquent tout de suite pour tout le monde.</p>
     <h3 class="stsec" id="adLobH">Lobbys</h3><div id="adLob"></div>
     <div class="row"><button type="button" class="danger" id="adAll" hidden>Fermer tous les lobbys</button></div></div>
+   <div class="panel" style="margin-top:14px"><h3>🛠️ Maintenance des jeux</h3>
+    <p class="sub">Désactive ou réactive chaque jeu. Les changements sont enregistrés et visibles par tous les joueurs.</p>
+    <div id="adMaintenance"></div></div>
    <div class="panel" style="margin-top:14px"><h3>🎨 Thèmes de saison</h3>
     <p class="sub">Aperçu des 4 thèmes. Le thème normal suit la date. « Tester » l'applique sur ton appareil seulement, jusqu'au rechargement de la page.</p>
     <div class="thgrid" id="thGrid"></div>

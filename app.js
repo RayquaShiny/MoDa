@@ -226,7 +226,7 @@ function watchSocial(){
 // ---------- Bots 🤖 (Battle Royale, Tanks, Sumo Arena : jeux à 2 joueurs minimum) ----------
 const BOTN=["Rex","Zap","Bolt","Nova","Byte","Pixel","Turbo","Echo","Glitch","Neo"];
 const isBot=u=>String(u).indexOf("bot_")===0;
-const botGame=l=>!!l&&["br","tk","sumo","barre","amog"].includes(l.game);
+const botGame=l=>!!l&&["br","tk","sumo","barre","amog","blockdash"].includes(l.game);
 const maxBots=l=>Math.max(0,(l&&l.game==="amog"?10:8)-Object.keys((l&&l.players)||{}).length);
 const botCount=l=>botGame(l)?Math.max(0,Math.min(maxBots(l),Math.floor(+((l.opts||{}).bots))||0)):0;
 function withBots(l){ // joueurs réels + bots (ids « bot_1 », « bot_2 »…, jamais écrits dans Firebase)

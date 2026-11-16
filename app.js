@@ -11,7 +11,7 @@ import {createVoice} from "./voice.js";
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="51";
+const VER="52";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -242,6 +242,7 @@ const played=(g,open)=>{const sec=open?0:Math.max(1,Math.round((Date.now()-gStar
 const rcode=()=>Array.from({length:5},()=>"ABCDEFGHJKLMNPQRSTUVWXYZ"[Math.floor(Math.random()*24)]).join("");
 const firstColor=pl=>COLORS.find(c=>!Object.values(pl||{}).some(p=>p.color===c))||COLORS[0];
 const mkLobby=game=>async()=>{
+  if(isMaintained(game)){toast(`${GAME_NAMES[game]||"Ce jeu"} est actuellement en maintenance.`);return}
   const c=rcode();
   await set(R(`lobbies/${c}`),{host:me.uid,game,status:"lobby",opts:{sp:1,wr:0,bo:1},players:{[me.uid]:{name:me.name,color:COLORS[0],ready:true,...ownTag()}}});
   onDisconnect(R(`lobbies/${c}`)).remove();enter(c);
@@ -253,6 +254,7 @@ async function joinLobby(c){
   if(code)await leaveLobby();
   const l=(await get(R(`lobbies/${c}`))).val();
   if(!l)return toast("Lobby introuvable");
+  if(isMaintained(l.game))return toast(`${GAME_NAMES[l.game]||"Ce jeu"} est actuellement en maintenance.`);
   if(l.kick&&l.kick[me.uid])return toast("Tu as été retiré de ce lobby par un admin");
   if(l.status!=="lobby"&&l.game!=="sim"&&l.game!=="fruit")return toast("Partie déjà en cours");
   const pl=l.players||{};const mxP=l.game==="fruit"?5:l.game==="amog"?10:8;if(Object.keys(pl).length>=mxP&&!pl[me.uid])return toast(`Lobby plein (${mxP} max)`);
@@ -265,6 +267,7 @@ function enter(c){
     const l=s.val();if(!l){if(code){local();toast("Le lobby a été fermé")}return}
     if(l.kick&&l.kick[me.uid]){if(code){local();toast("Un admin t'a retiré du lobby")}return}
     lobby=l;
+    if(isMaintained(l.game)){if(l.status==="playing"){show("lobby");toast(`${GAME_NAMES[l.game]||"Ce jeu"} est actuellement en maintenance.`)}renderLobby();return}
     if((l.status==="lobby"||l.game==="sim"||l.game==="fruit")&&l.host!==me.uid&&!(l.players&&l.players[me.uid])){ // coupure puis retour : on se réinscrit
       set(R(`lobbies/${c}/players/${me.uid}`),{name:me.name,color:firstColor(l.players),ready:false,...ownTag()});onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();return}
     renderLobby();
@@ -1901,6 +1904,24 @@ function drawTk(now){
 }
 
 // ---------- Panneau admin (owners) : onglet 2 du menu Stats ----------
+
+const GAME_NAMES={snake:"Snake",surv:"Survie coop",br:"Battle Royale",lab:"Évasion coop",sim:"Mine Simulator",tk:"Tanks",sumo:"Sumo Arena",barre:"La barre malicieuse",fruit:"Fruit Forager",amog:"Amog Us"};
+const GAME_TILES={snake:"tsnake",surv:"tsurv",br:"tbr",lab:"tlab",sim:"tsim",tk:"ttk",sumo:"tsumo",barre:"tbarre",fruit:"tfruit",amog:"tamog"};
+const maintenance=()=>({...stD.maintenance,amog:stD.maintenance?.amog??true});
+const isMaintained=g=>!!maintenance()[g];
+function paintMaintenance(){
+ const state=maintenance();
+ Object.entries(GAME_TILES).forEach(([g,id])=>{
+  const el=$(id);if(!el)return;const on=!!state[g];el.classList.toggle("soon",on);el.setAttribute("aria-disabled",String(on));
+  const small=el.querySelector("small");if(small){if(!small.dataset.normal)small.dataset.normal=small.textContent;small.textContent=on?"Sous maintenance":small.dataset.normal;}
+ });
+}
+onValue(R("stats/maintenance"),s=>{
+ stD.maintenance=s.val()||{};paintMaintenance();
+ if(me&&me.owner&&adm)renderMaintenanceAdmin();
+ if(cur==="lobby"&&lobby&&isMaintained(lobby.game))renderLobby();
+},()=>{});
+
 const admErr=()=>toast("Action refusée : les règles Firebase doivent autoriser les owners à écrire dans lobbies, games et stats");
 function setStTab(i){$("stView").hidden=!!i;$("admView").hidden=!i;
   [["tbStats",!i],["tbAdm",!!i]].forEach(([id,on])=>{$(id).classList.toggle("on",on);$(id).setAttribute("aria-selected",String(on))})}
@@ -1918,6 +1939,30 @@ function renderThemes(){
     b.onclick=()=>{window.__setSeason(k);adm=false;try{localStorage.setItem("moda.stats","0")}catch{}$("sw").setAttribute("aria-checked","false");applyNeon();showHome();toast(`Aperçu : ${S[k].n} (jusqu'au rechargement)`)};
     n.append(ic,nm,b);c.append(m,n);return c}))}
 $("thAuto").onclick=()=>{window.__setSeason(null);applyNeon();renderThemes();toast("Thème automatique rétabli")};
+
+function renderMaintenanceAdmin(){
+ const root=$("adMaintenance");if(!root||!me||!me.owner)return;
+ const state=maintenance();
+ root.replaceChildren(...Object.entries(GAME_NAMES).map(([g,name])=>{
+  const row=h("div");row.className="adl";row.style.cssText="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap";
+  const label=h("span",name+(state[g]?" · Sous maintenance":" · Disponible"));label.className="g";
+  const btn=h("button",state[g]?"Désactiver la maintenance":"Mettre en maintenance");btn.type="button";btn.className=state[g]?"alt mini":"danger mini";
+  btn.onclick=async()=>{
+   btn.disabled=true;
+   try{
+    await set(R("stats/maintenance/"+g),!state[g]);
+    if(!state[g]){
+     const current=stD.lobbies||{};
+     const closing=Object.entries(current).filter(([,l])=>l&&l.game===g);
+     await Promise.all(closing.map(async([c])=>{await remove(R("games/"+c));await remove(R("lobbies/"+c));}));
+    }
+    toast(name+(state[g]?" : maintenance désactivée.":" : maintenance activée."));
+   }catch{admErr()}finally{btn.disabled=false}
+  };
+  row.append(label,btn);return row;
+ }));
+}
+
 async function admClose(c){try{await remove(R(`games/${c}`));await remove(R(`lobbies/${c}`));toast(`Lobby ${c} fermé`)}catch{admErr()}}
 async function admKick(c,u,name){
   if(!confirm(`Retirer ${name} du lobby ${c} ?`))return;
@@ -1929,6 +1974,7 @@ $("adReset").onclick=async()=>{if(!confirm("Remettre le compteur « parties jou�
   try{await set(R("stats/gamesPlayed"),0);await remove(R("stats/byGame"));await remove(R("stats/hours"));toast("Statistiques remises à zéro")}catch{admErr()}};
 function renderAdmin(D){
   if(!me||!me.owner)return;
+  paintMaintenance();renderMaintenanceAdmin();
   const GN={tk:"💥 Tanks",snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",barre:"🌀 La barre malicieuse",fruit:"🍎 Fruit Forager",amog:"🚀 Amog Us"};
   const lobs=Object.entries(D.lobbies||{}).filter(([,l])=>l).sort((x,y)=>(y[1].status==="playing")-(x[1].status==="playing"));
   $("adLobH").textContent=`Lobbys (${lobs.length})`;$("adAll").hidden=!lobs.length;

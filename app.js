@@ -6,12 +6,13 @@ import {startFruit,createFruitClient} from "./fruit.js";
 import {startSumo,createSumoClient} from "./sumo.js";
 import {startBarre,createBarreClient} from "./barre.js";
 import {startAmog,createAmogClient} from "./amog.js";
+import {startBlockDash,createBlockDashClient} from "./blockdash.js";
 import {createVoice} from "./voice.js";
 
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="52";
+const VER="53";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -247,7 +248,7 @@ const mkLobby=game=>async()=>{
   await set(R(`lobbies/${c}`),{host:me.uid,game,status:"lobby",opts:{sp:1,wr:0,bo:1},players:{[me.uid]:{name:me.name,color:COLORS[0],ready:true,...ownTag()}}});
   onDisconnect(R(`lobbies/${c}`)).remove();enter(c);
 };
-$("tsnake").onclick=mkLobby("snake");$("tsurv").onclick=mkLobby("surv");$("tbr").onclick=mkLobby("br");$("ttk").onclick=mkLobby("tk");$("tlab").onclick=mkLobby("lab");$("tsim").onclick=mkLobby("sim");$("tsumo").onclick=mkLobby("sumo");$("tbarre").onclick=mkLobby("barre");$("tfruit").onclick=mkLobby("fruit");$("tamog").onclick=mkLobby("amog");
+$("tsnake").onclick=mkLobby("snake");$("tsurv").onclick=mkLobby("surv");$("tbr").onclick=mkLobby("br");$("ttk").onclick=mkLobby("tk");$("tlab").onclick=mkLobby("lab");$("tsim").onclick=mkLobby("sim");$("tsumo").onclick=mkLobby("sumo");$("tbarre").onclick=mkLobby("barre");$("tfruit").onclick=mkLobby("fruit");$("tamog").onclick=mkLobby("amog");$("tblockdash").onclick=mkLobby("blockdash");
 $("join").onclick=()=>joinLobby($("joincode").value.trim().toUpperCase());
 $("joincode").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();$("join").click()}});
 async function joinLobby(c){
@@ -281,12 +282,12 @@ function renderLobby(){
   Object.entries(pl).forEach(([u,p])=>{const r=h("div",null);r.className="pl";const sw=h("span");sw.className="sw";sw.style.background=p.color;
     r.append(sw,h("span",(p.ow?"🛡️ ":"")+p.name+(u===lobby.host?" (hôte)":"")+(p.wins?` 🏆${p.wins}`:"")),h("span",p.ready?"✔ prêt":"…"));b.append(r)});
   $("ready").hidden=host;$("ready").textContent=pl[me.uid]?.ready?"Pas prêt":"Prêt";
-  $("ltitle").textContent={snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",tk:"💥 Tanks",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",barre:"🌀 La barre malicieuse",fruit:"🍎 Fruit Forager",amog:"🚀 Amog Us"}[lobby.game]||"Lobby";
+  $("ltitle").textContent={snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",tk:"💥 Tanks",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",barre:"🌀 La barre malicieuse",fruit:"🍎 Fruit Forager",amog:"🚀 Amog Us",blockdash:"🧱 Block Dash"}[lobby.game]||"Lobby";
   $("opts").style.display=lobby.game==="snake"?"":"none";
   const op=lobby.opts||{};$("oSp").textContent="⚡ Vitesse : "+["lente","normale","rapide"][op.sp??1];
   $("oWr").textContent=op.wr?"🌀 Murs : traversables":"🧱 Murs : mortels";$("oBo").textContent=op.bo===0?"🎁 Bonus : non":"🎁 Bonus : oui";
   ["oSp","oWr","oBo"].forEach(i=>$(i).disabled=!host);
-  const nb=botCount(lobby),need=lobby.game==="amog"?4:lobby.game==="br"||lobby.game==="tk"||lobby.game==="sumo"||lobby.game==="barre"?2:1,cnt=Object.keys(pl).length+nb,all=Object.values(pl).every(p=>p.ready); // le battle royale ne se lance jamais seul
+  const nb=botCount(lobby),need=lobby.game==="amog"?4:lobby.game==="br"||lobby.game==="tk"||lobby.game==="sumo"||lobby.game==="barre"||lobby.game==="blockdash"?2:1,cnt=Object.keys(pl).length+nb,all=Object.values(pl).every(p=>p.ready); // le battle royale ne se lance jamais seul
   $("botrow").style.display=botGame(lobby)?"":"none";$("oBt").textContent="🤖 Bots : "+nb;$("oBt").disabled=!host;
   $("dfrow").style.display=lobby.game==="barre"?"":"none";$("oDf").textContent="🎚️ Difficulté : "+["😊 facile","😐 normale","💀 difficile"][op.df===0||op.df===2?op.df:1];$("oDf").disabled=!host; // La barre malicieuse : choisie par l'hôte
   $("amrow").style.display=lobby.game==="amog"?"":"none";
@@ -324,6 +325,8 @@ function enterBarreGame(c){ba=ba||createBarreClient(simEnv());return ba.enter(c)
 // ---------- Amog Us (amog.js) : l'hôte simule, tout le monde dessine dans le canvas commun ----------
 let am=null;
 function enterAmogGame(c){am=am||createAmogClient(simEnv());return am.enter(c)}
+let bd=null;
+function enterBlockDashGame(c){bd=bd||createBlockDashClient(simEnv());return bd.enter(c)}
 function local(){voice&&voice.stop();unLobby&&unLobby();unState&&unState();unLobby=unState=null;code=lobby=null;if(me)showHome()}
 
 // ---------- Jeu : affichage (tous les joueurs) ----------
@@ -402,6 +405,7 @@ setInterval(()=>{
 function enterGame(c){
   if(lobby&&lobby.game==="barre"){show("game");st=pv=null;gk="barre";held.clear();lastMv="";scoreKey="";document.body.dataset.g="barre";wake();orientHint();unState=enterBarreGame(c);return}
   if(lobby&&lobby.game==="amog"){show("game");st=pv=null;gk="amog";held.clear();lastMv="";scoreKey="";document.body.dataset.g="amog";wake();orientHint();unState=enterAmogGame(c);return}
+  if(lobby&&lobby.game==="blockdash"){show("game");st=pv=null;gk="blockdash";held.clear();lastMv="";scoreKey="";document.body.dataset.g="blockdash";wake();orientHint();unState=enterBlockDashGame(c);return}
   if(lobby&&lobby.game==="sumo"){show("game");st=pv=null;gk="sumo";held.clear();lastMv="";scoreKey="";document.body.dataset.g="sumo";wake();orientHint();unState=enterSumoGame(c);return}
   if(lobby&&lobby.game==="fruit"){show("game");st=pv=null;gk="fruit";held.clear();lastMv="";scoreKey="";document.body.dataset.g="fruit";wake();orientHint();unState=enterFruitGame(c);return}
   if(lobby&&lobby.game==="sim"){show("game");st=pv=null;gk="sim";held.clear();lastMv="";scoreKey="";document.body.dataset.g="sim";wake();orientHint();unState=enterSimGame(c);return}
@@ -991,6 +995,7 @@ $("start").onclick=async()=>{
   gStart=Date.now();
   if(lobby.game==="sim")return startSim(simEnv());
   if(lobby.game==="amog")return startAmog(simEnv());
+  if(lobby.game==="blockdash")return startBlockDash(simEnv());
   if(lobby.game==="sumo")return startSumo(simEnv());
   if(lobby.game==="barre")return startBarre(simEnv());
   if(lobby.game==="fruit")return startFruit(simEnv());
@@ -1905,8 +1910,8 @@ function drawTk(now){
 
 // ---------- Panneau admin (owners) : onglet 2 du menu Stats ----------
 
-const GAME_NAMES={snake:"Snake",surv:"Survie coop",br:"Battle Royale",lab:"Évasion coop",sim:"Mine Simulator",tk:"Tanks",sumo:"Sumo Arena",barre:"La barre malicieuse",fruit:"Fruit Forager",amog:"Amog Us"};
-const GAME_TILES={snake:"tsnake",surv:"tsurv",br:"tbr",lab:"tlab",sim:"tsim",tk:"ttk",sumo:"tsumo",barre:"tbarre",fruit:"tfruit",amog:"tamog"};
+const GAME_NAMES={snake:"Snake",surv:"Survie coop",br:"Battle Royale",lab:"Évasion coop",sim:"Mine Simulator",tk:"Tanks",sumo:"Sumo Arena",barre:"La barre malicieuse",fruit:"Fruit Forager",amog:"Amog Us",blockdash:"Block Dash"};
+const GAME_TILES={snake:"tsnake",surv:"tsurv",br:"tbr",lab:"tlab",sim:"tsim",tk:"ttk",sumo:"tsumo",barre:"tbarre",fruit:"tfruit",amog:"tamog",blockdash:"tblockdash"};
 const maintenance=()=>({...stD.maintenance,amog:stD.maintenance?.amog??true});
 const isMaintained=g=>!!maintenance()[g];
 function paintMaintenance(){
@@ -1975,7 +1980,7 @@ $("adReset").onclick=async()=>{if(!confirm("Remettre le compteur « parties jou�
 function renderAdmin(D){
   if(!me||!me.owner)return;
   paintMaintenance();renderMaintenanceAdmin();
-  const GN={tk:"💥 Tanks",snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",barre:"🌀 La barre malicieuse",fruit:"🍎 Fruit Forager",amog:"🚀 Amog Us"};
+  const GN={tk:"💥 Tanks",snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",barre:"🌀 La barre malicieuse",fruit:"🍎 Fruit Forager",amog:"🚀 Amog Us",blockdash:"🧱 Block Dash"};
   const lobs=Object.entries(D.lobbies||{}).filter(([,l])=>l).sort((x,y)=>(y[1].status==="playing")-(x[1].status==="playing"));
   $("adLobH").textContent=`Lobbys (${lobs.length})`;$("adAll").hidden=!lobs.length;
   $("adLob").replaceChildren(...(lobs.length?lobs.map(([c,l])=>{

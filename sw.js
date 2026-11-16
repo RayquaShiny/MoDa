@@ -7,7 +7,7 @@ const VERSION = 'moda-v53';
 const SHELL = 'shell-' + VERSION;
 const LIBS = 'libs-' + VERSION;
 const FILES = ['./', 'index.html', 'app.js', 'sim.js', 'simcore.js', 'sumo.js', 'barre.js', 'fruit.js', 'fruitcore.js', 'voice.js', 'amog.js', 'blockdash.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png'];
-const WATCHED = ['index.html', 'app.js', 'sim.js', 'simcore.js', 'sumo.js', 'barre.js', 'fruit.js', 'fruitcore.js', 'voice.js', 'amog.js']; // les fichiers dont un changement déclenche la mise à jour
+const WATCHED = ['index.html', 'app.js', 'sim.js', 'simcore.js', 'sumo.js', 'barre.js', 'fruit.js', 'fruitcore.js', 'voice.js', 'amog.js', 'blockdash.js']; // les fichiers dont un changement déclenche la mise à jour
 const LIB_HOSTS = ['www.gstatic.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
 self.addEventListener('install', (e) => {

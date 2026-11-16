@@ -15,7 +15,7 @@ export async function startBlockDash(env){
  };
  const pub=extra=>set(R(`games/${c}/state`),JSON.stringify({k:"blockdash",t:+t.toFixed(2),v:+speed.toFixed(2),walls:walls.map(w=>[w.id,+w.z.toFixed(2),w.blocks]),p:ids.map(u=>{let q=P[u];return[u,+q.x.toFixed(2),+q.z.toFixed(2),q.a,+q.d.toFixed(1),q.j>0?1:0,q.s>0?1:0,q.c,q.n]}),...extra}));
  const inputUn=onValue(R(`games/${c}/inputs`),s=>Object.entries(s.val()||{}).forEach(([u,v])=>{if(!I[u]||seen[u]===v)return;seen[u]=v;const a=String(v).split(",").map(Number),i=I[u];if(Number.isFinite(a[0]))i.x=Math.max(-4,Math.min(4,a[0]));if(Number.isFinite(a[1]))i.z=Math.max(-2.2,Math.min(2.2,a[1]));if(a[2]!==i.j)i.wantJ=1;if(a[3]!==i.s)i.wantS=1;i.j=a[2]||0;i.s=a[3]||0}));
- for(let i=0;i<5;i++){const w=wall();w.z=5+i*4.3;walls.push(w)}
+ for(let i=0;i<5;i++){const w=wall();w.z=10+i*4.3;if(i===0)w.blocks=w.blocks.filter(v=>Math.abs(v[0])>.6);walls.push(w)}
  for(let n=3;n>0;n--){await pub({cd:n});await new Promise(r=>setTimeout(r,1000));if(getCode()!==c){inputUn();return}}
  let last=performance.now(),acc=0,raf=0;
  const step=()=>{
@@ -45,7 +45,7 @@ export function createBlockDashClient(env){
  const up=e=>{if(!pointer||pointer.id!==e.pointerId)return;const r=cv.getBoundingClientRect(),a=(e.clientX-r.left)/r.width,b=(e.clientY-r.top)/r.height;if(!pointer.moved){if(a>.72&&b>.62)jump++;else if(a<.28&&b>.62)smash++;else if(b<.35)pz=Math.min(2.2,pz+.7)}send();pointer=null};
  const poly=(pts,fill,stroke)=>{x.beginPath();x.moveTo(pts[0][0],pts[0][1]);for(let i=1;i<pts.length;i++)x.lineTo(pts[i][0],pts[i][1]);x.closePath();x.fillStyle=fill;x.fill();if(stroke){x.strokeStyle=stroke;x.lineWidth=2;x.stroke()}};
  const rounded=(a,b,w,h,r,fill,stroke)=>{x.beginPath();x.roundRect(a,b,w,h,r);x.fillStyle=fill;x.fill();if(stroke){x.strokeStyle=stroke;x.lineWidth=1.5;x.stroke()}};
- const project=(xx,depth,yy=0)=>{const d=Math.max(.1,depth+5),s=430/d;return{x:400+(xx-(meX()||0))*s,y:205+(350-depth*9)*s/4-yy*s,w:s}};
+ const project=(xx,depth,yy=0)=>{const d=Math.max(.1,depth+5),s=430/d;return{x:400+(xx-(meX()||0))*s,y:205+335*(5/d)-yy*s,w:s}};
  const meX=()=>{const q=(state?.p||[]).find(v=>v[0]===me);return q?q[1]:px};
  const cube=(xx,depth,type,height)=>{
   const p=project(xx,depth),s=p.w*.42,w=s,h=height*p.w*.34,dx=s*.2,dy=s*.14,a=p.x-w/2,b=p.y-h;

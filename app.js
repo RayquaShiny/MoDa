@@ -159,7 +159,7 @@ const transient=e=>!navigator.onLine||/offline|network|timeout|unavailable/i.tes
 async function run(u){
   const my=++seq;let hold=false;
   presUn.forEach(f=>f());presUn=[];
-  if(!u){me=null;stopStats();applyNeon();$("adm").hidden=true;$("who").textContent="";$("out").hidden=true;$("net").hidden=true;setBusy(false);show("auth");return unboot()}
+  if(!u){me=null;stopStats();stopMaintenance();applyNeon();$("adm").hidden=true;$("who").textContent="";$("out").hidden=true;$("net").hidden=true;setBusy(false);show("auth");return unboot()}
   setBusy(true);
   try{
     const own=ownerOf(u);
@@ -180,7 +180,7 @@ async function run(u){
         $("net").hidden=true;if(was)toast("Reconnecté ✅");was=true;
       }else if(was)nt=setTimeout(()=>{$("net").hidden=false},1200);
     }));
-    watchSocial();
+    watchSocial();watchMaintenance();
   }catch(e){
     if(my!==seq)return;
     if(transient(e)){ // hors ligne : on garde la session et on réessaie, sans repasser par l'écran de connexion
@@ -243,7 +243,7 @@ const played=(g,open)=>{const sec=open?0:Math.max(1,Math.round((Date.now()-gStar
 const rcode=()=>Array.from({length:5},()=>"ABCDEFGHJKLMNPQRSTUVWXYZ"[Math.floor(Math.random()*24)]).join("");
 const firstColor=pl=>COLORS.find(c=>!Object.values(pl||{}).some(p=>p.color===c))||COLORS[0];
 const mkLobby=game=>async()=>{
-  if(isMaintained(game)){toast(`${GAME_NAMES[game]||"Ce jeu"} est actuellement en maintenance.`);return}
+  if(isMaintained(game)){toast(maintMsg(game));return}
   const c=rcode();
   await set(R(`lobbies/${c}`),{host:me.uid,game,status:"lobby",opts:{sp:1,wr:0,bo:1},players:{[me.uid]:{name:me.name,color:COLORS[0],ready:true,...ownTag()}}});
   onDisconnect(R(`lobbies/${c}`)).remove();enter(c);
@@ -255,7 +255,7 @@ async function joinLobby(c){
   if(code)await leaveLobby();
   const l=(await get(R(`lobbies/${c}`))).val();
   if(!l)return toast("Lobby introuvable");
-  if(isMaintained(l.game))return toast(`${GAME_NAMES[l.game]||"Ce jeu"} est actuellement en maintenance.`);
+  if(isMaintained(l.game))return toast(maintMsg(l.game));
   if(l.kick&&l.kick[me.uid])return toast("Tu as été retiré de ce lobby par un admin");
   if(l.status!=="lobby"&&l.game!=="sim"&&l.game!=="fruit")return toast("Partie déjà en cours");
   const pl=l.players||{};const mxP=l.game==="fruit"?5:l.game==="amog"?10:8;if(Object.keys(pl).length>=mxP&&!pl[me.uid])return toast(`Lobby plein (${mxP} max)`);
@@ -268,7 +268,7 @@ function enter(c){
     const l=s.val();if(!l){if(code){local();toast("Le lobby a été fermé")}return}
     if(l.kick&&l.kick[me.uid]){if(code){local();toast("Un admin t'a retiré du lobby")}return}
     lobby=l;
-    if(isMaintained(l.game)){if(l.status==="playing"){show("lobby");toast(`${GAME_NAMES[l.game]||"Ce jeu"} est actuellement en maintenance.`)}renderLobby();return}
+    if(isMaintained(l.game)){toast(maintMsg(l.game));leaveLobby();return}
     if((l.status==="lobby"||l.game==="sim"||l.game==="fruit")&&l.host!==me.uid&&!(l.players&&l.players[me.uid])){ // coupure puis retour : on se réinscrit
       set(R(`lobbies/${c}/players/${me.uid}`),{name:me.name,color:firstColor(l.players),ready:false,...ownTag()});onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();return}
     renderLobby();
@@ -992,6 +992,7 @@ addEventListener("keyup",e=>{if(e.key===" "&&isAim()&&cur==="game"){spDown=0;set
 
 // ---------- Jeu : boucle de l'hôte ----------
 $("start").onclick=async()=>{
+  if(lobby&&isMaintained(lobby.game)){toast(maintMsg(lobby.game));return leaveLobby()}
   gStart=Date.now();
   if(lobby.game==="sim")return startSim(simEnv());
   if(lobby.game==="amog")return startAmog(simEnv());
@@ -1636,7 +1637,7 @@ function startStats(){
 function renderStats(D){
   const pr=D.presence||{},us=D.users||{},lobs=Object.entries(D.lobbies||{}),fr=D.friends||{},now=Date.now();
   const online=Object.keys(pr).filter(u=>pr[u]),made=Object.values(us).map(u=>u.createdAt||0),nUsers=Object.keys(us).length;
-  const GN={tk:["💥","Tanks"],snake:["🐍","Snake"],surv:["🧟","Survie coop"],br:["🔫","Battle Royale"],lab:["🧩","Évasion coop"],sim:["⛏️","Mine Simulator"],sumo:["🤼","Sumo Arena"],barre:["🌀","La barre malicieuse"],fruit:["🍎","Fruit Forager"],amog:["🚀","Amog Us"]};
+  const GN={tk:["💥","Tanks"],snake:["🐍","Snake"],surv:["🧟","Survie coop"],br:["🔫","Battle Royale"],lab:["🧩","Évasion coop"],sim:["⛏️","Mine Simulator"],sumo:["🤼","Sumo Arena"],barre:["🌀","La barre malicieuse"],fruit:["🍎","Fruit Forager"],amog:["🚀","Amog Us"],blockdash:["🧱","Block Dash"]};
   const ago=t=>{if(!t)return"date inconnue";const m=Math.floor((now-t)/6e4);return m<1?"à l'instant":m<60?`il y a ${m} min`:m<1440?`il y a ${Math.floor(m/60)} h`:`il y a ${Math.floor(m/1440)} j`};
   const card=([ic,v,l])=>{const d=h("div");d.className="stat";const i=h("span",ic);i.className="ic";d.append(i,h("b",String(v)),h("span",l));return d};
   const playing=lobs.filter(([,l])=>l&&l.status==="playing"),open=lobs.filter(([,l])=>l&&l.status==="lobby");
@@ -1912,20 +1913,34 @@ function drawTk(now){
 
 const GAME_NAMES={snake:"Snake",surv:"Survie coop",br:"Battle Royale",lab:"Évasion coop",sim:"Mine Simulator",tk:"Tanks",sumo:"Sumo Arena",barre:"La barre malicieuse",fruit:"Fruit Forager",amog:"Amog Us",blockdash:"Block Dash"};
 const GAME_TILES={snake:"tsnake",surv:"tsurv",br:"tbr",lab:"tlab",sim:"tsim",tk:"ttk",sumo:"tsumo",barre:"tbarre",fruit:"tfruit",amog:"tamog",blockdash:"tblockdash"};
-const maintenance=()=>({...stD.maintenance,amog:stD.maintenance?.amog??true});
-const isMaintained=g=>!!maintenance()[g];
+// État de maintenance : variable À PART (stD est vidé à chaque ouverture du panneau stats, ce qui effaçait la maintenance)
+let maint=null,unMaint=null,maintTry=0,maintRetry=0;   // maint=null : pas encore lu
+const DEFAULT_MAINT={amog:true};                       // jeux en maintenance tant qu'un owner ne les a pas ouverts
+const maintenance=()=>({...DEFAULT_MAINT,...(maint||{})});
+const rawMaint=g=>!!maintenance()[g];                                  // état réel (panneau admin)
+const isMaintained=g=>rawMaint(g)&&!(me&&me.owner);                  // accès bloqué : les owners passent toujours
+const maintMsg=g=>`${GAME_NAMES[g]||"Ce jeu"} est actuellement en maintenance.`;
 function paintMaintenance(){
  const state=maintenance();
  Object.entries(GAME_TILES).forEach(([g,id])=>{
-  const el=$(id);if(!el)return;const on=!!state[g];el.classList.toggle("soon",on);el.setAttribute("aria-disabled",String(on));
-  const small=el.querySelector("small");if(small){if(!small.dataset.normal)small.dataset.normal=small.textContent;small.textContent=on?"Sous maintenance":small.dataset.normal;}
+  const el=$(id);if(!el)return;const on=!!state[g],ow=!!(me&&me.owner);el.classList.toggle("soon",on);el.setAttribute("aria-disabled",String(on&&!ow));
+  const small=el.querySelector("small");if(small){if(!small.dataset.normal)small.dataset.normal=small.textContent;small.textContent=on?(ow?"Maintenance · accès owner":"Sous maintenance"):small.dataset.normal;}
  });
 }
-onValue(R("stats/maintenance"),s=>{
- stD.maintenance=s.val()||{};paintMaintenance();
+function onMaintChange(){
+ paintMaintenance();
  if(me&&me.owner&&adm)renderMaintenanceAdmin();
- if(cur==="lobby"&&lobby&&isMaintained(lobby.game))renderLobby();
-},()=>{});
+ if(code&&lobby&&isMaintained(lobby.game)){toast(maintMsg(lobby.game));leaveLobby()}   // joueurs déjà dans un lobby / une partie : sortie propre
+}
+// Démarrée APRÈS la connexion (avant, les règles refusent la lecture et l'écoute meurt) ; réessaie si elle échoue
+function watchMaintenance(){
+ stopMaintenance();
+ unMaint=onValue(R("stats/maintenance"),s=>{maintTry=0;maint=s.val()||{};onMaintChange()},()=>{
+  unMaint=null;if(!auth.currentUser)return;
+  maintRetry=setTimeout(watchMaintenance,Math.min(30000,2000*2**Math.min(maintTry++,4)));
+ });
+}
+function stopMaintenance(){unMaint&&unMaint();unMaint=null;clearTimeout(maintRetry)}
 
 const admErr=()=>toast("Action refusée : les règles Firebase doivent autoriser les owners à écrire dans lobbies, games et stats");
 function setStTab(i){$("stView").hidden=!!i;$("admView").hidden=!i;
@@ -1953,15 +1968,16 @@ function renderMaintenanceAdmin(){
   const label=h("span",name+(state[g]?" · Sous maintenance":" · Disponible"));label.className="g";
   const btn=h("button",state[g]?"Désactiver la maintenance":"Mettre en maintenance");btn.type="button";btn.className=state[g]?"alt mini":"danger mini";
   btn.onclick=async()=>{
+   const next=!rawMaint(g);   // état lu au moment du clic (pas celui du rendu)
    btn.disabled=true;
    try{
-    await set(R("stats/maintenance/"+g),!state[g]);
-    if(!state[g]){
-     const current=stD.lobbies||{};
-     const closing=Object.entries(current).filter(([,l])=>l&&l.game===g);
-     await Promise.all(closing.map(async([c])=>{await remove(R("games/"+c));await remove(R("lobbies/"+c));}));
+    await set(R("stats/maintenance/"+g),next);
+    maint={...(maint||{}),[g]:next};onMaintChange();
+    if(next){   // on ferme les lobbys de ce jeu (liste lue en direct, pas depuis le cache des stats)
+     const all=(await get(R("lobbies"))).val()||{};
+     await Promise.all(Object.entries(all).filter(([,l])=>l&&l.game===g).map(async([c])=>{await remove(R("games/"+c));await remove(R("lobbies/"+c))}));
     }
-    toast(name+(state[g]?" : maintenance désactivée.":" : maintenance activée."));
+    toast(name+(next?" : maintenance activée.":" : maintenance désactivée."));
    }catch{admErr()}finally{btn.disabled=false}
   };
   row.append(label,btn);return row;

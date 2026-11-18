@@ -542,7 +542,7 @@ export function createStaClient(env) {
     let ix = 4, iy = 4;
     for (let t = 0; t < 20; t++) { ix = 1 + Math.floor(Math.random() * (N - 1)); iy = 1 + Math.floor(Math.random() * (N - 1)); const d = Math.hypot(ix * CELL - me.x, iy * CELL - me.y); if (d > 900 && d < 2400) break; }
     const hz = Math.random() < .5, sg = Math.random() < .5 ? 1 : -1, tr = { dx: hz ? sg : 0, dy: hz ? 0 : sg, x: 0, y: 0, a: 0, v: 130, hp: 240, mx: 240, fl: 0, hit: 0 };
-    tr.x = hz ? ix * CELL : ix * CELL - tr.dy * 22; tr.y = hz ? iy * CELL + tr.dx * 22 : iy * CELL; tr.a = Math.atan2(tr.dy, tr.dx);
+    tr.x = hz ? ix * CELL + tr.dx * 3 : ix * CELL - tr.dy * 22; tr.y = hz ? iy * CELL + tr.dx * 22 : iy * CELL + tr.dy * 3; tr.a = Math.atan2(tr.dy, tr.dx);
     return tr;
   }
   function truckStep(q, dt) {                                             // suit les voies de circulation, tourne au hasard aux carrefours
@@ -555,7 +555,7 @@ export function createStaClient(env) {
       if (!ds.length) ds.push([-q.dx, -q.dy]);
       const st = ds.find(d => d[0] === q.dx && d[1] === q.dy), d = st && Math.random() < .5 ? st : rnd(ds);
       q.dx = d[0]; q.dy = d[1];
-      if (q.dx) { q.x = ix * CELL; q.y = iy * CELL + q.dx * 22; } else { q.x = ix * CELL - q.dy * 22; q.y = iy * CELL; }
+      if (q.dx) { q.x = ix * CELL + q.dx * 3; q.y = iy * CELL + q.dx * 22; } else { q.x = ix * CELL - q.dy * 22; q.y = iy * CELL + q.dy * 3; }   // décalé de 3 px dans le sens de la marche : sinon le camion re-détecte le même carrefour et tourne en boucle
     }
     q.a = angLerp(q.a, Math.atan2(q.dy, q.dx), Math.min(1, 9 * dt));
   }

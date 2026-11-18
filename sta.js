@@ -10,6 +10,7 @@
 
 const W = 800, H = 560, CELL = 360, ROAD = 100, N = 9, WORLD = N * CELL, BL = CELL - ROAD, SW = 18;
 const POLICE = [6, 2], HOSP = [2, 6], GARAGE = [2, 2], GPRICE = 3500, ARMS = [6, 6];
+const GHOST = 4000001, GHOST_V = 560;   // voiture fantôme (owners ayant le garage) : id spécial, vitesse max (la normale est de 230)
 const SPAWN = { police: [6 * CELL + 180, 3 * CELL], hosp: [2 * CELL + 180, 7 * CELL] };
 const CCOL = ["#e63946", "#f4a261", "#2a9d8f", "#457b9d", "#e9c46a", "#9b5de5", "#8d99ae", "#f1f1f1"];
 const SKIN = ["#f1c27d", "#e0ac69", "#c68642", "#8d5524", "#ffdbac", "#d9a066"], SHIRT = ["#e63946", "#3a86ff", "#06d6a0", "#ffbe0b", "#8338ec", "#fb5607"];
@@ -319,14 +320,22 @@ export function createStaClient(env) {
     const gs = gStr(); if (force || gs !== savedG) { savedG = gs; set(RF(`users/${myUid}/sta2`), gs).catch(() => { }); }
   }
   const inGarage = () => me.dead <= 0 && Math.hypot(me.x - GZ.x, me.y - GZ.y) < 62;
-  function gAct() {                                                       // action de garage possible ici : "" | "buy" | "store" | "take"
+  const isOwner = () => { try { const o = env.isOwner; if (o !== undefined) return !!(typeof o === "function" ? o() : o); const m = getMe() || {}; return !!(m.owner || m.isOwner || m.role === "owner"); } catch { return false; } };
+  function gAct() {                                                       // action de garage possible ici : "" | "buy" | "store" | "take" | "ghost" | "ghostPut"
     if (!inGarage()) return "";
     if (!me.g) return "buy";
-    if (me.vid) return me.gcar ? "" : "store";
-    return me.gcar ? "take" : "";
+    if (me.vid) return me.vid === GHOST ? "ghostPut" : me.gcar ? "" : "store";
+    if (me.gcar) return "take";
+    return isOwner() ? "ghost" : "";
+  }
+  function ghostTake() {                                                  // voiture fantôme : rapide, aucun dégât ; n'existe pas dans le monde (pas de go/gi), seulement chez son conducteur
+    me.vid = GHOST; me.v = 0; myCol = 7; me.dm = 0; me.cop = 0; me.carT = 0; me.hp = 100; job = null;
+    floats.push({ x: me.x, y: me.y - 22, t: tNow, s: "👻 VOITURE FANTÔME", c: "#9ad8ff" }); beep(880, .14, "triangle", .06);
   }
   function garageDo() {
     const a = gAct(); if (!a) return false;
+    if (a === "ghost") { ghostTake(); return true; }
+    if (a === "ghostPut") { me.vid = 0; me.v = 0; job = null; floats.push({ x: me.x, y: me.y - 22, t: tNow, s: "👻 FANTÔME RANGÉ", c: "#9ad8ff" }); beep(520, .1, "triangle", .06); return true; }
     if (a === "buy") {
       if (me.cash < GPRICE) { toast(`Il te faut $${GPRICE} pour acheter le garage`); return true; }
       me.cash -= GPRICE; me.g = 1; floats.push({ x: me.x, y: me.y - 22, t: tNow, s: `GARAGE ACHETÉ −$${GPRICE}`, c: "#7ae582" }); beep(660, .12, "triangle", .06); persist(true); return true;
@@ -392,7 +401,7 @@ export function createStaClient(env) {
     newJob();
   }
   function dent(wa, sev) {                                                // la tôle se déforme du côté de l'impact (wa = angle monde vers le point d'impact)
-    if (!me.vid || me.dmCd > 0) return; me.dmCd = .35;
+    if (!me.vid || me.vid === GHOST || me.dmCd > 0) return; me.dmCd = .35;
     const rel = Math.atan2(Math.sin(wa - me.a), Math.cos(wa - me.a)), z = Math.abs(rel) < .785 ? 0 : Math.abs(rel) > 2.356 ? 2 : rel > 0 ? 1 : 3;
     for (let k = 0; k < sev; k++) if (((me.dm >> (z * 2)) & 3) < 3) me.dm += 1 << (z * 2);
     SND.crash(sev); navigator.vibrate && navigator.vibrate(30);
@@ -612,9 +621,9 @@ export function createStaClient(env) {
         else if (m > .05) { let d = Math.atan2(iy, ix) - me.a; d = Math.atan2(Math.sin(d), Math.cos(d)); sr = clamp(d * 2.2, -1, 1); th = Math.abs(d) < 1.6 ? Math.max(.6, m) : .5; }
         else { th = 0; sr = 0; }
       } else if (brakeId !== null) th = -1;
-      const MAXV = 230 * (1 - .045 * dmSum(me.dm)), REV = 95;
+      const GH = me.vid === GHOST, MAXV = GH ? GHOST_V : 230 * (1 - .045 * dmSum(me.dm)), REV = 95;
       me.thr = th > 0 ? Math.min(1, th) : 0; me.sk = (th < 0 && me.v > 100) || (Math.abs(sr) > .85 && Math.abs(me.v) > 170) ? 1 : 0;   // pour le son : accélère / crisse
-      if (th > 0) me.v += (me.v < -5 ? 620 : 330) * th * dt;
+      if (th > 0) me.v += (me.v < -5 ? 620 : 330) * (GH ? 2.2 : 1) * th * dt;
       else if (th < 0) me.v -= (me.v > 10 ? 620 : 190) * -th * dt;
       else me.v -= Math.sign(me.v) * Math.min(Math.abs(me.v), 170 * dt);
       me.v = clamp(me.v, -REV, MAXV);
@@ -645,7 +654,7 @@ export function createStaClient(env) {
     for (const [ox, oy, ov, om] of ot) {
       const dx = me.x - ox, dy = me.y - oy, d = Math.hypot(dx, dy);
       if (!me.vid) { if (ov > 50 && d < 19 && me.hurt <= 0) { me.hp -= Math.min(60, ov / 6); me.hurt = .6; me.x += dx / (d || 1) * 18; me.y += dy / (d || 1) * 18; beep(90, .15, "sawtooth", .05, 40); navigator.vibrate && navigator.vibrate(80); } }
-      else if (d < 30 && ov !== undefined) { me.x += dx / (d || 1) * (30 - d); me.y += dy / (d || 1) * (30 - d); if (Math.abs(me.v) > 90) { const sv = Math.abs(me.v); me.v *= .5; dent(Math.atan2(-dy, -dx), sv > 170 ? 2 : 1); beep(100, .1, "square", .04, 30); } if (om === "c") me.heat += dt * .5; }
+      else if (me.vid !== GHOST && d < 30 && ov !== undefined) { me.x += dx / (d || 1) * (30 - d); me.y += dy / (d || 1) * (30 - d); if (Math.abs(me.v) > 90) { const sv = Math.abs(me.v); me.v *= .5; dent(Math.atan2(-dy, -dx), sv > 170 ? 2 : 1); beep(100, .1, "square", .04, 30); } if (om === "c") me.heat += dt * .5; }
     }
     // police : « arrêté » si un flic est collé à toi et que tu ne fonces pas
     let copNear = false, bust = false;
@@ -653,10 +662,11 @@ export function createStaClient(env) {
     for (const d of dCops.values()) { const dd = Math.hypot(d.x - me.x, d.y - me.y); if (dd < 500) copNear = true; if (dd < 30) bust = true; }
     me.heat = Math.max(0, me.heat - dt * (copNear ? .02 : .09)); me.wl = Math.min(5, Math.ceil(me.heat - 1e-6));
     if (me.wl > 0 && bust && Math.abs(me.v) < 90) me.bust += dt; else me.bust = Math.max(0, me.bust - dt * 1.5);
+    if (me.vid === GHOST) { me.hp = 100; me.bust = 0; me.hurt = 0; }   // fantôme : ni blessé, ni arrêté
     if (me.bust > .9) die("🚓 ARRÊTÉ ! −20 % de ton argent", .2, "police");
     if (me.hp <= 0) die("💀 K.O. : −10 % de ton argent", .1, "hosp");
     // conflit : deux joueurs montent dans la même voiture
-    if (me.vid) for (const [u, p] of activeP()) if (u !== myUid && p.vid === me.vid && u < myUid) { me.vid = 0; me.v = 0; job = null; toast("Quelqu'un a pris cette voiture avant toi"); }
+    if (me.vid && me.vid !== GHOST) for (const [u, p] of activeP()) if (u !== myUid && p.vid === me.vid && u < myUid) { me.vid = 0; me.v = 0; job = null; toast("Quelqu'un a pris cette voiture avant toi"); }
     // courses
     if (me.vid && !job) newJob();
     if (me.vid && job && Math.hypot(job.x - me.x, job.y - me.y) < 60) { const r = 200 + Math.round(job.d / 6); me.cash += r; floats.push({ x: me.x, y: me.y - 20, t: tNow, s: `+$${r} livraison !`, c: "#ffd23f" }); beep(660, .12, "triangle", .06); newJob(); }
@@ -849,9 +859,10 @@ const WALL = ["#b07a35", "#8b8d99", "#b5523c", "#c9a867", "#5f7fa8", "#8a8f4c", 
 const rrect = (px, py, w, h, r) => { x.beginPath(); x.moveTo(px + r, py); x.arcTo(px + w, py, px + w, py + h, r); x.arcTo(px + w, py + h, px, py + h, r); x.arcTo(px, py + h, px, py, r); x.arcTo(px, py, px + w, py, r); x.closePath(); };
 function drawCar(px, py, a, color, cop, now, id, dm) {
   const ty = cop ? 0 : (id | 0) % 3, S = 1.18, L = (ty === 2 ? 42 : ty === 1 ? 34 : 38) * S, Wd = (ty === 2 ? 20 : ty === 1 ? 16 : 18) * S, hl = L / 2, hw = Wd / 2;
-  dm |= 0; const body = cop ? "#f3f3f3" : color, gl = "#8fc7ea", gd = "#4f7a97";
+  dm |= 0; const body = cop ? "#f3f3f3" : id === GHOST ? "#cfeeff" : color, gl = "#8fc7ea", gd = "#4f7a97";
   const cx0 = ty === 2 ? -hl + 3 : ty === 1 ? -hl + L * .3 : -hl + L * .2, cx1 = ty === 2 ? hl - L * .26 : hl - L * (ty === 1 ? .3 : .32), mid = (cx0 + cx1) / 2;
   x.save(); x.translate(px, py); x.rotate(a);
+  if (id === GHOST) { x.globalAlpha = .5 + .18 * Math.sin(now / 160); x.shadowColor = "#7fd4ff"; x.shadowBlur = 14; }   // fantôme : translucide et lumineux
   x.fillStyle = "rgba(0,0,0,.4)"; rrect(-hl + 4, -hw + 4, L, Wd, 5); x.fill();                    // ombre
   x.fillStyle = "#08080c"; [[-hl * .62, -1], [hl * .55, -1], [-hl * .62, 1], [hl * .55, 1]].forEach(([wx, sd]) => x.fillRect(wx - 4.5, sd < 0 ? -hw - 1.8 : hw - 1.2, 9, 3));   // roues
   x.fillStyle = "#0c0c10"; rrect(-hl - 1, -hw - 1, L + 2, Wd + 2, 6); x.fill();                  // contour
@@ -1119,7 +1130,7 @@ function frame(now) {
   x.strokeStyle = "#0b0c10"; x.lineWidth = 4; rrect(mx, my, mm, mm, 12); x.stroke(); x.strokeStyle = "#e8e8f0"; x.lineWidth = 1.5; rrect(mx, my, mm, mm, 12); x.stroke();   // cadre
   txt("N", mx + mm - 10, my + 14, 11, "#fffc");
   const bx = W - 56, by = H - 62; x.fillStyle = "#1f4fbf"; x.beginPath(); x.arc(bx, by, 38, 0, 7); x.fill(); x.strokeStyle = "#000"; x.lineWidth = 3; x.stroke(); txt(gAct() ? "GARAGE" : !me.vid && (shopAt() || nearGiver()) ? "ACTION" : me.vid ? "SORTIR" : "ENTRER", bx, by + 4, 12);
-  { const ga = gAct(); if (ga || (me.g && inGarage())) txt(ga === "buy" ? `E : ACHETER LE GARAGE ($${GPRICE})` : ga === "store" ? "E : RANGER LA VOITURE" : ga === "take" ? "E : SORTIR TA VOITURE" : me.vid ? "GARAGE PLEIN" : "GARAGE VIDE", W / 2, H - 60, 15, ga === "buy" && me.cash < GPRICE ? "#ff9f43" : "#ffe14d"); }
+  { const ga = gAct(); if (ga || (me.g && inGarage())) txt(ga === "buy" ? `E : ACHETER LE GARAGE ($${GPRICE})` : ga === "store" ? "E : RANGER LA VOITURE" : ga === "take" ? (me.g && isOwner() ? "E : SORTIR TA VOITURE · G : FANTÔME 👻" : "E : SORTIR TA VOITURE") : ga === "ghost" ? "E : SORTIR LA VOITURE FANTÔME 👻" : ga === "ghostPut" ? "E : RANGER LE FANTÔME" : me.vid ? "GARAGE PLEIN" : "GARAGE VIDE", W / 2, H - 60, 15, ga === "buy" && me.cash < GPRICE ? "#ff9f43" : "#ffe14d"); }
   if (me.dead <= 0 && !shop) {
     let h = "", hc = "#ffe14d"; const sa = shopAt();
     if (sa) { if (me.vid) h = `DESCENDS (E) POUR ${sa === "heal" ? "TE SOIGNER" : "ACHETER DES ARMES"}`; else if (sa === "heal") { const p = healPrice(); h = me.hp >= 99 ? "TU ES EN PLEINE FORME" : `E : TE SOIGNER ($${p})`; if (me.hp < 99 && p > me.cash) hc = "#ff9f43"; } else h = "E : ENTRER DANS L'ARMURERIE"; }
@@ -1149,6 +1160,7 @@ function frame(now) {
     if (e.key === "x" || e.key === "X") { if (!e.repeat) cycleWpn(); e.preventDefault(); return; }
     if (e.key === "r" || e.key === "R") { if (!e.repeat) nextStation(); e.preventDefault(); return; }
     if (e.key === "h" || e.key === "H") { hornKey = true; e.preventDefault(); return; }
+    if ((e.key === "g" || e.key === "G") && !shop) { if (!e.repeat && me.g && isOwner() && inGarage() && !me.vid && me.dead <= 0) ghostTake(); e.preventDefault(); return; }
     if (shop) { const d2 = /^(Digit|Numpad)([1-9])$/.exec(e.code || ""); if (d2) { shopPick(+d2[2] - 1); e.preventDefault(); return; } if (e.key === "Escape") { shop = ""; return; } }
     if ((e.key === "m" || e.key === "M") && mis) { if (!e.repeat) missionFail("", true); e.preventDefault(); return; }
     const dg = /^(Digit|Numpad)([1-3])$/.exec(e.code || ""); if (dg) { selWpn(+dg[2]); return; }
@@ -1190,7 +1202,7 @@ function frame(now) {
       Object.assign(me, { vid: 0, hp: 100, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, bust: 0, hurt: 0, v: 0, a: 0, cash: 0, cop: 0, wpn: 0, ammo: [0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, gcar: null, gn: 0, go: 0, gi: 0, gm: 0 });
       mis = null; tgt = null; shop = ""; killQ = []; carQ = []; tracers = []; sparks = []; booms = []; wrecks = []; pickT = new Map(); lastFc = {}; lastCs = {}; fireKey = false; fireId = null;
       const ix = 2 + Math.floor(Math.random() * 5), iy = 2 + Math.floor(Math.random() * 5); spawnAt([ix * CELL, iy * CELL]);
-      $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : monter / descendre d'une voiture · en voiture ↑ accélère, ↓ freine, ←→ tourne · livre les colis 📦, écrase des piétons, évite la police ! · Ramasse les armes au sol : F tirer, X changer d'arme (1-2-3) · les voitures se cabossent ! · garage ($3500) : va sur la zone jaune et appuie sur E · R : changer de radio (4 stations), H : klaxon · missions : parle aux donneurs ❗ (E), M pour abandonner · armurerie et distributeur de soins (hôpital) : va sur leur zone et appuie sur E";
+      $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : monter / descendre d'une voiture · en voiture ↑ accélère, ↓ freine, ←→ tourne · livre les colis 📦, écrase des piétons, évite la police ! · Ramasse les armes au sol : F tirer, X changer d'arme (1-2-3) · les voitures se cabossent ! · garage ($3500) : va sur la zone jaune et appuie sur E (owners : voiture fantôme 👻 invincible, G) · R : changer de radio (4 stations), H : klaxon · missions : parle aux donneurs ❗ (E), M pour abandonner · armurerie et distributeur de soins (hôpital) : va sur leur zone et appuie sur E";
       get(RF(`users/${myUid}/sta`)).then(s => { const v = +s.val(); if (v > 0 && me.cash === 0) { me.cash = v; savedCash = v; sPrevCash = v; } }).catch(() => { });
       get(RF(`users/${myUid}/sta2`)).then(s => {                           // garage, voiture rangée, armes et munitions
         try {

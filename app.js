@@ -6,6 +6,7 @@ import {startFruit,createFruitClient} from "./fruit.js";
 import {startSumo,createSumoClient} from "./sumo.js";
 import {startBarre,createBarreClient} from "./barre.js";
 import {startAmog,createAmogClient} from "./amog.js";
+import {createStaClient} from "./sta.js";
 import {startBlockDash,createBlockDashClient} from "./blockdash.js";
 import {createVoice} from "./voice.js";
 
@@ -176,7 +177,7 @@ async function run(u){
       clearTimeout(nt);
       if(x.val()){
         onDisconnect(R(`presence/${u.uid}`)).set(false);set(R(`presence/${u.uid}`),true).catch(()=>{});
-        if(code&&lobby)onDisconnect(R(lobby.host===u.uid?`lobbies/${code}`:`lobbies/${code}/players/${u.uid}`)).remove(); // ré-armé après une coupure
+        if(code&&lobby)onDisconnect(R(lobby.host===u.uid&&lobby.game!=="sta"?`lobbies/${code}`:`lobbies/${code}/players/${u.uid}`)).remove(); // ré-armé après une coupure
         $("net").hidden=true;if(was)toast("Reconnecté ✅");was=true;
       }else if(was)nt=setTimeout(()=>{$("net").hidden=false},1200);
     }));
@@ -248,7 +249,7 @@ const mkLobby=game=>async()=>{
   await set(R(`lobbies/${c}`),{host:me.uid,game,status:"lobby",opts:{sp:1,wr:0,bo:1},players:{[me.uid]:{name:me.name,color:COLORS[0],ready:true,...ownTag()}}});
   onDisconnect(R(`lobbies/${c}`)).remove();enter(c);
 };
-$("tsnake").onclick=mkLobby("snake");$("tsurv").onclick=mkLobby("surv");$("tbr").onclick=mkLobby("br");$("ttk").onclick=mkLobby("tk");$("tlab").onclick=mkLobby("lab");$("tsim").onclick=mkLobby("sim");$("tsumo").onclick=mkLobby("sumo");$("tbarre").onclick=mkLobby("barre");$("tfruit").onclick=mkLobby("fruit");$("tamog").onclick=mkLobby("amog");$("tblockdash").onclick=mkLobby("blockdash");
+$("tsnake").onclick=mkLobby("snake");$("tsta").onclick=joinSta;$("tsurv").onclick=mkLobby("surv");$("tbr").onclick=mkLobby("br");$("ttk").onclick=mkLobby("tk");$("tlab").onclick=mkLobby("lab");$("tsim").onclick=mkLobby("sim");$("tsumo").onclick=mkLobby("sumo");$("tbarre").onclick=mkLobby("barre");$("tfruit").onclick=mkLobby("fruit");$("tamog").onclick=mkLobby("amog");$("tblockdash").onclick=mkLobby("blockdash");
 $("join").onclick=()=>joinLobby($("joincode").value.trim().toUpperCase());
 $("joincode").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();$("join").click()}});
 async function joinLobby(c){
@@ -269,8 +270,8 @@ function enter(c){
     if(l.kick&&l.kick[me.uid]){if(code){local();toast("Un admin t'a retiré du lobby")}return}
     lobby=l;
     if(isMaintained(l.game)){toast(maintMsg(l.game));leaveLobby();return}
-    if((l.status==="lobby"||l.game==="sim"||l.game==="fruit")&&l.host!==me.uid&&!(l.players&&l.players[me.uid])){ // coupure puis retour : on se réinscrit
-      set(R(`lobbies/${c}/players/${me.uid}`),{name:me.name,color:firstColor(l.players),ready:false,...ownTag()});onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();return}
+    if(((l.status==="lobby"||l.game==="sim"||l.game==="fruit")&&l.host!==me.uid||l.game==="sta")&&!(l.players&&l.players[me.uid])){ // coupure puis retour : on se réinscrit
+      set(R(`lobbies/${c}/players/${me.uid}`),{name:me.name,color:firstColor(l.players),ready:false,...(l.game==="sta"?{j:Date.now()}:{}),...ownTag()});onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();return}
     renderLobby();
     if(l.status==="playing"&&cur!=="game")enterGame(c);
     if(l.status==="lobby"&&cur==="game"){unState&&unState();unState=null;show("lobby")}
@@ -282,7 +283,7 @@ function renderLobby(){
   Object.entries(pl).forEach(([u,p])=>{const r=h("div",null);r.className="pl";const sw=h("span");sw.className="sw";sw.style.background=p.color;
     r.append(sw,h("span",(p.ow?"🛡️ ":"")+p.name+(u===lobby.host?" (hôte)":"")+(p.wins?` 🏆${p.wins}`:"")),h("span",p.ready?"✔ prêt":"…"));b.append(r)});
   $("ready").hidden=host;$("ready").textContent=pl[me.uid]?.ready?"Pas prêt":"Prêt";
-  $("ltitle").textContent={snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",tk:"💥 Tanks",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",barre:"🌀 La barre malicieuse",fruit:"🍎 Fruit Forager",amog:"🚀 Amog Us",blockdash:"🧱 Block Dash"}[lobby.game]||"Lobby";
+  $("ltitle").textContent={snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",tk:"💥 Tanks",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",barre:"🌀 La barre malicieuse",fruit:"🍎 Fruit Forager",sta:"🚗 Sta I",amog:"🚀 Amog Us",blockdash:"🧱 Block Dash"}[lobby.game]||"Lobby";
   $("opts").style.display=lobby.game==="snake"?"":"none";
   const op=lobby.opts||{};$("oSp").textContent="⚡ Vitesse : "+["lente","normale","rapide"][op.sp??1];
   $("oWr").textContent=op.wr?"🌀 Murs : traversables":"🧱 Murs : mortels";$("oBo").textContent=op.bo===0?"🎁 Bonus : non":"🎁 Bonus : oui";
@@ -305,10 +306,29 @@ $("oAi").onclick=setOpt("ai",o=>((o.ai>=1&&o.ai<=3?o.ai:0)+1)%4);$("oAs").onclic
 $("oBt").onclick=()=>{if(!lobby||lobby.host!==me.uid||!botGame(lobby))return;const m=maxBots(lobby),n=botCount(lobby)+1>m?0:botCount(lobby)+1;update(R(`lobbies/${code}/opts`),{bots:n}).catch(err)};
 $("ready").onclick=()=>set(R(`lobbies/${code}/players/${me.uid}/ready`),!lobby.players[me.uid].ready);
 $("leave").onclick=leaveLobby;
+// ---------- Sta I : serveur persistant (STA1, STA2…). Pas de lobby : on arrive directement dans la partie ; l'hôte = le plus ancien joueur ----------
+const STA_MAX=24;
+async function joinSta(){
+  if(isMaintained("sta"))return toast(maintMsg("sta"));
+  if(code)await leaveLobby();
+  let c=null;
+  try{
+    for(let i=1;i<=30&&!c;i++){
+      const k="STA"+i,l=(await get(R(`lobbies/${k}`))).val(),pl=(l&&l.players)||{},n=Object.keys(pl).length;
+      if(l&&l.game!=="sta")continue;
+      if(l&&n>=STA_MAX&&!pl[me.uid])continue;
+      if(l&&!n)await remove(R(`games/${k}`));   // serveur vide : on repart d'un monde neuf
+      await update(R(`lobbies/${k}`),{host:me.uid,game:"sta",status:"playing",opts:{},[`players/${me.uid}`]:{name:me.name,color:firstColor(pl),ready:true,j:Date.now(),...ownTag()}});
+      c=k;
+    }
+  }catch{return toast("Impossible de rejoindre le serveur Sta I")}
+  if(!c)return toast("Tous les serveurs Sta I sont pleins");
+  onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();enter(c);
+}
 async function leaveLobby(){
-  if(!code)return;const c=code,host=lobby&&lobby.host===me.uid;local();
+  if(!code)return;const c=code,sta=!!lobby&&lobby.game==="sta",host=lobby&&lobby.host===me.uid&&!sta;local();
   onDisconnect(R(`lobbies/${c}`)).cancel();onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).cancel();
-  try{if(host){await remove(R(`games/${c}`));await remove(R(`lobbies/${c}`))}else await remove(R(`lobbies/${c}/players/${me.uid}`))}catch{}
+  try{if(host){await remove(R(`games/${c}`));await remove(R(`lobbies/${c}`))}else{await remove(R(`lobbies/${c}/players/${me.uid}`));if(sta&&!(await get(R(`lobbies/${c}/players`))).val())await remove(R(`games/${c}`))}}catch{}
 }
 // ---------- Mine Simulator (sim.js + simcore.js) : monde partagé, progression sauvegardée dans users/<uid>/sim ----------
 let sc=null;
@@ -325,6 +345,8 @@ function enterBarreGame(c){ba=ba||createBarreClient(simEnv());return ba.enter(c)
 // ---------- Amog Us (amog.js) : l'hôte simule, tout le monde dessine dans le canvas commun ----------
 let am=null;
 function enterAmogGame(c){am=am||createAmogClient(simEnv());return am.enter(c)}
+let staC=null;
+function enterStaGame(c){staC=staC||createStaClient(simEnv());return staC.enter(c)}
 let bd=null;
 function enterBlockDashGame(c){bd=bd||createBlockDashClient(simEnv());return bd.enter(c)}
 function local(){voice&&voice.stop();unLobby&&unLobby();unState&&unState();unLobby=unState=null;code=lobby=null;if(me)showHome()}
@@ -403,6 +425,7 @@ setInterval(()=>{
   else return;
   voice.setPos(o[me.uid]||null,o,r)},200);
 function enterGame(c){
+  if(lobby&&lobby.game==="sta"){show("game");st=pv=null;gk="sta";held.clear();lastMv="";scoreKey="";document.body.dataset.g="sta";wake();orientHint();unState=enterStaGame(c);return}
   if(lobby&&lobby.game==="barre"){show("game");st=pv=null;gk="barre";held.clear();lastMv="";scoreKey="";document.body.dataset.g="barre";wake();orientHint();unState=enterBarreGame(c);return}
   if(lobby&&lobby.game==="amog"){show("game");st=pv=null;gk="amog";held.clear();lastMv="";scoreKey="";document.body.dataset.g="amog";wake();orientHint();unState=enterAmogGame(c);return}
   if(lobby&&lobby.game==="blockdash"){show("game");st=pv=null;gk="blockdash";held.clear();lastMv="";scoreKey="";document.body.dataset.g="blockdash";wake();orientHint();unState=enterBlockDashGame(c);return}
@@ -666,7 +689,7 @@ function frame(now){
 }
 const KEYS={ArrowUp:"U",w:"U",z:"U",ArrowDown:"D",s:"D",ArrowLeft:"L",a:"L",q:"L",ArrowRight:"R",d:"R"};
 const held=new Set();let seqN=0;
-const mv=()=>{if(cur!=="game"||!code||!me||gk==="lab"||gk==="sim"||gk==="sumo"||gk==="barre"||gk==="fruit"||gk==="amog")return;if(isAim())return brSend();const m=`${(held.has("R")?1:0)-(held.has("L")?1:0)},${(held.has("D")?1:0)-(held.has("U")?1:0)}`;if(m!==lastMv){lastMv=m;set(R(`games/${code}/inputs/${me.uid}`),m+","+(++seqN)).catch(()=>{})}};
+const mv=()=>{if(cur!=="game"||!code||!me||gk==="lab"||gk==="sim"||gk==="sumo"||gk==="barre"||gk==="fruit"||gk==="amog"||gk==="sta")return;if(isAim())return brSend();const m=`${(held.has("R")?1:0)-(held.has("L")?1:0)},${(held.has("D")?1:0)-(held.has("U")?1:0)}`;if(m!==lastMv){lastMv=m;set(R(`games/${code}/inputs/${me.uid}`),m+","+(++seqN)).catch(()=>{})}};
 const send=d=>{if(cur!=="game"||gk!=="snake"||d===lastDir)return;lastDir=d;set(R(`games/${code}/inputs/${me.uid}`),d+(++seqN)).catch(()=>{})};
 addEventListener("keydown",e=>{if(cur!=="game"||/^(INPUT|TEXTAREA)$/.test(e.target.tagName))return;const d=KEYS[e.key.length>1?e.key:e.key.toLowerCase()];if(d){e.preventDefault();if(gk!=="snake"){held.add(d);mv()}else send(d)}});
 addEventListener("keyup",e=>{const d=KEYS[e.key.length>1?e.key:e.key.toLowerCase()];if(d&&(gk!=="snake")&&cur==="game"){held.delete(d);mv()}});
@@ -700,7 +723,7 @@ function endStick(k){const s=tp[k];if(!s)return;tp[k]=null;s.el.classList.remove
   if(k==="mv")setHeld(0,0,0,0);else{ptrDown=0;aimLock=0;if(cur==="game"&&isAim())setFire()}}
 function resetTouch(){["mv","aim"].forEach(endStick);tp.sw=null;held.clear();ptrDown=0;aimLock=0;if(cur==="game"){if(isAim())setFire();else if(gk==="surv"||gk==="lab")mv()}}
 gameEl.addEventListener("pointerdown",e=>{
-  if(!touchy(e)||cur!=="game"||gk==="sim"||gk==="sumo"||gk==="barre"||gk==="fruit"||gk==="amog"||e.target.closest("button"))return;
+  if(!touchy(e)||cur!=="game"||gk==="sim"||gk==="sumo"||gk==="barre"||gk==="fruit"||gk==="amog"||gk==="sta"||e.target.closest("button"))return;
   e.preventDefault();const x=e.clientX,y=e.clientY;
   if(gk==="snake"){if(tp.sw)return;tp.sw={id:e.pointerId,ox:x,oy:y}}
   else if(isAim()&&(ctlMode==="pad"||x>=innerWidth*.5)){if(tp.aim)return;tp.aim=mkStick(sR,x,y,e.pointerId);ptrDown=1;setFire()}
@@ -1637,7 +1660,7 @@ function startStats(){
 function renderStats(D){
   const pr=D.presence||{},us=D.users||{},lobs=Object.entries(D.lobbies||{}),fr=D.friends||{},now=Date.now();
   const online=Object.keys(pr).filter(u=>pr[u]),made=Object.values(us).map(u=>u.createdAt||0),nUsers=Object.keys(us).length;
-  const GN={tk:["💥","Tanks"],snake:["🐍","Snake"],surv:["🧟","Survie coop"],br:["🔫","Battle Royale"],lab:["🧩","Évasion coop"],sim:["⛏️","Mine Simulator"],sumo:["🤼","Sumo Arena"],barre:["🌀","La barre malicieuse"],fruit:["🍎","Fruit Forager"],amog:["🚀","Amog Us"],blockdash:["🧱","Block Dash"]};
+  const GN={tk:["💥","Tanks"],snake:["🐍","Snake"],surv:["🧟","Survie coop"],br:["🔫","Battle Royale"],lab:["🧩","Évasion coop"],sim:["⛏️","Mine Simulator"],sumo:["🤼","Sumo Arena"],barre:["🌀","La barre malicieuse"],fruit:["🍎","Fruit Forager"],amog:["🚀","Amog Us"],blockdash:["🧱","Block Dash"],sta:["🚗","Sta I"]};
   const ago=t=>{if(!t)return"date inconnue";const m=Math.floor((now-t)/6e4);return m<1?"à l'instant":m<60?`il y a ${m} min`:m<1440?`il y a ${Math.floor(m/60)} h`:`il y a ${Math.floor(m/1440)} j`};
   const card=([ic,v,l])=>{const d=h("div");d.className="stat";const i=h("span",ic);i.className="ic";d.append(i,h("b",String(v)),h("span",l));return d};
   const playing=lobs.filter(([,l])=>l&&l.status==="playing"),open=lobs.filter(([,l])=>l&&l.status==="lobby");
@@ -1911,11 +1934,11 @@ function drawTk(now){
 
 // ---------- Panneau admin (owners) : onglet 2 du menu Stats ----------
 
-const GAME_NAMES={snake:"Snake",surv:"Survie coop",br:"Battle Royale",lab:"Évasion coop",sim:"Mine Simulator",tk:"Tanks",sumo:"Sumo Arena",barre:"La barre malicieuse",fruit:"Fruit Forager",amog:"Amog Us",blockdash:"Block Dash"};
-const GAME_TILES={snake:"tsnake",surv:"tsurv",br:"tbr",lab:"tlab",sim:"tsim",tk:"ttk",sumo:"tsumo",barre:"tbarre",fruit:"tfruit",amog:"tamog",blockdash:"tblockdash"};
+const GAME_NAMES={snake:"Snake",surv:"Survie coop",br:"Battle Royale",lab:"Évasion coop",sim:"Mine Simulator",tk:"Tanks",sumo:"Sumo Arena",barre:"La barre malicieuse",fruit:"Fruit Forager",amog:"Amog Us",blockdash:"Block Dash",sta:"Sta I"};
+const GAME_TILES={snake:"tsnake",surv:"tsurv",br:"tbr",lab:"tlab",sim:"tsim",tk:"ttk",sumo:"tsumo",barre:"tbarre",fruit:"tfruit",amog:"tamog",blockdash:"tblockdash",sta:"tsta"};
 // État de maintenance : variable À PART (stD est vidé à chaque ouverture du panneau stats, ce qui effaçait la maintenance)
 let maint=null,unMaint=null,maintTry=0,maintRetry=0;   // maint=null : pas encore lu
-const DEFAULT_MAINT={amog:true};                       // jeux en maintenance tant qu'un owner ne les a pas ouverts
+const DEFAULT_MAINT={sta:true};                       // jeux en maintenance tant qu'un owner ne les a pas ouverts
 const maintenance=()=>({...DEFAULT_MAINT,...(maint||{})});
 const rawMaint=g=>!!maintenance()[g];                                  // état réel (panneau admin)
 const isMaintained=g=>rawMaint(g)&&!(me&&me.owner);                  // accès bloqué : les owners passent toujours
@@ -1996,7 +2019,7 @@ $("adReset").onclick=async()=>{if(!confirm("Remettre le compteur « parties jou�
 function renderAdmin(D){
   if(!me||!me.owner)return;
   paintMaintenance();renderMaintenanceAdmin();
-  const GN={tk:"💥 Tanks",snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",barre:"🌀 La barre malicieuse",fruit:"🍎 Fruit Forager",amog:"🚀 Amog Us",blockdash:"🧱 Block Dash"};
+  const GN={tk:"💥 Tanks",snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",barre:"🌀 La barre malicieuse",fruit:"🍎 Fruit Forager",sta:"🚗 Sta I",amog:"🚀 Amog Us",blockdash:"🧱 Block Dash"};
   const lobs=Object.entries(D.lobbies||{}).filter(([,l])=>l).sort((x,y)=>(y[1].status==="playing")-(x[1].status==="playing"));
   $("adLobH").textContent=`Lobbys (${lobs.length})`;$("adAll").hidden=!lobs.length;
   $("adLob").replaceChildren(...(lobs.length?lobs.map(([c,l])=>{

@@ -8,7 +8,7 @@
      hormis users/<uid>/sta (ton argent, sauvegardé).
    - But : gagner de l'argent (courses en voiture, piétons écrasés), éviter la police (étoiles ★), finir premier du classement. */
 
-const W = 800, H = 560, CELL = 360, ROAD = 100, N = 9, WORLD = N * CELL, BL = CELL - ROAD, SW = 14;
+const W = 800, H = 560, CELL = 360, ROAD = 100, N = 9, WORLD = N * CELL, BL = CELL - ROAD, SW = 18;
 const POLICE = [6, 2], HOSP = [2, 6];
 const SPAWN = { police: [6 * CELL + 180, 3 * CELL], hosp: [2 * CELL + 180, 7 * CELL] };
 const CCOL = ["#e63946", "#f4a261", "#2a9d8f", "#457b9d", "#e9c46a", "#9b5de5", "#8d99ae", "#f1f1f1"];
@@ -42,7 +42,11 @@ const parseP = s => { const a = String(s).split(","); return { x: +a[0] || 0, y:
 
 export function createStaClient(env) {
   const { R: RF, set, get, remove, onValue, $, beep, getMe, getCode, getLobby, toast } = env;
-  const cv = $("cv"), x = cv.getContext("2d");
+  const cv = $("cv"), mx2 = cv.getContext("2d"), LR = 2, lc = document.createElement("canvas"), lx = lc.getContext("2d");
+  lc.width = W / LR; lc.height = H / LR; let x = mx2;
+  const mkPat = (base, sp, n) => { const c2 = document.createElement("canvas"); c2.width = c2.height = 128; const g = c2.getContext("2d"); g.fillStyle = base; g.fillRect(0, 0, 128, 128); let seed = 7; const r = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff; for (let i = 0; i < n; i++) { g.fillStyle = sp[Math.floor(r() * sp.length)]; g.fillRect(Math.floor(r() * 64) * 2, Math.floor(r() * 64) * 2, 2, 2); } return lx.createPattern(c2, "repeat") || base; };
+  const patRoad = mkPat("#585a60", ["#4e5057", "#63656c", "#484a50"], 750), patGrass = mkPat("#3c7d2c", ["#33702a", "#478b36", "#2d6424"], 650);
+  const TOUCH = typeof matchMedia === "function" && matchMedia("(pointer:coarse)").matches;
   let active = false, raf = 0, timer = 0, tPrev = 0, c = "", myUid = "", unS = null, unP = null;
   // --- état partagé reçu ---
   let ls = null, lastT = 0, lastH = "", lastEv = 0, pd = {};
@@ -50,7 +54,7 @@ export function createStaClient(env) {
   // --- simulation de l'hôte ---
   let hostOn = false, peds = [], cars = [], nid = 1, evs = [], evId = 0, lastHs = {}, spawnCd = 0, streamCd = 0, pubAt = 0, hostT = 0, cleanCd = 0;
   // --- moi ---
-  const me = { x: 0, y: 0, a: 0, v: 0, vid: 0, hp: 100, cash: 0, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, msg: "", hurt: 0, bust: 0 };
+  const me = { x: 0, y: 0, a: 0, v: 0, vid: 0, hp: 100, cash: 0, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, msg: "", hurt: 0, bust: 0, carT: 99 };
   let keys = new Set(), stick = null, useReq = 0, job = null, myCol = 0, cam = { x: 0, y: 0, z: 1.2 }, sentAt = 0, sentStr = "", savedCash = -1, saveAt = 0, tNow = 0, hitDone = new Set();
   let splats = [], floats = [];
 
@@ -98,7 +102,7 @@ export function createStaClient(env) {
   }
   function sidewalk(q, px, py) {
     const i = clamp(Math.floor((px - ROAD / 2) / CELL), 0, N - 1), j = clamp(Math.floor((py - ROAD / 2) / CELL), 0, N - 1), x0 = lo(i), y0 = lo(j), e = Math.floor(Math.random() * 4), t = rr(0, BL);
-    if (e === 0) { q.x = x0 + t; q.y = y0 + 7; } else if (e === 1) { q.x = x0 + t; q.y = y0 + BL - 7; } else if (e === 2) { q.x = x0 + 7; q.y = y0 + t; } else { q.x = x0 + BL - 7; q.y = y0 + t; }
+    if (e === 0) { q.x = x0 + t; q.y = y0 + SW / 2; } else if (e === 1) { q.x = x0 + t; q.y = y0 + BL - SW / 2; } else if (e === 2) { q.x = x0 + SW / 2; q.y = y0 + t; } else { q.x = x0 + BL - SW / 2; q.y = y0 + t; }
   }
   const nearPt = (a, b) => { const ps = activeP(); if (!ps.length) return null; const p = rnd(ps)[1], an = rr(0, 6.283), d = rr(a, b); return [clamp(p.x + Math.cos(an) * d, 0, WORLD), clamp(p.y + Math.sin(an) * d, 0, WORLD)]; };
 
@@ -198,7 +202,7 @@ export function createStaClient(env) {
     let best = 0, bd = 48, bc = null;
     for (const [id, d] of dCars) if ((d.m === "d" || d.m === "p") && Math.hypot(d.x - me.x, d.y - me.y) < bd) { bd = Math.hypot(d.x - me.x, d.y - me.y); best = id; bc = d; }
     if (!best) return;
-    me.vid = best; me.x = bc.x; me.y = bc.y; me.a = bc.a; me.v = bc.m === "d" ? bc.v : 0; myCol = bc.c;
+    me.vid = best; me.x = bc.x; me.y = bc.y; me.a = bc.a; me.v = bc.m === "d" ? bc.v : 0; myCol = bc.c; me.carT = 0;
     if (bc.m === "d") { me.heat += .8; floats.push({ x: me.x, y: me.y - 20, t: tNow, s: "🚗 Car-jacking !", c: "#ffd23f" }); }
     newJob();
   }
@@ -208,12 +212,19 @@ export function createStaClient(env) {
     if (stick) { const m = Math.hypot(stick.dx, stick.dy); if (m > .18) { const k = Math.min(1, (m - .18) / .7) / m; ix = stick.dx * k; iy = stick.dy * k; } }
     else { ix = (keys.has("R") ? 1 : 0) - (keys.has("L") ? 1 : 0); iy = (keys.has("D") ? 1 : 0) - (keys.has("U") ? 1 : 0); if (ix && iy && !me.vid) { ix *= .7071; iy *= .7071; } }
     if (me.vid) {
-      const th = -iy;
-      if (th > 0) me.v += th * 280 * dt; else if (th < 0) me.v += (me.v > 20 ? 520 : 160) * th * dt; else me.v -= Math.sign(me.v) * Math.min(Math.abs(me.v), 130 * dt);
-      me.v = clamp(me.v, -110, 310);
-      me.a += ix * 2.5 * dt * clamp(me.v / 110, -1, 1);
-      me.x += Math.cos(me.a) * me.v * dt; me.y += Math.sin(me.a) * me.v * dt;
-      if (push(me, 13)) { if (Math.abs(me.v) > 140) beep(80, .15, "sawtooth", .05, 30); me.v *= .35; }
+      // conduite « arcade » : ↑ accélère (et freine si on recule), ↓ freine puis recule, ←→ tourne le nez de la voiture (seulement si elle roule)
+      const th = -iy, MAXV = 230, REV = 95;
+      if (th > 0) me.v += (me.v < -5 ? 620 : 330) * th * dt;
+      else if (th < 0) me.v -= (me.v > 10 ? 620 : 190) * -th * dt;
+      else me.v -= Math.sign(me.v) * Math.min(Math.abs(me.v), 170 * dt);
+      me.v = clamp(me.v, -REV, MAXV);
+      me.a += ix * 2.9 * clamp(Math.abs(me.v) / 45, 0, 1) * (1 - .35 * Math.abs(me.v) / MAXV) * dt;
+      const sx = me.x + Math.cos(me.a) * me.v * dt, sy = me.y + Math.sin(me.a) * me.v * dt;
+      me.x = sx; me.y = sy;
+      if (push(me, 13)) {                                                  // contre un mur : on glisse, et on ne perd de la vitesse que si on le prend de face
+        const cx = me.x - sx, cy = me.y - sy, cl = Math.hypot(cx, cy);
+        if (cl > .01 && Math.abs(me.v) > 1) { const dot = (Math.cos(me.a) * cx + Math.sin(me.a) * cy) / cl * Math.sign(me.v); if (dot < 0) { if (Math.abs(me.v) > 140 && -dot > .5) beep(80, .12, "sawtooth", .05, 30); me.v *= 1 + dot * .75; } }
+      }
     } else {
       const m = Math.hypot(ix, iy); if (m > .05) { me.a = Math.atan2(iy, ix); me.x += ix / Math.max(1, m) * 125 * dt; me.y += iy / Math.max(1, m) * 125 * dt; } me.v = m > .05 ? 125 : 0;
       push(me, 7);
@@ -254,112 +265,146 @@ export function createStaClient(env) {
     if (now - saveAt > 8000 && Math.round(me.cash) !== savedCash) { saveAt = now; savedCash = Math.round(me.cash); set(RF(`users/${myUid}/sta`), savedCash).catch(() => { }); }
   }
 
-  // ================= DESSIN =================
-  const txt = (s, px, py, size, color, al) => { x.font = `700 ${size}px system-ui,sans-serif`; x.textAlign = al || "center"; x.fillStyle = "#000a"; x.fillText(s, px + 1, py + 1); x.fillStyle = color || "#fff"; x.fillText(s, px, py); };
-  function drawCar(px, py, a, color, cop, now, nm) {
-    x.save(); x.translate(px, py); x.rotate(a);
-    x.fillStyle = "#0005"; x.fillRect(-16, -6, 36, 18);
-    x.fillStyle = cop ? "#eceff4" : color; x.fillRect(-18, -9, 36, 18);
-    if (cop) { x.fillStyle = "#1d4ed8"; x.fillRect(-18, -2, 36, 4); }
-    else { x.fillStyle = "#0003"; x.fillRect(-18, -9, 36, 3); x.fillRect(-18, 6, 36, 3); }
-    x.fillStyle = "#16202c"; x.fillRect(-3, -7, 12, 14); x.fillStyle = "#9fd8ff55"; x.fillRect(7, -7, 4, 14);
-    x.fillStyle = "#fff6b0"; x.fillRect(17, -8, 2, 4); x.fillRect(17, 4, 2, 4);
-    x.fillStyle = "#ff3030"; x.fillRect(-19, -8, 2, 3); x.fillRect(-19, 5, 2, 3);
-    if (cop) { const f = Math.floor(now / 160) % 2; x.fillStyle = f ? "#ff2a2a" : "#2a5bff"; x.fillRect(0, -8, 4, 8); x.fillStyle = f ? "#2a5bff" : "#ff2a2a"; x.fillRect(0, 0, 4, 8); }
-    x.restore();
-    if (nm) txt(nm, px, py - 20, 11);
+  // ================= DESSIN (style GTA 1 : vue de dessus, rendu pixelisé 2×, ombres portées, toits plats) =================
+const ROOF = [["#8b5a3c", "#a8714b", "#5e3a25"], ["#7d7d86", "#9a9aa5", "#55555d"], ["#a33b3b", "#c25353", "#6e2424"], ["#c9b27c", "#dcc794", "#8f7c4f"], ["#3d5a80", "#5577a3", "#27394f"], ["#6b7a3a", "#8a9a50", "#444f22"], ["#b0663a", "#cf8352", "#7a4222"], ["#9b9b9b", "#bdbdbd", "#666666"]];
+const shadeC = new Map();
+const shade = (hex, f) => { const k = hex + f; let v = shadeC.get(k); if (!v) { const n = parseInt(hex.slice(1), 16) || 0; v = `rgb(${Math.round((n >> 16 & 255) * f)},${Math.round((n >> 8 & 255) * f)},${Math.round((n & 255) * f)})`; shadeC.set(k, v); } return v; };
+const txt = (s, px, py, size, color, al) => { x.font = `700 ${size}px "Courier New",monospace`; x.textAlign = al || "center"; x.fillStyle = "#000"; x.fillText(s, px + 1.5, py + 1.5); x.fillStyle = color || "#fff"; x.fillText(s, px, py); };
+function drawCar(px, py, a, color, cop, now, id) {
+  const ty = cop ? 0 : (id | 0) % 3, L = ty === 2 ? 42 : ty === 1 ? 33 : 36, Wd = ty === 2 ? 20 : ty === 1 ? 16 : 18, hl = L / 2, hw = Wd / 2;
+  x.save(); x.translate(px, py); x.rotate(a);
+  x.fillStyle = "rgba(0,0,0,.38)"; x.fillRect(-hl + 3, -hw + 3, L + 2, Wd + 2);                 // ombre
+  x.fillStyle = "#101010"; x.fillRect(-hl - 1, -hw - 1, L + 2, Wd + 2);                         // contour
+  if (cop) {
+    x.fillStyle = "#f2f2f2"; x.fillRect(-hl, -hw, L, Wd); x.fillStyle = "#16161c"; x.fillRect(hl - 9, -hw, 9, Wd); x.fillRect(-hl, -hw, 9, Wd);
+    x.fillStyle = "#2a2a34"; x.fillRect(-7, -hw + 2, 14, Wd - 4);
+    const f = Math.floor(now / 150) % 2; x.fillStyle = f ? "#ff2a2a" : "#2a5bff"; x.fillRect(-3, -hw + 1, 5, hw - 1); x.fillStyle = f ? "#2a5bff" : "#ff2a2a"; x.fillRect(-3, 0, 5, hw - 1);
+  } else if (ty === 2) {                                                                          // camionnette : caisse + cabine
+    x.fillStyle = color; x.fillRect(-hl, -hw, L, Wd); x.fillStyle = shade(color, .78); x.fillRect(-hl, -hw, L - 14, Wd);
+    x.fillStyle = "rgba(255,255,255,.2)"; x.fillRect(-hl, -hw, L - 14, 2); x.fillStyle = shade(color, .6); x.fillRect(-hl + 3, -hw + 3, L - 20, Wd - 6);
+  } else {
+    x.fillStyle = color; x.fillRect(-hl, -hw, L, Wd);
+    x.fillStyle = shade(color, .8); x.fillRect(-hl, -hw, 5, Wd); x.fillRect(hl - 5, -hw, 5, Wd);
+    x.fillStyle = shade(color, .62); x.fillRect(-8, -hw + 2, 15, Wd - 4);
+    x.fillStyle = "rgba(255,255,255,.22)"; x.fillRect(-8, -hw + 2, 15, 2);
+    if (ty === 1) { x.fillStyle = "#f4f4f4"; x.fillRect(-hl, -2, L, 1.5); x.fillRect(-hl, .5, L, 1.5); }   // coupé : bandes de course
   }
-  function drawWalker(px, py, a, body, nm, skin) {
-    x.fillStyle = "#0004"; x.beginPath(); x.arc(px + 2, py + 2, 6, 0, 7); x.fill();
-    x.fillStyle = body; x.beginPath(); x.arc(px, py, 6, 0, 7); x.fill();
-    x.fillStyle = skin || "#f1c27d"; x.beginPath(); x.arc(px + Math.cos(a) * 2, py + Math.sin(a) * 2, 3.6, 0, 7); x.fill();
-    if (nm) txt(nm, px, py - 12, 11);
+  x.fillStyle = "#86bfe0"; x.fillRect(hl - 11, -hw + 2, 4, Wd - 4); x.fillStyle = "#5f8ba8"; x.fillRect(-hl + 7, -hw + 2, 3, Wd - 4);
+  x.fillStyle = "#fff6a8"; x.fillRect(hl - 1, -hw, 2, 4); x.fillRect(hl - 1, hw - 4, 2, 4);
+  x.fillStyle = "#c1121f"; x.fillRect(-hl - 1, -hw, 1, 4); x.fillRect(-hl - 1, hw - 4, 1, 4);
+  x.restore();
+}
+function drawWalker(px, py, a, body, skin, ph) {
+  x.fillStyle = "rgba(0,0,0,.35)"; x.beginPath(); x.arc(px + 2, py + 2, 5, 0, 7); x.fill();
+  x.save(); x.translate(px, py); x.rotate(a);
+  if (ph !== null) { const l = Math.sin(ph) * 3.2; x.fillStyle = "#1c1c22"; x.fillRect(l - 1.5, -4.5, 3.5, 2.5); x.fillRect(-l - 1.5, 2, 3.5, 2.5); }   // jambes qui marchent
+  x.fillStyle = "#101010"; x.fillRect(-3, -6, 6, 12); x.fillStyle = body; x.fillRect(-2, -5, 4, 10);
+  x.fillStyle = skin || "#f1c27d"; x.beginPath(); x.arc(0, 0, 2.7, 0, 7); x.fill();
+  x.restore();
+}
+function drawWorld(vx0, vy0, vx1, vy1) {
+  x.fillStyle = "#1b1b1f"; x.fillRect(vx0, vy0, vx1 - vx0, vy1 - vy0);
+  const R2 = ROAD / 2, rx0 = Math.max(vx0, -R2), ry0 = Math.max(vy0, -R2), rx1 = Math.min(vx1, WORLD + R2), ry1 = Math.min(vy1, WORLD + R2);
+  if (rx1 <= rx0 || ry1 <= ry0) return;
+  x.fillStyle = patRoad; x.fillRect(rx0, ry0, rx1 - rx0, ry1 - ry0);
+  const ia = Math.max(0, Math.ceil((vx0 - R2) / CELL)), ib = Math.min(N, Math.floor((vx1 + R2) / CELL)), ja = Math.max(0, Math.ceil((vy0 - R2) / CELL)), jb = Math.min(N, Math.floor((vy1 + R2) / CELL));
+  x.lineWidth = 2;
+  for (let i = ia; i <= ib; i++) { const cx = i * CELL; x.setLineDash([]); x.strokeStyle = "#d9d9d9"; x.beginPath(); x.moveTo(cx - 44, ry0); x.lineTo(cx - 44, ry1); x.moveTo(cx + 44, ry0); x.lineTo(cx + 44, ry1); x.stroke(); x.strokeStyle = "#e6c83c"; x.setLineDash([16, 16]); x.beginPath(); x.moveTo(cx, ry0); x.lineTo(cx, ry1); x.stroke(); }
+  for (let j = ja; j <= jb; j++) { const cy = j * CELL; x.setLineDash([]); x.strokeStyle = "#d9d9d9"; x.beginPath(); x.moveTo(rx0, cy - 44); x.lineTo(rx1, cy - 44); x.moveTo(rx0, cy + 44); x.lineTo(rx1, cy + 44); x.stroke(); x.strokeStyle = "#e6c83c"; x.setLineDash([16, 16]); x.beginPath(); x.moveTo(rx0, cy); x.lineTo(rx1, cy); x.stroke(); }
+  x.setLineDash([]);
+  for (let i = ia; i <= ib; i++) for (let j = ja; j <= jb; j++) {               // carrefours (on efface les lignes) + passages piétons
+    const cx = i * CELL, cy = j * CELL;
+    x.fillStyle = patRoad; x.fillRect(cx - R2, cy - R2, ROAD, ROAD); x.fillStyle = "#dcdcdc";
+    for (let k = 0; k < 11; k++) { const o = -44 + k * 8; if (i < N) x.fillRect(cx + R2 + 4, cy + o, 12, 4); if (i > 0) x.fillRect(cx - R2 - 16, cy + o, 12, 4); if (j < N) x.fillRect(cx + o, cy + R2 + 4, 4, 12); if (j > 0) x.fillRect(cx + o, cy - R2 - 16, 4, 12); }
   }
-  function drawWorld(vx0, vy0, vx1, vy1) {
-    x.fillStyle = "#14161c"; x.fillRect(vx0, vy0, vx1 - vx0, vy1 - vy0);
-    const rx0 = Math.max(vx0, -ROAD / 2), ry0 = Math.max(vy0, -ROAD / 2), rx1 = Math.min(vx1, WORLD + ROAD / 2), ry1 = Math.min(vy1, WORLD + ROAD / 2);
-    if (rx1 <= rx0 || ry1 <= ry0) return;
-    x.fillStyle = "#343741"; x.fillRect(rx0, ry0, rx1 - rx0, ry1 - ry0);
-    x.strokeStyle = "#c9c36a"; x.lineWidth = 2; x.setLineDash([22, 22]);
-    for (let i = Math.max(0, Math.ceil((vx0 - 5) / CELL)); i <= Math.min(N, Math.floor((vx1 + 5) / CELL)); i++) { x.beginPath(); x.moveTo(i * CELL, ry0); x.lineTo(i * CELL, ry1); x.stroke(); }
-    for (let j = Math.max(0, Math.ceil((vy0 - 5) / CELL)); j <= Math.min(N, Math.floor((vy1 + 5) / CELL)); j++) { x.beginPath(); x.moveTo(rx0, j * CELL); x.lineTo(rx1, j * CELL); x.stroke(); }
-    x.setLineDash([]);
-    const i0 = clamp(Math.floor((vx0 - ROAD / 2) / CELL), 0, N - 1), i1 = clamp(Math.floor((vx1 - ROAD / 2) / CELL), 0, N - 1), j0 = clamp(Math.floor((vy0 - ROAD / 2) / CELL), 0, N - 1), j1 = clamp(Math.floor((vy1 - ROAD / 2) / CELL), 0, N - 1);
-    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
-      const bx = lo(i), by = lo(j), h = hs(i, j);
-      x.fillStyle = "#8d909b"; x.fillRect(bx, by, BL, BL);
-      if (isPark(i, j)) {
-        x.fillStyle = "#3f8f4a"; x.fillRect(bx + SW, by + SW, BL - 2 * SW, BL - 2 * SW);
-        for (let k = 0; k < 7; k++) { const tx = bx + SW + 20 + (hs(i + k, j * 7 + 1) % (BL - 2 * SW - 40)), ty = by + SW + 20 + (hs(j + k, i * 5 + 3) % (BL - 2 * SW - 40)); x.fillStyle = "#2c6e37"; x.beginPath(); x.arc(tx, ty, 15, 0, 7); x.fill(); x.fillStyle = "#3a8a47"; x.beginPath(); x.arc(tx - 3, ty - 3, 10, 0, 7); x.fill(); }
-        continue;
-      }
-      const bw = BL - 2 * SW, sp = isSpecial(i, j), pol = i === POLICE[0] && j === POLICE[1];
-      x.fillStyle = "#0004"; x.fillRect(bx + SW + 6, by + SW + 6, bw, bw);
-      x.fillStyle = sp ? (pol ? "#2b4fb8" : "#e6edf3") : `hsl(${(h % 360)},${18 + h % 20}%,${34 + (h >> 8) % 18}%)`; x.fillRect(bx + SW, by + SW, bw, bw);
-      x.strokeStyle = "#0006"; x.lineWidth = 3; x.strokeRect(bx + SW + 1.5, by + SW + 1.5, bw - 3, bw - 3);
-      x.fillStyle = "#0002"; x.fillRect(bx + SW + 20 + (h >> 4) % 60, by + SW + 20 + (h >> 10) % 60, 50 + (h >> 14) % 50, 40 + (h >> 18) % 40);
-      if (sp) { txt(pol ? "🚓 POLICE" : "🏥 HÔPITAL", bx + BL / 2, by + BL / 2 + 6, 22, pol ? "#fff" : "#d62828"); }
+  const i0 = clamp(Math.floor((vx0 - R2) / CELL), 0, N - 1), i1 = clamp(Math.floor((vx1 - R2) / CELL), 0, N - 1), j0 = clamp(Math.floor((vy0 - R2) / CELL), 0, N - 1), j1 = clamp(Math.floor((vy1 - R2) / CELL), 0, N - 1);
+  for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
+    const bx = lo(i), by = lo(j), h = hs(i, j), bw = BL - 2 * SW, ox = bx + SW, oy = by + SW;
+    x.fillStyle = "#b3b1a6"; x.fillRect(bx, by, BL, BL);                       // trottoir
+    x.strokeStyle = "#9d9b91"; x.lineWidth = 1.5; x.beginPath(); for (let t = SW; t < BL; t += SW) { x.moveTo(bx + t, by); x.lineTo(bx + t, by + BL); x.moveTo(bx, by + t); x.lineTo(bx + BL, by + t); } x.stroke();
+    if (isPark(i, j)) {
+      x.fillStyle = patGrass; x.fillRect(ox, oy, bw, bw);
+      x.fillStyle = "#34702a"; for (let k = 0; k < 8; k++) x.fillRect(ox + hs(i + k, j) % (bw - 30), oy + hs(j + k, i + 9) % (bw - 30), 30, 22);
+      x.fillStyle = "#b9a878"; x.fillRect(ox + bw / 2 - 5, oy, 10, bw); x.fillRect(ox, oy + bw / 2 - 5, bw, 10);
+      for (let k = 0; k < 6; k++) { const tx = ox + 18 + hs(i * 3 + k, j) % (bw - 36), ty = oy + 18 + hs(j * 5 + k, i + 2) % (bw - 36); x.fillStyle = "rgba(0,0,0,.3)"; x.beginPath(); x.arc(tx + 5, ty + 5, 14, 0, 7); x.fill(); x.fillStyle = "#1f5a1c"; x.beginPath(); x.arc(tx, ty, 14, 0, 7); x.fill(); x.fillStyle = "#2f7a28"; x.beginPath(); x.arc(tx - 1, ty - 1, 9, 0, 7); x.fill(); x.fillStyle = "#43963a"; x.beginPath(); x.arc(tx - 4, ty - 4, 4, 0, 7); x.fill(); }
+      continue;
     }
+    const pol = i === POLICE[0] && j === POLICE[1], hos = i === HOSP[0] && j === HOSP[1], pal = pol ? ["#2f55c4", "#5a7fe0", "#1c3585"] : hos ? ["#e9edf0", "#ffffff", "#aab3ba"] : ROOF[h % ROOF.length];
+    x.fillStyle = "rgba(0,0,0,.38)"; x.fillRect(ox + 9, oy + 9, bw, bw);        // ombre portée
+    x.fillStyle = pal[0]; x.fillRect(ox, oy, bw, bw);
+    x.fillStyle = pal[1]; x.fillRect(ox, oy, bw, 3); x.fillRect(ox, oy, 3, bw);
+    x.fillStyle = pal[2]; x.fillRect(ox, oy + bw - 5, bw, 5); x.fillRect(ox + bw - 5, oy, 5, bw);
+    x.strokeStyle = pal[2]; x.lineWidth = 2; x.strokeRect(ox + 14, oy + 14, bw - 28, bw - 28);
+    if (pol) { x.fillStyle = "#fff"; x.font = 'bold 28px "Courier New",monospace'; x.textAlign = "center"; x.fillText("POLICE", ox + bw / 2, oy + bw / 2 + 9); }
+    else if (hos) { x.fillStyle = "#d62828"; x.fillRect(ox + bw / 2 - 8, oy + bw / 2 - 26, 16, 52); x.fillRect(ox + bw / 2 - 26, oy + bw / 2 - 8, 52, 16); }
+    else for (let k = 0; k < 3; k++) { const w = 18 + (h >>> (k * 5)) % 18, hh = 14 + (h >>> (k * 4 + 2)) % 16, px = ox + 22 + (h >>> (k * 6)) % (bw - 70), py = oy + 22 + (h >>> (k * 7 + 1)) % (bw - 60); x.fillStyle = pal[1]; x.fillRect(px, py, w, hh); x.fillStyle = pal[2]; x.fillRect(px, py + hh - 3, w, 3); x.fillRect(px + w - 3, py, 3, hh); }
   }
-  function frame(now) {
-    if (!active) { raf = 0; return; }
-    raf = requestAnimationFrame(frame);
-    const dt = Math.min(.05, (now - (tPrev || now)) / 1000); tPrev = now; tNow = now;
-    // lissage des entités reçues
-    const k = 1 - Math.exp(-13 * dt);
-    for (const d of dPeds.values()) { d.x += (d.tx - d.x) * k; d.y += (d.ty - d.y) * k; d.a = angLerp(d.a, d.ta, k); }
-    for (const d of dCars.values()) { if (Math.abs(d.tx - d.x) + Math.abs(d.ty - d.y) > 250) { d.x = d.tx; d.y = d.ty; } else { d.x += (d.tx - d.x) * k; d.y += (d.ty - d.y) * k; } d.a = angLerp(d.a, d.ta, k); }
-    const lp = lobbyP();
-    for (const [u, p] of activeP()) { if (u === myUid) continue; let d = dP.get(u); if (!d) dP.set(u, d = { x: p.x, y: p.y, a: p.a }); if (Math.abs(p.x - d.x) + Math.abs(p.y - d.y) > 300) { d.x = p.x; d.y = p.y; } else { d.x += (p.x - d.x) * k; d.y += (p.y - d.y) * k; } d.a = angLerp(d.a, p.a, k); d.vid = p.vid; d.cash = p.cash; d.wl = p.wl; d.v = p.v; }
-    for (const u of dP.keys()) if (!lp[u]) dP.delete(u);
-    // logique locale
-    if (me.dead > 0) { me.dead -= dt; if (me.dead <= 0) { spawnAt(SPAWN[me.where || "hosp"]); } }
-    else { if (useReq) { useReq = 0; useKey(); } control(dt); interact(dt); }
-    useReq = 0;
-    sendP(now);
-    // caméra
-    const tz = me.vid ? 1.15 - Math.min(.3, Math.abs(me.v) / 1000) : 1.35;
-    cam.z += (tz - cam.z) * Math.min(1, 2.5 * dt); cam.x += (me.x + Math.cos(me.a) * (me.vid ? me.v * .25 : 0) - cam.x) * Math.min(1, 6 * dt); cam.y += (me.y + Math.sin(me.a) * (me.vid ? me.v * .25 : 0) - cam.y) * Math.min(1, 6 * dt);
-    const S = cv.width / W, z = cam.z, vw = W / z, vh = H / z, vx0 = cam.x - vw / 2, vy0 = cam.y - vh / 2, vx1 = vx0 + vw, vy1 = vy0 + vh;
-    x.setTransform(S * z, 0, 0, S * z, S * (W / 2 - cam.x * z), S * (H / 2 - cam.y * z));
-    drawWorld(vx0, vy0, vx1, vy1);
-    const inV = (px, py) => px > vx0 - 60 && px < vx1 + 60 && py > vy0 - 60 && py < vy1 + 60;
-    splats.forEach(s => { const a = 1 - (now - s.t) / 30000; if (a > 0 && inV(s.x, s.y)) { x.globalAlpha = a * .7; x.fillStyle = "#a4161a"; x.beginPath(); x.arc(s.x, s.y, 9, 0, 7); x.fill(); x.globalAlpha = 1; } });
-    splats = splats.filter(s => now - s.t < 30000);
-    for (const [id, d] of dCars) if (d.m !== "t" && id !== me.vid && inV(d.x, d.y)) drawCar(d.x, d.y, d.a, col(d.c), d.m === "c", now);
-    for (const d of dPeds.values()) if (inV(d.x, d.y)) drawWalker(d.x, d.y, d.a, SHIRT[d.sk % 6], "", SKIN[d.sk % 6]);
-    for (const [u, d] of dP) if (inV(d.x, d.y)) { const pl = lp[u] || {}; if (d.vid) { const cc = dCars.get(d.vid); drawCar(d.x, d.y, d.a, col(cc ? cc.c : 0), false, now, pl.name); } else drawWalker(d.x, d.y, d.a, pl.color || "#fff", pl.name, "#f1c27d"); }
-    if (me.dead <= 0) { if (me.vid) drawCar(me.x, me.y, me.a, col(myCol), false, now, ""); else drawWalker(me.x, me.y, me.a, (lp[myUid] || {}).color || "#fff", "", "#f1c27d"); x.strokeStyle = "#fff"; x.lineWidth = 1.5; x.beginPath(); x.arc(me.x, me.y, me.vid ? 24 : 12, 0, 7); x.globalAlpha = .35; x.stroke(); x.globalAlpha = 1; }
-    if (job) { const f = (Math.sin(now / 250) + 1) / 2; x.strokeStyle = "#ffd23f"; x.lineWidth = 4; x.beginPath(); x.arc(job.x, job.y, 50 + f * 8, 0, 7); x.stroke(); x.fillStyle = "#ffd23f33"; x.fill(); txt("📦", job.x, job.y + 8, 24); }
-    floats = floats.filter(f => now - f.t < 1400); floats.forEach(f => { x.globalAlpha = 1 - (now - f.t) / 1400; txt(f.s, f.x, f.y - (now - f.t) / 25, 14, f.c); }); x.globalAlpha = 1;
-    // ----- HUD -----
-    x.setTransform(S, 0, 0, S, 0, 0);
-    txt(`$${Math.round(me.cash)}`, 14, 30, 24, "#7ae582", "left");
-    txt("★".repeat(me.wl) + "☆".repeat(5 - me.wl), 14, 54, 20, me.wl ? (Math.floor(now / 250) % 2 ? "#ff4d6d" : "#4d79ff") : "#ffd23f", "left");
-    x.fillStyle = "#0008"; x.fillRect(14, 64, 110, 9); x.fillStyle = me.hp > 40 ? "#3ee6c4" : "#ff4d6d"; x.fillRect(14, 64, 110 * clamp(me.hp, 0, 100) / 100, 9);
-    const rank = [[myUid, me.cash]].concat(activeP().filter(([u]) => u !== myUid).map(([u, p]) => [u, p.cash])).sort((a, b) => b[1] - a[1]);
-    txt(`Serveur ${c} · ${rank.length} joueur${rank.length > 1 ? "s" : ""}${hostOn ? " · hôte" : ""}`, W - 12, 20, 12, "#fff9", "right");
-    rank.slice(0, 6).forEach(([u, cs], i) => { const pl = lp[u] || {}; x.fillStyle = pl.color || "#fff"; x.fillRect(W - 150, 30 + i * 18, 8, 8); txt(`${(pl.name || "?").slice(0, 10)}${u === myUid ? " (toi)" : ""}`, W - 136, 38 + i * 18, 12, "#fff", "left"); txt(`$${Math.round(cs)}`, W - 12, 38 + i * 18, 12, "#7ae582", "right"); });
-    // mini-carte
-    const mm = 130, mx = 10, my = H - mm - 10, mk = mm / WORLD;
-    x.fillStyle = "#000b"; x.fillRect(mx - 2, my - 2, mm + 4, mm + 4); x.strokeStyle = "#5a5f6e"; x.lineWidth = 1; x.beginPath();
-    for (let i = 0; i <= N; i++) { x.moveTo(mx + i * CELL * mk, my); x.lineTo(mx + i * CELL * mk, my + mm); x.moveTo(mx, my + i * CELL * mk); x.lineTo(mx + mm, my + i * CELL * mk); } x.stroke();
-    const dot = (px, py, cl, r) => { x.fillStyle = cl; x.beginPath(); x.arc(mx + clamp(px, 0, WORLD) * mk, my + clamp(py, 0, WORLD) * mk, r, 0, 7); x.fill(); };
-    dot(SPAWN.police[0], SPAWN.police[1], "#2b4fb8", 4); dot(SPAWN.hosp[0], SPAWN.hosp[1], "#e63946", 4);
-    for (const d of dCars.values()) if (d.m === "c") dot(d.x, d.y, Math.floor(now / 200) % 2 ? "#ff2a2a" : "#2a5bff", 2.5);
-    for (const [u, d] of dP) dot(d.x, d.y, (lp[u] || {}).color || "#fff", 2.5);
-    if (job) dot(job.x, job.y, "#ffd23f", 4);
-    dot(me.x, me.y, "#fff", 3.5);
-    // bouton entrer / sortir (aussi pour le tactile)
-    const bx = W - 56, by = H - 62; x.fillStyle = "#2e7dffcc"; x.beginPath(); x.arc(bx, by, 38, 0, 7); x.fill(); txt(me.vid ? "SORTIR" : "ENTRER", bx, by + 4, 12);
-    if (!me.vid && me.dead <= 0) { let near = false; for (const d of dCars.values()) if ((d.m === "d" || d.m === "p") && Math.hypot(d.x - me.x, d.y - me.y) < 48) near = true; if (near) txt("E : monter dans la voiture", W / 2, H - 24, 14, "#ffd23f"); }
-    if (me.vid && job) { const a = Math.atan2(job.y - me.y, job.x - me.x); txt(`📦 ${Math.round(Math.hypot(job.x - me.x, job.y - me.y) / 10)} m`, W / 2, 24, 14, "#ffd23f"); x.save(); x.translate(W / 2, 48); x.rotate(a); x.fillStyle = "#ffd23f"; x.beginPath(); x.moveTo(14, 0); x.lineTo(-8, -9); x.lineTo(-8, 9); x.fill(); x.restore(); }
-    if (me.bust > .1) { x.fillStyle = "#2a5bff"; x.fillRect(W / 2 - 60, H / 2 + 40, 120 * clamp(me.bust / .9, 0, 1), 8); txt("ARRESTATION…", W / 2, H / 2 + 34, 12, "#8fb0ff"); }
-    if (me.dead > 0) { x.fillStyle = "#000a"; x.fillRect(0, 0, W, H); txt(me.msg, W / 2, H / 2, 30, "#fff"); }
-    if (stick) { x.fillStyle = "rgba(255,255,255,.08)"; x.strokeStyle = "rgba(255,255,255,.28)"; x.lineWidth = 2; x.beginPath(); x.arc(stick.ox, stick.oy, 55, 0, 7); x.fill(); x.stroke(); x.fillStyle = "rgba(255,255,255,.65)"; x.beginPath(); x.arc(stick.ox + stick.dx * 55, stick.oy + stick.dy * 55, 22, 0, 7); x.fill(); }
+}
+function frame(now) {
+  if (!active) { raf = 0; return; }
+  raf = requestAnimationFrame(frame);
+  const dt = Math.min(.05, (now - (tPrev || now)) / 1000); tPrev = now; tNow = now;
+  const k = 1 - Math.exp(-13 * dt);
+  for (const d of dPeds.values()) { d.x += (d.tx - d.x) * k; d.y += (d.ty - d.y) * k; d.a = angLerp(d.a, d.ta, k); }
+  for (const d of dCars.values()) { if (Math.abs(d.tx - d.x) + Math.abs(d.ty - d.y) > 250) { d.x = d.tx; d.y = d.ty; } else { d.x += (d.tx - d.x) * k; d.y += (d.ty - d.y) * k; } d.a = angLerp(d.a, d.ta, k); }
+  const lp = lobbyP();
+  for (const [u, p] of activeP()) { if (u === myUid) continue; let d = dP.get(u); if (!d) dP.set(u, d = { x: p.x, y: p.y, a: p.a }); if (Math.abs(p.x - d.x) + Math.abs(p.y - d.y) > 300) { d.x = p.x; d.y = p.y; } else { d.x += (p.x - d.x) * k; d.y += (p.y - d.y) * k; } d.a = angLerp(d.a, p.a, k); d.vid = p.vid; d.cash = p.cash; d.wl = p.wl; d.v = p.v; }
+  for (const u of dP.keys()) if (!lp[u]) dP.delete(u);
+  if (me.dead > 0) { me.dead -= dt; if (me.dead <= 0) spawnAt(SPAWN[me.where || "hosp"]); }
+  else { if (useReq) { useReq = 0; useKey(); } control(dt); interact(dt); }
+  useReq = 0; if (me.vid) me.carT += dt;
+  sendP(now);
+  // caméra (zoom fixe par paliers : l'image pixelisée reste nette)
+  const spd = me.vid ? Math.abs(me.v) : 0, tz = me.vid ? 1.1 - Math.min(.2, spd / 230 * .2) : 1.45;
+  cam.z += (tz - cam.z) * Math.min(1, 3 * dt);
+  cam.x += (me.x + (me.vid ? Math.cos(me.a) * me.v * .12 : 0) - cam.x) * Math.min(1, 9 * dt); cam.y += (me.y + (me.vid ? Math.sin(me.a) * me.v * .12 : 0) - cam.y) * Math.min(1, 9 * dt);
+  const S = cv.width / W, z = cam.z, vw = W / z, vh = H / z, vx0 = cam.x - vw / 2, vy0 = cam.y - vh / 2, vx1 = vx0 + vw, vy1 = vy0 + vh;
+  const tx = Math.round((W / 2 - cam.x * z) / LR), ty = Math.round((H / 2 - cam.y * z) / LR), sxy = (wx, wy) => [wx * z + tx * LR, wy * z + ty * LR];
+  const labels = [];
+  x = lx; x.setTransform(z / LR, 0, 0, z / LR, tx, ty);                              // le monde est dessiné en basse résolution…
+  drawWorld(vx0, vy0, vx1, vy1);
+  const inV = (px, py) => px > vx0 - 60 && px < vx1 + 60 && py > vy0 - 60 && py < vy1 + 60;
+  splats.forEach(s => { const a = 1 - (now - s.t) / 30000; if (a > 0 && inV(s.x, s.y)) { x.globalAlpha = a; x.fillStyle = "#8d0f14"; x.beginPath(); x.arc(s.x, s.y, 8, 0, 7); x.arc(s.x + 7, s.y + 3, 5, 0, 7); x.arc(s.x - 5, s.y + 6, 4, 0, 7); x.fill(); x.globalAlpha = 1; } });
+  splats = splats.filter(s => now - s.t < 30000);
+  for (const d of dPeds.values()) if (inV(d.x, d.y)) drawWalker(d.x, d.y, d.a, SHIRT[d.sk % 6], SKIN[d.sk % 6], now / 85 + d.tx);
+  for (const [id, d] of dCars) if (d.m !== "t" && id !== me.vid && inV(d.x, d.y)) drawCar(d.x, d.y, d.a, col(d.c), d.m === "c", now, id);
+  for (const [u, d] of dP) if (inV(d.x, d.y)) { const pl = lp[u] || {}; if (d.vid) { const cc = dCars.get(d.vid); drawCar(d.x, d.y, d.a, col(cc ? cc.c : 0), false, now, d.vid); } else drawWalker(d.x, d.y, d.a, pl.color || "#fff", "#f1c27d", d.v > 0 ? now / 85 : null); labels.push([pl.name || "?", d.x, d.y - (d.vid ? 20 : 12), "#fff"]); }
+  if (me.dead <= 0) { if (me.vid) drawCar(me.x, me.y, me.a, col(myCol), false, now, me.vid); else drawWalker(me.x, me.y, me.a, (lp[myUid] || {}).color || "#fff", "#f1c27d", me.v > 0 ? now / 85 : null); x.fillStyle = "#ffe14d"; const ay = me.y - (me.vid ? 24 : 15) + Math.sin(now / 160) * 2; x.beginPath(); x.moveTo(me.x, ay + 6); x.lineTo(me.x - 5, ay - 2); x.lineTo(me.x + 5, ay - 2); x.fill(); }
+  if (job) { const f = (Math.sin(now / 250) + 1) / 2; x.strokeStyle = "#ffd23f"; x.lineWidth = 4; x.beginPath(); x.arc(job.x, job.y, 50 + f * 8, 0, 7); x.stroke(); x.fillStyle = "rgba(255,210,63,.25)"; x.fill(); labels.push(["📦", job.x, job.y + 8, "#fff", 26]); }
+  x = mx2; x.setTransform(1, 0, 0, 1, 0, 0); x.imageSmoothingEnabled = false; x.drawImage(lc, 0, 0, cv.width, cv.height);   // …puis agrandie sans lissage = look GTA 1
+  x.setTransform(S, 0, 0, S, 0, 0);
+  labels.forEach(([s, wx, wy, c2, sz]) => { const [px, py] = sxy(wx, wy); if (px > -50 && px < W + 50 && py > -30 && py < H + 30) txt(s, px, py, sz || 12, c2); });
+  floats = floats.filter(f => now - f.t < 1400); floats.forEach(f => { const [px, py] = sxy(f.x, f.y); x.globalAlpha = 1 - (now - f.t) / 1400; txt(f.s, px, py - (now - f.t) / 25, 15, f.c); }); x.globalAlpha = 1;
+  // ----- HUD -----
+  txt(`$${Math.round(me.cash)}`, 14, 32, 28, "#ffe14d", "left");
+  for (let i = 0; i < 5; i++) { const hx = 22 + i * 22, on = i < me.wl, fl = on && Math.floor(now / 250) % 2; x.fillStyle = "#000"; x.beginPath(); x.arc(hx, 46, 9, 0, 7); x.fill(); x.fillStyle = on ? "#f1c27d" : "#3a3a40"; x.beginPath(); x.arc(hx, 47, 7, 0, 7); x.fill(); x.fillStyle = on ? (fl ? "#ff3b3b" : "#2a5bff") : "#2a2a30"; x.fillRect(hx - 8, 38, 16, 6); x.fillRect(hx - 5, 34, 10, 5); x.fillStyle = on ? "#ffe14d" : "#3a3a40"; x.fillRect(hx - 2, 35, 4, 3); }
+  x.fillStyle = "#000"; x.fillRect(13, 62, 112, 11); x.fillStyle = me.hp > 40 ? "#3ee62f" : "#ff3b30"; x.fillRect(15, 64, 108 * clamp(me.hp, 0, 100) / 100, 7);
+  const rank = [[myUid, me.cash]].concat(activeP().filter(([u]) => u !== myUid).map(([u, p]) => [u, p.cash])).sort((a, b) => b[1] - a[1]);
+  txt(`SERVEUR ${c} · ${rank.length} JOUEUR${rank.length > 1 ? "S" : ""}${hostOn ? " · HÔTE" : ""}`, W - 12, 18, 12, "#fffa", "right");
+  rank.slice(0, 6).forEach(([u, cs], i) => { const pl = lp[u] || {}; x.fillStyle = pl.color || "#fff"; x.fillRect(W - 170, 28 + i * 18, 9, 9); txt(`${(pl.name || "?").slice(0, 10)}${u === myUid ? "*" : ""}`, W - 156, 37 + i * 18, 12, "#fff", "left"); txt(`$${Math.round(cs)}`, W - 12, 37 + i * 18, 12, "#ffe14d", "right"); });
+  const mm = 130, mx = 10, my = H - mm - 10, mk = mm / WORLD;
+  x.fillStyle = "#000"; x.fillRect(mx - 3, my - 3, mm + 6, mm + 6); x.fillStyle = "#3a3c42"; x.fillRect(mx, my, mm, mm); x.strokeStyle = "#6d7079"; x.lineWidth = 1; x.beginPath();
+  for (let i = 0; i <= N; i++) { x.moveTo(mx + i * CELL * mk, my); x.lineTo(mx + i * CELL * mk, my + mm); x.moveTo(mx, my + i * CELL * mk); x.lineTo(mx + mm, my + i * CELL * mk); } x.stroke();
+  const dot = (px, py, cl, r) => { x.fillStyle = cl; x.fillRect(mx + clamp(px, 0, WORLD) * mk - r, my + clamp(py, 0, WORLD) * mk - r, r * 2, r * 2); };
+  dot(SPAWN.police[0], SPAWN.police[1], "#2f55c4", 4); dot(SPAWN.hosp[0], SPAWN.hosp[1], "#e63946", 4);
+  for (const d of dCars.values()) if (d.m === "c") dot(d.x, d.y, Math.floor(now / 200) % 2 ? "#ff2a2a" : "#2a5bff", 2.5);
+  for (const [u, d] of dP) dot(d.x, d.y, (lp[u] || {}).color || "#fff", 2.5);
+  if (job) dot(job.x, job.y, "#ffd23f", 4);
+  dot(me.x, me.y, "#fff", 3);
+  const bx = W - 56, by = H - 62; x.fillStyle = "#1f4fbf"; x.beginPath(); x.arc(bx, by, 38, 0, 7); x.fill(); x.strokeStyle = "#000"; x.lineWidth = 3; x.stroke(); txt(me.vid ? "SORTIR" : "ENTRER", bx, by + 4, 12);
+  if (!me.vid && me.dead <= 0) { let near = false; for (const d of dCars.values()) if ((d.m === "d" || d.m === "p") && Math.hypot(d.x - me.x, d.y - me.y) < 48) near = true; if (near) txt("E : MONTER DANS LA VOITURE", W / 2, H - 24, 14, "#ffe14d"); }
+  if (me.vid && me.dead <= 0) {
+    const kmh = Math.round(Math.abs(me.v) * .5);
+    txt(`${kmh} km/h${me.v < -3 ? "  ◄ MARCHE ARRIÈRE" : ""}`, W / 2, H - 14, 16, me.v < -3 ? "#ff9f43" : "#fff");
+    if (me.carT < 9) { x.fillStyle = "rgba(0,0,0,.65)"; x.fillRect(W / 2 - 230, H - 96, 460, 54); txt(TOUCH ? "JOYSTICK : HAUT = ACCÉLÉRER · BAS = FREINER / RECULER" : "↑ ACCÉLÉRER · ↓ FREINER / RECULER", W / 2, H - 74, 13, "#fff"); txt(TOUCH ? "GAUCHE / DROITE = TOURNER · BOUTON = SORTIR" : "← → TOURNER (SEULEMENT QUAND LA VOITURE ROULE) · E = SORTIR", W / 2, H - 54, 12, "#ffe14d"); }
+    if (job) { const a = Math.atan2(job.y - me.y, job.x - me.x); txt(`📦 ${Math.round(Math.hypot(job.x - me.x, job.y - me.y) / 10)} m`, W / 2, 26, 15, "#ffd23f"); x.save(); x.translate(W / 2, 52); x.rotate(a); x.fillStyle = "#ffd23f"; x.strokeStyle = "#000"; x.lineWidth = 2; x.beginPath(); x.moveTo(15, 0); x.lineTo(-9, -10); x.lineTo(-9, 10); x.closePath(); x.fill(); x.stroke(); x.restore(); }
   }
+  if (me.bust > .1) { x.fillStyle = "#2a5bff"; x.fillRect(W / 2 - 60, H / 2 + 40, 120 * clamp(me.bust / .9, 0, 1), 8); txt("ARRESTATION…", W / 2, H / 2 + 34, 13, "#8fb0ff"); }
+  if (me.dead > 0) { x.fillStyle = "rgba(0,0,0,.65)"; x.fillRect(0, 0, W, H); txt(me.msg, W / 2, H / 2, 30, "#fff"); }
+  if (stick) { x.fillStyle = "rgba(255,255,255,.08)"; x.strokeStyle = "rgba(255,255,255,.28)"; x.lineWidth = 2; x.beginPath(); x.arc(stick.ox, stick.oy, 55, 0, 7); x.fill(); x.stroke(); x.fillStyle = "rgba(255,255,255,.65)"; x.beginPath(); x.arc(stick.ox + stick.dx * 55, stick.oy + stick.dy * 55, 22, 0, 7); x.fill(); }
+}
 
-  // ================= ENTRÉES =================
+// ================= ENTRÉES =================
   addEventListener("keydown", e => {
     if (!active || /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
     if (e.key === " " || e.key === "e" || e.key === "E") { e.preventDefault(); if (!e.repeat) useReq = 1; return; }

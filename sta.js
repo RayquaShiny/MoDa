@@ -45,7 +45,7 @@ export function createStaClient(env) {
   const cv = $("cv"), mx2 = cv.getContext("2d"), LR = 2, lc = document.createElement("canvas"), lx = lc.getContext("2d");
   lc.width = W / LR; lc.height = H / LR; let x = mx2;
   const mkPat = (base, sp, n) => { const c2 = document.createElement("canvas"); c2.width = c2.height = 128; const g = c2.getContext("2d"); g.fillStyle = base; g.fillRect(0, 0, 128, 128); let seed = 7; const r = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff; for (let i = 0; i < n; i++) { g.fillStyle = sp[Math.floor(r() * sp.length)]; g.fillRect(Math.floor(r() * 64) * 2, Math.floor(r() * 64) * 2, 2, 2); } return lx.createPattern(c2, "repeat") || base; };
-  const patRoad = mkPat("#585a60", ["#4e5057", "#63656c", "#484a50"], 750), patGrass = mkPat("#3c7d2c", ["#33702a", "#478b36", "#2d6424"], 650);
+  const patRoad = mkPat("#5d5c7b", ["#524f70", "#6a6888", "#4b4968"], 750), patGrass = mkPat("#3c7d2c", ["#33702a", "#478b36", "#2d6424"], 650);
   const TOUCH = typeof matchMedia === "function" && matchMedia("(pointer:coarse)").matches;
   let active = false, raf = 0, timer = 0, tPrev = 0, c = "", myUid = "", unS = null, unP = null;
   // --- état partagé reçu ---
@@ -56,7 +56,7 @@ export function createStaClient(env) {
   // --- moi ---
   const me = { x: 0, y: 0, a: 0, v: 0, vid: 0, hp: 100, cash: 0, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, msg: "", hurt: 0, bust: 0, carT: 99 };
   let keys = new Set(), stick = null, useReq = 0, job = null, myCol = 0, cam = { x: 0, y: 0, z: 1.2 }, sentAt = 0, sentStr = "", savedCash = -1, saveAt = 0, tNow = 0, hitDone = new Set();
-  let splats = [], floats = [];
+  let splats = [], floats = [], brakeId = null;
 
   const lobbyP = () => (getLobby() || {}).players || {};
   const activeP = () => { const lp = lobbyP(); return Object.entries(pd).filter(([u]) => lp[u]); };
@@ -213,12 +213,19 @@ export function createStaClient(env) {
     else { ix = (keys.has("R") ? 1 : 0) - (keys.has("L") ? 1 : 0); iy = (keys.has("D") ? 1 : 0) - (keys.has("U") ? 1 : 0); if (ix && iy && !me.vid) { ix *= .7071; iy *= .7071; } }
     if (me.vid) {
       // conduite « arcade » : ↑ accélère (et freine si on recule), ↓ freine puis recule, ←→ tourne le nez de la voiture (seulement si elle roule)
-      const th = -iy, MAXV = 230, REV = 95;
+      let th = -iy, sr = ix;                                              // clavier : ↑↓ gaz/frein, ←→ volant
+      if (stick) {                                                        // doigt / souris : la voiture tourne toute seule vers la direction montrée
+        const m = Math.hypot(ix, iy);
+        if (brakeId !== null) { th = -1; sr = ix; }
+        else if (m > .05) { let d = Math.atan2(iy, ix) - me.a; d = Math.atan2(Math.sin(d), Math.cos(d)); sr = clamp(d * 2.2, -1, 1); th = Math.abs(d) < 1.6 ? Math.max(.6, m) : .5; }
+        else { th = 0; sr = 0; }
+      } else if (brakeId !== null) th = -1;
+      const MAXV = 230, REV = 95;
       if (th > 0) me.v += (me.v < -5 ? 620 : 330) * th * dt;
       else if (th < 0) me.v -= (me.v > 10 ? 620 : 190) * -th * dt;
       else me.v -= Math.sign(me.v) * Math.min(Math.abs(me.v), 170 * dt);
       me.v = clamp(me.v, -REV, MAXV);
-      me.a += ix * 2.9 * clamp(Math.abs(me.v) / 45, 0, 1) * (1 - .35 * Math.abs(me.v) / MAXV) * dt;
+      me.a += sr * 2.9 * clamp(Math.abs(me.v) / 45, 0, 1) * (1 - .35 * Math.abs(me.v) / MAXV) * dt;
       const sx = me.x + Math.cos(me.a) * me.v * dt, sy = me.y + Math.sin(me.a) * me.v * dt;
       me.x = sx; me.y = sy;
       if (push(me, 13)) {                                                  // contre un mur : on glisse, et on ne perd de la vitesse que si on le prend de face
@@ -320,8 +327,8 @@ function drawWorld(vx0, vy0, vx1, vy1) {
   const i0 = clamp(Math.floor((vx0 - R2) / CELL), 0, N - 1), i1 = clamp(Math.floor((vx1 - R2) / CELL), 0, N - 1), j0 = clamp(Math.floor((vy0 - R2) / CELL), 0, N - 1), j1 = clamp(Math.floor((vy1 - R2) / CELL), 0, N - 1);
   for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
     const bx = lo(i), by = lo(j), h = hs(i, j), bw = BL - 2 * SW, ox = bx + SW, oy = by + SW;
-    x.fillStyle = "#b3b1a6"; x.fillRect(bx, by, BL, BL);                       // trottoir
-    x.strokeStyle = "#9d9b91"; x.lineWidth = 1.5; x.beginPath(); for (let t = SW; t < BL; t += SW) { x.moveTo(bx + t, by); x.lineTo(bx + t, by + BL); x.moveTo(bx, by + t); x.lineTo(bx + BL, by + t); } x.stroke();
+    x.fillStyle = "#cfc89c"; x.fillRect(bx, by, BL, BL);                       // trottoir
+    x.strokeStyle = "#aaa278"; x.lineWidth = 1.5; x.beginPath(); for (let t = SW * 2; t < BL; t += SW * 2) { x.moveTo(bx + t, by); x.lineTo(bx + t, by + BL); x.moveTo(bx, by + t); x.lineTo(bx + BL, by + t); } x.stroke(); x.strokeStyle = "#ece8cf"; x.lineWidth = 3; x.strokeRect(bx + 1, by + 1, BL - 2, BL - 2);
     if (isPark(i, j)) {
       x.fillStyle = patGrass; x.fillRect(ox, oy, bw, bw);
       x.fillStyle = "#34702a"; for (let k = 0; k < 8; k++) x.fillRect(ox + hs(i + k, j) % (bw - 30), oy + hs(j + k, i + 9) % (bw - 30), 30, 22);
@@ -392,11 +399,12 @@ function frame(now) {
   if (job) dot(job.x, job.y, "#ffd23f", 4);
   dot(me.x, me.y, "#fff", 3);
   const bx = W - 56, by = H - 62; x.fillStyle = "#1f4fbf"; x.beginPath(); x.arc(bx, by, 38, 0, 7); x.fill(); x.strokeStyle = "#000"; x.lineWidth = 3; x.stroke(); txt(me.vid ? "SORTIR" : "ENTRER", bx, by + 4, 12);
+  if (me.vid && TOUCH) { const bb = brakeId !== null; x.fillStyle = bb ? "#ff5a4d" : "#b3261e"; x.beginPath(); x.arc(W - 140, H - 48, 34, 0, 7); x.fill(); x.stroke(); txt("FREIN", W - 140, H - 44, 13); }
   if (!me.vid && me.dead <= 0) { let near = false; for (const d of dCars.values()) if ((d.m === "d" || d.m === "p") && Math.hypot(d.x - me.x, d.y - me.y) < 48) near = true; if (near) txt("E : MONTER DANS LA VOITURE", W / 2, H - 24, 14, "#ffe14d"); }
   if (me.vid && me.dead <= 0) {
     const kmh = Math.round(Math.abs(me.v) * .5);
     txt(`${kmh} km/h${me.v < -3 ? "  ◄ MARCHE ARRIÈRE" : ""}`, W / 2, H - 14, 16, me.v < -3 ? "#ff9f43" : "#fff");
-    if (me.carT < 9) { x.fillStyle = "rgba(0,0,0,.65)"; x.fillRect(W / 2 - 230, H - 96, 460, 54); txt(TOUCH ? "JOYSTICK : HAUT = ACCÉLÉRER · BAS = FREINER / RECULER" : "↑ ACCÉLÉRER · ↓ FREINER / RECULER", W / 2, H - 74, 13, "#fff"); txt(TOUCH ? "GAUCHE / DROITE = TOURNER · BOUTON = SORTIR" : "← → TOURNER (SEULEMENT QUAND LA VOITURE ROULE) · E = SORTIR", W / 2, H - 54, 12, "#ffe14d"); }
+    if (me.carT < 9) { x.fillStyle = "rgba(0,0,0,.65)"; x.fillRect(W / 2 - 230, H - 96, 460, 54); txt(TOUCH ? "POUSSE LE JOYSTICK VERS OÙ TU VEUX ALLER" : "↑ ACCÉLÉRER · ↓ FREINER / RECULER", W / 2, H - 74, 13, "#fff"); txt(TOUCH ? "LÂCHE = ROULE LIBRE · FREIN = FREINER / RECULER" : "← → TOURNER (SEULEMENT QUAND LA VOITURE ROULE) · E = SORTIR", W / 2, H - 54, 12, "#ffe14d"); }
     if (job) { const a = Math.atan2(job.y - me.y, job.x - me.x); txt(`📦 ${Math.round(Math.hypot(job.x - me.x, job.y - me.y) / 10)} m`, W / 2, 26, 15, "#ffd23f"); x.save(); x.translate(W / 2, 52); x.rotate(a); x.fillStyle = "#ffd23f"; x.strokeStyle = "#000"; x.lineWidth = 2; x.beginPath(); x.moveTo(15, 0); x.lineTo(-9, -10); x.lineTo(-9, 10); x.closePath(); x.fill(); x.stroke(); x.restore(); }
   }
   if (me.bust > .1) { x.fillStyle = "#2a5bff"; x.fillRect(W / 2 - 60, H / 2 + 40, 120 * clamp(me.bust / .9, 0, 1), 8); txt("ARRESTATION…", W / 2, H / 2 + 34, 13, "#8fb0ff"); }
@@ -411,12 +419,13 @@ function frame(now) {
     const k = KEYS[e.key.length > 1 ? e.key : e.key.toLowerCase()]; if (k) { e.preventDefault(); keys.add(k); }
   });
   addEventListener("keyup", e => { const k = KEYS[e.key.length > 1 ? e.key : e.key.toLowerCase()]; if (k) keys.delete(k); });
-  addEventListener("blur", () => { keys.clear(); stick = null; });
-  document.addEventListener("visibilitychange", () => { if (document.hidden) { keys.clear(); stick = null; } });
+  addEventListener("blur", () => { keys.clear(); stick = null; brakeId = null; });
+  document.addEventListener("visibilitychange", () => { if (document.hidden) { keys.clear(); stick = null; brakeId = null; } });
   const rel = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height }; };
   cv.addEventListener("pointerdown", e => {
     if (!active) return; e.preventDefault(); const p = rel(e);
     if (e.button === 2 || Math.hypot(p.x - (W - 56), p.y - (H - 62)) < 40) { useReq = 1; return; }
+    if (me.vid && Math.hypot(p.x - (W - 140), p.y - (H - 48)) < 38) { brakeId = e.pointerId; try { cv.setPointerCapture(e.pointerId); } catch { } return; }
     if (stick) return;
     try { cv.setPointerCapture(e.pointerId); } catch { }
     stick = { id: e.pointerId, ox: p.x, oy: p.y, dx: 0, dy: 0 };
@@ -427,13 +436,13 @@ function frame(now) {
     if (d > m) { stick.ox += dx / d * (d - m); stick.oy += dy / d * (d - m); dx = dx / d * m; dy = dy / d * m; }
     stick.dx = dx / m; stick.dy = dy / m;
   });
-  const end = e => { if (stick && e.pointerId === stick.id) stick = null; };
+  const end = e => { if (brakeId === e.pointerId) brakeId = null; if (stick && e.pointerId === stick.id) stick = null; };
   cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end);
   cv.addEventListener("contextmenu", e => { if (active) e.preventDefault(); });
 
   return {
     enter(code) {
-      active = true; c = code; myUid = getMe().uid; ls = null; lastT = 0; lastH = ""; lastEv = 0; pd = {}; hostOn = false; keys = new Set(); stick = null; useReq = 0;
+      active = true; c = code; myUid = getMe().uid; ls = null; lastT = 0; lastH = ""; lastEv = 0; pd = {}; hostOn = false; keys = new Set(); stick = null; brakeId = null; useReq = 0;
       dPeds.clear(); dCars.clear(); dP.clear(); splats = []; floats = []; hitDone = new Set(); lastHs = {}; sentStr = ""; sentAt = 0; savedCash = -1; saveAt = performance.now();
       Object.assign(me, { vid: 0, hp: 100, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, bust: 0, hurt: 0, v: 0, a: 0, cash: 0 });
       const ix = 2 + Math.floor(Math.random() * 5), iy = 2 + Math.floor(Math.random() * 5); spawnAt([ix * CELL, iy * CELL]);

@@ -46,6 +46,9 @@ export function createStaClient(env) {
   lc.width = W / LR; lc.height = H / LR; let x = mx2;
   const mkPat = (base, sp, n) => { const c2 = document.createElement("canvas"); c2.width = c2.height = 128; const g = c2.getContext("2d"); g.fillStyle = base; g.fillRect(0, 0, 128, 128); let seed = 7; const r = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff; for (let i = 0; i < n; i++) { g.fillStyle = sp[Math.floor(r() * sp.length)]; g.fillRect(Math.floor(r() * 64) * 2, Math.floor(r() * 64) * 2, 2, 2); } return lx.createPattern(c2, "repeat") || base; };
   const patRoad = mkPat("#5d5c7b", ["#524f70", "#6a6888", "#4b4968"], 750), patGrass = mkPat("#3c7d2c", ["#33702a", "#478b36", "#2d6424"], 650);
+  const patSide = (() => { const c2 = document.createElement("canvas"); c2.width = c2.height = 128; const g = c2.getContext("2d"), T = 32, cs = ["#cfc89c", "#c8c194", "#d3cca2", "#c2bb8e"]; let seed = 11; const r = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    for (let ty = 0; ty < 4; ty++) for (let tx = 0; tx < 4; tx++) { const ox = tx * T, oy = ty * T; g.fillStyle = cs[Math.floor(r() * 4)]; g.fillRect(ox, oy, T, T); g.fillStyle = "#e9e3bb"; g.fillRect(ox, oy, T, 2); g.fillRect(ox, oy, 2, T); g.fillStyle = "#9a9468"; g.fillRect(ox, oy + T - 2, T, 2); g.fillRect(ox + T - 2, oy, 2, T); for (let n = 0; n < 22; n++) { g.fillStyle = r() < .5 ? "#b5ae82" : "#dad4aa"; g.fillRect(ox + 2 + Math.floor(r() * 14) * 2, oy + 2 + Math.floor(r() * 14) * 2, 2, 2); } }
+    return lx.createPattern(c2, "repeat") || "#cfc89c"; })();
   const TOUCH = typeof matchMedia === "function" && matchMedia("(pointer:coarse)").matches;
   let active = false, raf = 0, timer = 0, tPrev = 0, c = "", myUid = "", unS = null, unP = null;
   // --- état partagé reçu ---
@@ -277,37 +280,58 @@ const ROOF = [["#8b5a3c", "#a8714b", "#5e3a25"], ["#7d7d86", "#9a9aa5", "#55555d
 const shadeC = new Map();
 const shade = (hex, f) => { const k = hex + f; let v = shadeC.get(k); if (!v) { const n = parseInt(hex.slice(1), 16) || 0; v = `rgb(${Math.round((n >> 16 & 255) * f)},${Math.round((n >> 8 & 255) * f)},${Math.round((n & 255) * f)})`; shadeC.set(k, v); } return v; };
 const txt = (s, px, py, size, color, al) => { x.font = `700 ${size}px "Courier New",monospace`; x.textAlign = al || "center"; x.fillStyle = "#000"; x.fillText(s, px + 1.5, py + 1.5); x.fillStyle = color || "#fff"; x.fillText(s, px, py); };
+const WALL = ["#b07a35", "#8b8d99", "#b5523c", "#c9a867", "#5f7fa8", "#8a8f4c", "#c27a3e", "#a9a49a"];
+const rrect = (px, py, w, h, r) => { x.beginPath(); x.moveTo(px + r, py); x.arcTo(px + w, py, px + w, py + h, r); x.arcTo(px + w, py + h, px, py + h, r); x.arcTo(px, py + h, px, py, r); x.arcTo(px, py, px + w, py, r); x.closePath(); };
 function drawCar(px, py, a, color, cop, now, id) {
-  const ty = cop ? 0 : (id | 0) % 3, L = ty === 2 ? 42 : ty === 1 ? 33 : 36, Wd = ty === 2 ? 20 : ty === 1 ? 16 : 18, hl = L / 2, hw = Wd / 2;
+  const ty = cop ? 0 : (id | 0) % 3, S = 1.18, L = (ty === 2 ? 42 : ty === 1 ? 34 : 38) * S, Wd = (ty === 2 ? 20 : ty === 1 ? 16 : 18) * S, hl = L / 2, hw = Wd / 2;
+  const body = cop ? "#f3f3f3" : color, gl = "#8fc7ea", gd = "#4f7a97";
+  const cx0 = ty === 2 ? -hl + 3 : ty === 1 ? -hl + L * .3 : -hl + L * .2, cx1 = ty === 2 ? hl - L * .26 : hl - L * (ty === 1 ? .3 : .32), mid = (cx0 + cx1) / 2;
   x.save(); x.translate(px, py); x.rotate(a);
-  x.fillStyle = "rgba(0,0,0,.38)"; x.fillRect(-hl + 3, -hw + 3, L + 2, Wd + 2);                 // ombre
-  x.fillStyle = "#101010"; x.fillRect(-hl - 1, -hw - 1, L + 2, Wd + 2);                         // contour
+  x.fillStyle = "rgba(0,0,0,.4)"; rrect(-hl + 4, -hw + 4, L, Wd, 5); x.fill();                    // ombre
+  x.fillStyle = "#08080c"; [[-hl * .62, -1], [hl * .55, -1], [-hl * .62, 1], [hl * .55, 1]].forEach(([wx, sd]) => x.fillRect(wx - 4.5, sd < 0 ? -hw - 1.8 : hw - 1.2, 9, 3));   // roues
+  x.fillStyle = "#0c0c10"; rrect(-hl - 1, -hw - 1, L + 2, Wd + 2, 6); x.fill();                  // contour
+  x.fillStyle = body; rrect(-hl, -hw, L, Wd, 5); x.fill();                                        // carrosserie
+  x.fillStyle = "rgba(255,255,255,.2)"; rrect(-hl + 1, -hw + 1, L - 2, Wd * .3, 3); x.fill();    // reflet
+  x.fillStyle = "rgba(0,0,0,.22)"; rrect(-hl + 1, hw - Wd * .26, L - 2, Wd * .26 - 1, 3); x.fill();
+  if (cop) { x.fillStyle = "#16161c"; x.fillRect(-hl + 5, -hw + .5, L - 10, 3.2); x.fillRect(-hl + 5, hw - 3.7, L - 10, 3.2); }
+  x.fillStyle = "#0c0c10"; x.fillRect(cx1 - 1, -hw - 2.2, 3.4, 3); x.fillRect(cx1 - 1, hw - .8, 3.4, 3);   // rétroviseurs
+  x.fillStyle = body; x.fillRect(cx1 - .5, -hw - 1.6, 2.4, 2); x.fillRect(cx1 - .5, hw - .4, 2.4, 2);
+  x.fillStyle = cop ? "#dcdcdc" : shade(body, ty === 2 ? .8 : .9); rrect(cx0, -hw + 2.2, cx1 - cx0, Wd - 4.4, 3); x.fill();   // toit
+  if (ty === 2) { x.strokeStyle = "rgba(0,0,0,.22)"; x.lineWidth = 1; x.beginPath(); for (let t = cx0 + 6; t < cx1 - 2; t += 6) { x.moveTo(t, -hw + 3); x.lineTo(t, hw - 3); } x.stroke(); }
+  x.fillStyle = "rgba(255,255,255,.28)"; x.fillRect(cx0 + 2, -hw + 3.4, cx1 - cx0 - 4, 1.4);
+  if (ty === 1) { x.fillStyle = "#f4f4f4"; x.fillRect(-hl + 3, -2.4, L - 6, 1.8); x.fillRect(-hl + 3, .6, L - 6, 1.8); }   // coupé : bandes
+  x.fillStyle = gl; x.beginPath(); x.moveTo(cx1, -hw + 2.8); x.lineTo(cx1 + L * .11, -hw + 4.6); x.lineTo(cx1 + L * .11, hw - 4.6); x.lineTo(cx1, hw - 2.8); x.closePath(); x.fill();   // pare-brise
+  if (ty !== 2) { x.fillStyle = gd; x.fillRect(cx0 - L * .08, -hw + 3.4, L * .08, Wd - 6.8); }
+  x.fillStyle = "rgba(15,35,55,.55)"; x.fillRect(cx0 + 1, -hw + 2.2, cx1 - cx0 - 2, 1.3); x.fillRect(cx0 + 1, hw - 3.5, cx1 - cx0 - 2, 1.3);   // vitres latérales
+  x.fillStyle = "rgba(0,0,0,.16)"; x.fillRect(cx1 + L * .14, -1.8, hl - cx1 - L * .14 - 4, 3.6);   // nervure de capot
+  x.fillStyle = "#2a2a30"; x.fillRect(hl - 1.2, -hw + 4.2, 1.2, Wd - 8.4); x.fillRect(-hl, -hw + 4.2, 1.2, Wd - 8.4);   // pare-chocs
+  x.fillStyle = "#fff4a3"; x.fillRect(hl - 2.8, -hw + 1.2, 3, 4); x.fillRect(hl - 2.8, hw - 5.2, 3, 4);                  // phares
+  x.fillStyle = "#d1121f"; x.fillRect(-hl, -hw + 1.2, 2.6, 4); x.fillRect(-hl, hw - 5.2, 2.6, 4);                         // feux arrière
   if (cop) {
-    x.fillStyle = "#f2f2f2"; x.fillRect(-hl, -hw, L, Wd); x.fillStyle = "#16161c"; x.fillRect(hl - 9, -hw, 9, Wd); x.fillRect(-hl, -hw, 9, Wd);
-    x.fillStyle = "#2a2a34"; x.fillRect(-7, -hw + 2, 14, Wd - 4);
-    const f = Math.floor(now / 150) % 2; x.fillStyle = f ? "#ff2a2a" : "#2a5bff"; x.fillRect(-3, -hw + 1, 5, hw - 1); x.fillStyle = f ? "#2a5bff" : "#ff2a2a"; x.fillRect(-3, 0, 5, hw - 1);
-  } else if (ty === 2) {                                                                          // camionnette : caisse + cabine
-    x.fillStyle = color; x.fillRect(-hl, -hw, L, Wd); x.fillStyle = shade(color, .78); x.fillRect(-hl, -hw, L - 14, Wd);
-    x.fillStyle = "rgba(255,255,255,.2)"; x.fillRect(-hl, -hw, L - 14, 2); x.fillStyle = shade(color, .6); x.fillRect(-hl + 3, -hw + 3, L - 20, Wd - 6);
-  } else {
-    x.fillStyle = color; x.fillRect(-hl, -hw, L, Wd);
-    x.fillStyle = shade(color, .8); x.fillRect(-hl, -hw, 5, Wd); x.fillRect(hl - 5, -hw, 5, Wd);
-    x.fillStyle = shade(color, .62); x.fillRect(-8, -hw + 2, 15, Wd - 4);
-    x.fillStyle = "rgba(255,255,255,.22)"; x.fillRect(-8, -hw + 2, 15, 2);
-    if (ty === 1) { x.fillStyle = "#f4f4f4"; x.fillRect(-hl, -2, L, 1.5); x.fillRect(-hl, .5, L, 1.5); }   // coupé : bandes de course
+    const f = Math.floor(now / 150) % 2; x.fillStyle = "#22222a"; x.fillRect(mid - 3, -hw + 2.6, 6, Wd - 5.2);
+    x.fillStyle = f ? "rgba(255,40,40,.35)" : "rgba(40,90,255,.35)"; x.beginPath(); x.arc(mid, -hw * .45, 10, 0, 7); x.fill();
+    x.fillStyle = f ? "rgba(40,90,255,.35)" : "rgba(255,40,40,.35)"; x.beginPath(); x.arc(mid, hw * .45, 10, 0, 7); x.fill();
+    x.fillStyle = f ? "#ff2a2a" : "#2a5bff"; x.fillRect(mid - 2.2, -hw + 3, 4.4, hw - 3); x.fillStyle = f ? "#2a5bff" : "#ff2a2a"; x.fillRect(mid - 2.2, 0, 4.4, hw - 3);
   }
-  x.fillStyle = "#86bfe0"; x.fillRect(hl - 11, -hw + 2, 4, Wd - 4); x.fillStyle = "#5f8ba8"; x.fillRect(-hl + 7, -hw + 2, 3, Wd - 4);
-  x.fillStyle = "#fff6a8"; x.fillRect(hl - 1, -hw, 2, 4); x.fillRect(hl - 1, hw - 4, 2, 4);
-  x.fillStyle = "#c1121f"; x.fillRect(-hl - 1, -hw, 1, 4); x.fillRect(-hl - 1, hw - 4, 1, 4);
   x.restore();
 }
 function drawWalker(px, py, a, body, skin, ph) {
-  x.fillStyle = "rgba(0,0,0,.35)"; x.beginPath(); x.arc(px + 2, py + 2, 5, 0, 7); x.fill();
+  x.fillStyle = "rgba(0,0,0,.35)"; x.beginPath(); x.arc(px + 2, py + 2, 6, 0, 7); x.fill();
   x.save(); x.translate(px, py); x.rotate(a);
-  if (ph !== null) { const l = Math.sin(ph) * 3.2; x.fillStyle = "#1c1c22"; x.fillRect(l - 1.5, -4.5, 3.5, 2.5); x.fillRect(-l - 1.5, 2, 3.5, 2.5); }   // jambes qui marchent
-  x.fillStyle = "#101010"; x.fillRect(-3, -6, 6, 12); x.fillStyle = body; x.fillRect(-2, -5, 4, 10);
-  x.fillStyle = skin || "#f1c27d"; x.beginPath(); x.arc(0, 0, 2.7, 0, 7); x.fill();
+  const sw = ph !== null ? Math.sin(ph) : 0;
+  if (ph !== null) { x.fillStyle = "#14141a"; x.fillRect(sw * 3.4 - 2, -4, 4.5, 2.8); x.fillRect(-sw * 3.4 - 2, 1.2, 4.5, 2.8); }   // pieds
+  x.fillStyle = "#101010"; x.fillRect(-3.6, -6.8, 7.2, 13.6); x.fillStyle = body; x.fillRect(-2.8, -6, 5.6, 12);                   // épaules / haut
+  x.fillStyle = skin || "#f1c27d"; x.fillRect(sw * 2.4 - 1.5, -7.6, 3.2, 2.4); x.fillRect(-sw * 2.4 - 1.5, 5.2, 3.2, 2.4);       // bras
+  x.fillStyle = "#101010"; x.beginPath(); x.arc(0, 0, 3.3, 0, 7); x.fill(); x.fillStyle = skin || "#f1c27d"; x.beginPath(); x.arc(0, 0, 2.6, 0, 7); x.fill();
+  x.fillStyle = "#2b1b10"; x.beginPath(); x.arc(-.6, 0, 2.2, 1.57, 4.71); x.fill();                                               // cheveux
   x.restore();
+}
+function drawSplat(s, al) {                                                                      // sang « GTA 1 » : étoile épineuse rouge
+  const h = hs(Math.round(s.x), Math.round(s.y)); x.globalAlpha = al;
+  const spike = (r0, r1, n, col, off) => { x.fillStyle = col; x.beginPath(); for (let k = 0; k < n * 2; k++) { const an = k * Math.PI / n + off, rad = k % 2 ? r0 : r1 * (.7 + ((h >>> (k % 24)) & 3) * .15); x.lineTo(s.x + Math.cos(an) * rad, s.y + Math.sin(an) * rad); } x.closePath(); x.fill(); };
+  spike(4, 13, 8, "#7d0c12", h % 6); spike(3, 9, 7, "#b3141c", h % 5); spike(2, 4.5, 5, "#d9232b", h % 4);
+  x.fillStyle = "#9b1018"; for (let k = 0; k < 6; k++) { const an = ((h >>> k) % 628) / 100, d = 12 + (h >>> (k + 3)) % 7; x.fillRect(s.x + Math.cos(an) * d, s.y + Math.sin(an) * d, 2, 2); }
+  x.globalAlpha = 1;
 }
 function drawWorld(vx0, vy0, vx1, vy1) {
   x.fillStyle = "#1b1b1f"; x.fillRect(vx0, vy0, vx1 - vx0, vy1 - vy0);
@@ -325,27 +349,60 @@ function drawWorld(vx0, vy0, vx1, vy1) {
     for (let k = 0; k < 11; k++) { const o = -44 + k * 8; if (i < N) x.fillRect(cx + R2 + 4, cy + o, 12, 4); if (i > 0) x.fillRect(cx - R2 - 16, cy + o, 12, 4); if (j < N) x.fillRect(cx + o, cy + R2 + 4, 4, 12); if (j > 0) x.fillRect(cx + o, cy - R2 - 16, 4, 12); }
   }
   const i0 = clamp(Math.floor((vx0 - R2) / CELL), 0, N - 1), i1 = clamp(Math.floor((vx1 - R2) / CELL), 0, N - 1), j0 = clamp(Math.floor((vy0 - R2) / CELL), 0, N - 1), j1 = clamp(Math.floor((vy1 - R2) / CELL), 0, N - 1);
-  for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
-    const bx = lo(i), by = lo(j), h = hs(i, j), bw = BL - 2 * SW, ox = bx + SW, oy = by + SW;
-    x.fillStyle = "#cfc89c"; x.fillRect(bx, by, BL, BL);                       // trottoir
-    x.strokeStyle = "#aaa278"; x.lineWidth = 1.5; x.beginPath(); for (let t = SW * 2; t < BL; t += SW * 2) { x.moveTo(bx + t, by); x.lineTo(bx + t, by + BL); x.moveTo(bx, by + t); x.lineTo(bx + BL, by + t); } x.stroke(); x.strokeStyle = "#ece8cf"; x.lineWidth = 3; x.strokeRect(bx + 1, by + 1, BL - 2, BL - 2);
-    if (isPark(i, j)) {
-      x.fillStyle = patGrass; x.fillRect(ox, oy, bw, bw);
-      x.fillStyle = "#34702a"; for (let k = 0; k < 8; k++) x.fillRect(ox + hs(i + k, j) % (bw - 30), oy + hs(j + k, i + 9) % (bw - 30), 30, 22);
-      x.fillStyle = "#b9a878"; x.fillRect(ox + bw / 2 - 5, oy, 10, bw); x.fillRect(ox, oy + bw / 2 - 5, bw, 10);
-      for (let k = 0; k < 6; k++) { const tx = ox + 18 + hs(i * 3 + k, j) % (bw - 36), ty = oy + 18 + hs(j * 5 + k, i + 2) % (bw - 36); x.fillStyle = "rgba(0,0,0,.3)"; x.beginPath(); x.arc(tx + 5, ty + 5, 14, 0, 7); x.fill(); x.fillStyle = "#1f5a1c"; x.beginPath(); x.arc(tx, ty, 14, 0, 7); x.fill(); x.fillStyle = "#2f7a28"; x.beginPath(); x.arc(tx - 1, ty - 1, 9, 0, 7); x.fill(); x.fillStyle = "#43963a"; x.beginPath(); x.arc(tx - 4, ty - 4, 4, 0, 7); x.fill(); }
-      continue;
-    }
-    const pol = i === POLICE[0] && j === POLICE[1], hos = i === HOSP[0] && j === HOSP[1], pal = pol ? ["#2f55c4", "#5a7fe0", "#1c3585"] : hos ? ["#e9edf0", "#ffffff", "#aab3ba"] : ROOF[h % ROOF.length];
-    x.fillStyle = "rgba(0,0,0,.38)"; x.fillRect(ox + 9, oy + 9, bw, bw);        // ombre portée
-    x.fillStyle = pal[0]; x.fillRect(ox, oy, bw, bw);
-    x.fillStyle = pal[1]; x.fillRect(ox, oy, bw, 3); x.fillRect(ox, oy, 3, bw);
-    x.fillStyle = pal[2]; x.fillRect(ox, oy + bw - 5, bw, 5); x.fillRect(ox + bw - 5, oy, 5, bw);
-    x.strokeStyle = pal[2]; x.lineWidth = 2; x.strokeRect(ox + 14, oy + 14, bw - 28, bw - 28);
-    if (pol) { x.fillStyle = "#fff"; x.font = 'bold 28px "Courier New",monospace'; x.textAlign = "center"; x.fillText("POLICE", ox + bw / 2, oy + bw / 2 + 9); }
-    else if (hos) { x.fillStyle = "#d62828"; x.fillRect(ox + bw / 2 - 8, oy + bw / 2 - 26, 16, 52); x.fillRect(ox + bw / 2 - 26, oy + bw / 2 - 8, 52, 16); }
-    else for (let k = 0; k < 3; k++) { const w = 18 + (h >>> (k * 5)) % 18, hh = 14 + (h >>> (k * 4 + 2)) % 16, px = ox + 22 + (h >>> (k * 6)) % (bw - 70), py = oy + 22 + (h >>> (k * 7 + 1)) % (bw - 60); x.fillStyle = pal[1]; x.fillRect(px, py, w, hh); x.fillStyle = pal[2]; x.fillRect(px, py + hh - 3, w, 3); x.fillRect(px + w - 3, py, 3, hh); }
+  const blds = [];
+  for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {              // passe 1 : trottoirs larges en dalles, bords arrondis, parcs
+    const bx = lo(i), by = lo(j), ox = bx + SW, oy = by + SW, bw = BL - 2 * SW;
+    x.fillStyle = "rgba(30,26,58,.42)"; rrect(bx - 6, by - 6, BL + 12, BL + 12, 32); x.fill();         // ombre du bord de trottoir sur la route
+    x.fillStyle = patSide; rrect(bx, by, BL, BL, 26); x.fill();
+    x.strokeStyle = "#f0ecd0"; x.lineWidth = 3; rrect(bx + 1.5, by + 1.5, BL - 3, BL - 3, 25); x.stroke();   // bordure claire
+    x.strokeStyle = "#8a845c"; x.lineWidth = 1.5; rrect(bx - .5, by - .5, BL + 1, BL + 1, 26.5); x.stroke();
+    if (!isPark(i, j)) { blds.push([i, j]); continue; }
+    x.fillStyle = patGrass; x.fillRect(ox, oy, bw, bw);
+    x.fillStyle = "#34702a"; for (let k = 0; k < 8; k++) x.fillRect(ox + hs(i + k, j) % (bw - 30), oy + hs(j + k, i + 9) % (bw - 30), 30, 22);
+    x.fillStyle = "#b9a878"; x.fillRect(ox + bw / 2 - 5, oy, 10, bw); x.fillRect(ox, oy + bw / 2 - 5, bw, 10);
+    for (let k = 0; k < 6; k++) { const tx = ox + 18 + hs(i * 3 + k, j) % (bw - 36), ty = oy + 18 + hs(j * 5 + k, i + 2) % (bw - 36); x.fillStyle = "rgba(0,0,0,.3)"; x.beginPath(); x.arc(tx + 5, ty + 5, 14, 0, 7); x.fill(); x.fillStyle = "#1f5a1c"; x.beginPath(); x.arc(tx, ty, 14, 0, 7); x.fill(); x.fillStyle = "#2f7a28"; x.beginPath(); x.arc(tx - 1, ty - 1, 9, 0, 7); x.fill(); x.fillStyle = "#43963a"; x.beginPath(); x.arc(tx - 4, ty - 4, 4, 0, 7); x.fill(); }
   }
+  // passe 2 : bâtiments en perspective (murs visibles côté caméra, toit décalé), du plus loin au plus proche
+  const dist = b => Math.hypot(lo(b[0]) + BL / 2 - cam.x, lo(b[1]) + BL / 2 - cam.y);
+  blds.sort((p, q) => dist(q) - dist(p));
+  blds.forEach(([i, j]) => {
+    const h = hs(i, j), bw = BL - 2 * SW, ox = lo(i) + SW, oy = lo(j) + SW, pol = i === POLICE[0] && j === POLICE[1], hos = i === HOSP[0] && j === HOSP[1];
+    const pal = pol ? ["#2f55c4", "#5a7fe0", "#1c3585"] : hos ? ["#e9edf0", "#ffffff", "#aab3ba"] : ROOF[h % ROOF.length];
+    const wc = pol ? "#3f66d0" : hos ? "#e3e8ec" : WALL[h % 8], k = .17 * (pol || hos ? 1.1 : .8 + (h % 4) * .13);
+    const P = (gx, gy) => [gx + (gx - cam.x) * k, gy + (gy - cam.y) * k];
+    const g00 = [ox, oy], g10 = [ox + bw, oy], g11 = [ox + bw, oy + bw], g01 = [ox, oy + bw], r00 = P(ox, oy), r10 = P(ox + bw, oy), r11 = P(ox + bw, oy + bw), r01 = P(ox, oy + bw);
+    x.fillStyle = "rgba(0,0,0,.4)"; x.fillRect(ox + 14, oy + 14, bw, bw);                         // ombre portée
+    const wall = (g0, g1, r0, r1, sh) => {
+      if (Math.hypot(r0[0] - g0[0], r0[1] - g0[1]) < .8) return;
+      const Q = (t, u) => { const gx = g0[0] + (g1[0] - g0[0]) * t, gy = g0[1] + (g1[1] - g0[1]) * t, rx = r0[0] + (r1[0] - r0[0]) * t, ry = r0[1] + (r1[1] - r0[1]) * t; return [gx + (rx - gx) * u, gy + (ry - gy) * u]; };
+      x.fillStyle = shade(wc, sh); x.beginPath(); x.moveTo(g0[0], g0[1]); x.lineTo(g1[0], g1[1]); x.lineTo(r1[0], r1[1]); x.lineTo(r0[0], r0[1]); x.closePath(); x.fill();
+      x.strokeStyle = "rgba(0,0,0,.17)"; x.lineWidth = 1; x.beginPath(); for (let s = 1; s < 14; s++) { const p = Q(s / 14, 0), q = Q(s / 14, 1); x.moveTo(p[0], p[1]); x.lineTo(q[0], q[1]); } x.stroke();   // briques / stries verticales
+      if (hos) { x.strokeStyle = "#d62828"; x.lineWidth = 3; const p = Q(0, .5), q = Q(1, .5); x.beginPath(); x.moveTo(p[0], p[1]); x.lineTo(q[0], q[1]); x.stroke(); }
+      const nc = 7, nr = 3;
+      for (let c = 0; c < nc; c++) for (let r = 0; r < nr; r++) {
+        const t0 = (c + .2) / nc, t1 = (c + .8) / nc, u0 = .1 + (r + .15) / nr * .82, u1 = .1 + (r + .75) / nr * .82, hv = (h >>> ((c + r * 3) % 28)) & 3;
+        x.fillStyle = pol ? (hv & 1 ? "#e8f0ff" : "#aac0ff") : hos ? (hv & 1 ? "#8fc7ea" : "#cfe9f7") : ["#3b84b3", "#2f6f9c", "#b84455", "#58a0c4"][hv];
+        const a1 = Q(t0, u0), a2 = Q(t1, u0), a3 = Q(t1, u1), a4 = Q(t0, u1);
+        x.beginPath(); x.moveTo(a1[0], a1[1]); x.lineTo(a2[0], a2[1]); x.lineTo(a3[0], a3[1]); x.lineTo(a4[0], a4[1]); x.closePath(); x.fill();
+        x.strokeStyle = "rgba(0,0,0,.45)"; x.lineWidth = 1; x.stroke();
+      }
+      x.strokeStyle = shade(wc, 1.3); x.lineWidth = 2; x.beginPath(); x.moveTo(r0[0], r0[1]); x.lineTo(r1[0], r1[1]); x.stroke();            // corniche
+      x.strokeStyle = "rgba(0,0,0,.5)"; x.beginPath(); x.moveTo(g0[0], g0[1]); x.lineTo(g1[0], g1[1]); x.stroke();                            // pied du mur
+    };
+    if (cam.x < ox) wall(g00, g01, r00, r01, .82);
+    if (cam.x > ox + bw) wall(g10, g11, r10, r11, .6);
+    if (cam.y < oy) wall(g00, g10, r00, r10, 1);
+    if (cam.y > oy + bw) wall(g01, g11, r01, r11, .7);
+    const rx = r00[0], ry = r00[1], rw = r10[0] - r00[0], sc = rw / bw;                              // toit
+    x.fillStyle = pal[0]; x.fillRect(rx, ry, rw, rw);
+    for (let n = 0; n < 24; n++) { x.fillStyle = n & 1 ? pal[1] : pal[2]; x.globalAlpha = .45; x.fillRect(rx + hs(h, n) % Math.floor(rw), ry + hs(n, h) % Math.floor(rw), 2, 2); } x.globalAlpha = 1;
+    x.fillStyle = pal[1]; x.fillRect(rx, ry, rw, 3); x.fillRect(rx, ry, 3, rw);
+    x.fillStyle = pal[2]; x.fillRect(rx, ry + rw - 5, rw, 5); x.fillRect(rx + rw - 5, ry, 5, rw);
+    x.strokeStyle = pal[2]; x.lineWidth = 2; x.strokeRect(rx + 14 * sc, ry + 14 * sc, rw - 28 * sc, rw - 28 * sc);
+    if (pol) { x.fillStyle = "#fff"; x.fillRect(rx + 14 * sc, ry + rw / 2 - 26 * sc, rw - 28 * sc, 3); x.fillRect(rx + 14 * sc, ry + rw / 2 + 24 * sc, rw - 28 * sc, 3); x.font = `bold ${Math.round(28 * sc)}px "Courier New",monospace`; x.textAlign = "center"; x.fillText("POLICE", rx + rw / 2, ry + rw / 2 + 9 * sc); }
+    else if (hos) { x.strokeStyle = "#d62828"; x.lineWidth = 4; x.beginPath(); x.arc(rx + rw / 2, ry + rw / 2, 46 * sc, 0, 7); x.stroke(); x.fillStyle = "#d62828"; x.fillRect(rx + rw / 2 - 8 * sc, ry + rw / 2 - 26 * sc, 16 * sc, 52 * sc); x.fillRect(rx + rw / 2 - 26 * sc, ry + rw / 2 - 8 * sc, 52 * sc, 16 * sc); }
+    else for (let n = 0; n < 3; n++) { const w = 18 + (h >>> (n * 5)) % 18, hh = 14 + (h >>> (n * 4 + 2)) % 16, px = rx + (22 + (h >>> (n * 6)) % (bw - 70)) * sc, py = ry + (22 + (h >>> (n * 7 + 1)) % (bw - 60)) * sc; x.fillStyle = pal[1]; x.fillRect(px, py, w * sc, hh * sc); x.fillStyle = pal[2]; x.fillRect(px, py + (hh - 3) * sc, w * sc, 3); x.fillRect(px + (w - 3) * sc, py, 3, hh * sc); }
+  });
 }
 function frame(now) {
   if (!active) { raf = 0; return; }
@@ -371,7 +428,7 @@ function frame(now) {
   x = lx; x.setTransform(z / LR, 0, 0, z / LR, tx, ty);                              // le monde est dessiné en basse résolution…
   drawWorld(vx0, vy0, vx1, vy1);
   const inV = (px, py) => px > vx0 - 60 && px < vx1 + 60 && py > vy0 - 60 && py < vy1 + 60;
-  splats.forEach(s => { const a = 1 - (now - s.t) / 30000; if (a > 0 && inV(s.x, s.y)) { x.globalAlpha = a; x.fillStyle = "#8d0f14"; x.beginPath(); x.arc(s.x, s.y, 8, 0, 7); x.arc(s.x + 7, s.y + 3, 5, 0, 7); x.arc(s.x - 5, s.y + 6, 4, 0, 7); x.fill(); x.globalAlpha = 1; } });
+  splats.forEach(s => { const a = 1 - (now - s.t) / 30000; if (a > 0 && inV(s.x, s.y)) drawSplat(s, a); });
   splats = splats.filter(s => now - s.t < 30000);
   for (const d of dPeds.values()) if (inV(d.x, d.y)) drawWalker(d.x, d.y, d.a, SHIRT[d.sk % 6], SKIN[d.sk % 6], now / 85 + d.tx);
   for (const [id, d] of dCars) if (d.m !== "t" && id !== me.vid && inV(d.x, d.y)) drawCar(d.x, d.y, d.a, col(d.c), d.m === "c", now, id);

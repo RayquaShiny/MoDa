@@ -88,7 +88,7 @@ export function createStaClient(env) {
   // --- moi ---
   const me = { x: 0, y: 0, a: 0, v: 0, vid: 0, hp: 100, cash: 0, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, msg: "", hurt: 0, bust: 0, carT: 99, wpn: 0, ammo: [0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, gcar: null, gn: 0, go: 0, gi: 0, gm: 0 };
   let keys = new Set(), stick = null, useReq = 0, job = null, myCol = 0, cam = { x: 0, y: 0, z: 1.2 }, sentAt = 0, sentStr = "", savedCash = -1, saveAt = 0, tNow = 0, hitDone = new Set(), gLoaded = false, savedG = "";
-  let mis = null, tgt = null, shop = "";   // mission en cours, cible à éliminer, boutique ouverte
+  let mis = null, tgt = null, shop = "", mmBase = null;   // mission en cours, cible à éliminer, boutique ouverte
   let ejected = [], splats = [], floats = [], brakeId = null, fireKey = false, fireId = null, killQ = [], carQ = [], killAt = 0, tracers = [], sparks = [], booms = [], wrecks = [], pickT = new Map(), lastFc = {}, lastCs = {};
 
   const lobbyP = () => (getLobby() || {}).players || {};
@@ -555,7 +555,11 @@ export function createStaClient(env) {
         if (me.vid && me.vid < 100000 && me.vid !== mis.no && !me.cop && myCol === mis.tc) { mis.st = 1; mis.vid = me.vid; toast("Bonne voiture ! Livre-la au 🏁"); beep(660, .1, "triangle", .06); }
       } else if (me.vid === mis.vid) {
         mis.lost = 0;
-        if (Math.hypot(mis.x - me.x, mis.y - me.y) < 60) missionDone(Math.round((450 + mis.d / 6) * (1 - Math.min(.6, dmSum(me.dm) * .05))), "🏁 VOITURE LIVRÉE");
+        if (Math.hypot(mis.x - me.x, mis.y - me.y) < 60) {
+          const r = Math.round((450 + mis.d / 6) * (1 - Math.min(.6, dmSum(me.dm) * .05)));
+          me.go = 1; me.gi = me.vid; me.gn = (me.gn + 1) % 1000; me.vid = 0; me.v = 0; me.cop = 0; job = null; SND.door();   // la voiture est remise à Tony : elle disparaît du monde (même mécanisme que le garage)
+          missionDone(r, "🏁 VOITURE LIVRÉE");
+        }
       } else {
         mis.lost += dt; const car = dCars.get(mis.vid);
         if (car && car.m === "t" && car.o !== myUid) missionFail("on t'a volé la voiture");
@@ -578,6 +582,21 @@ export function createStaClient(env) {
       const a = Math.atan2(pt.y - me.y, pt.x - me.x), d = Math.hypot(pt.x - me.x, pt.y - me.y);
       if (d > 120) { const ax = W / 2 + Math.cos(a) * 96, ay = H / 2 + Math.sin(a) * 78; x.save(); x.translate(ax, ay); x.rotate(a); x.fillStyle = pt.c; x.strokeStyle = "#000"; x.lineWidth = 2; x.beginPath(); x.moveTo(15, 0); x.lineTo(-9, -10); x.lineTo(-9, 10); x.closePath(); x.fill(); x.stroke(); x.restore(); txt(`${Math.round(d / 10)} m`, ax, ay + 26, 12, pt.c); }
     } else if (mis.k === "car" && mis.st === 0) txt("cherche en ville…", W / 2, 24, 12, "#ffd23f");
+  }
+  function mkMini() {                                                     // fond de la minicarte, dessiné une seule fois : routes, blocs, parcs, bâtiments importants
+    const S = 280, c2 = document.createElement("canvas"); c2.width = c2.height = S; const g = c2.getContext("2d"), k = S / WORLD;
+    g.fillStyle = "#262a38"; g.fillRect(0, 0, S, S);
+    g.strokeStyle = "rgba(255,255,255,.08)"; g.lineWidth = 1; g.beginPath();                          // lignes centrales des routes
+    for (let i = 0; i <= N; i++) { g.moveTo(i * CELL * k, 0); g.lineTo(i * CELL * k, S); g.moveTo(0, i * CELL * k); g.lineTo(S, i * CELL * k); } g.stroke();
+    const SP = [[POLICE, "#2f55c4", "P"], [HOSP, "#e9edf0", "+"], [GARAGE, "#6b7080", "G"], [ARMS, "#a14040", "A"]];
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+      const bx = lo(i) * k, by = lo(j) * k, bs = BL * k, sp = SP.find(s => s[0][0] === i && s[0][1] === j), pk = isPark(i, j);
+      g.fillStyle = sp ? sp[1] : pk ? "#2f6b2c" : hs(i, j) % 3 ? "#4b5066" : "#575d75"; g.fillRect(bx, by, bs, bs);
+      g.strokeStyle = sp ? "#fff" : pk ? "#4f9a45" : "#7a8099"; g.lineWidth = sp ? 1.5 : 1; g.strokeRect(bx + .5, by + .5, bs - 1, bs - 1);
+      if (pk) { g.fillStyle = "#245a22"; for (let t = 0; t < 4; t++) { g.beginPath(); g.arc(bx + 8 + hs(i + t, j) % (bs - 16), by + 8 + hs(j + t, i + 9) % (bs - 16), 3, 0, 7); g.fill(); } }
+      if (sp) { g.font = "bold 18px 'Courier New',monospace"; g.textAlign = "center"; g.fillStyle = sp[0] === HOSP ? "#d62828" : "#fff"; g.fillText(sp[2], bx + bs / 2, by + bs / 2 + 6); }
+    }
+    return c2;
   }
   function newJob() { for (let t = 0; t < 8; t++) { const jx = (1 + Math.floor(Math.random() * (N - 1))) * CELL, jy = (1 + Math.floor(Math.random() * (N - 1))) * CELL, d = Math.hypot(jx - me.x, jy - me.y); if (d > 700 || t === 7) { job = { x: jx, y: jy, d }; return; } } }
   function control(dt) {
@@ -1077,17 +1096,28 @@ function frame(now) {
   const rank = [[myUid, me.cash]].concat(activeP().filter(([u]) => u !== myUid).map(([u, p]) => [u, p.cash])).sort((a, b) => b[1] - a[1]);
   txt(`SERVEUR ${c} · ${rank.length} JOUEUR${rank.length > 1 ? "S" : ""}${hostOn ? " · HÔTE" : ""}`, W - 12, 18, 12, "#fffa", "right");
   rank.slice(0, 6).forEach(([u, cs], i) => { const pl = lp[u] || {}; x.fillStyle = pl.color || "#fff"; x.fillRect(W - 170, 28 + i * 18, 9, 9); txt(`${(pl.name || "?").slice(0, 10)}${u === myUid ? "*" : ""}`, W - 156, 37 + i * 18, 12, "#fff", "left"); txt(`$${Math.round(cs)}`, W - 12, 37 + i * 18, 12, "#ffe14d", "right"); });
-  const mm = 130, mx = 10, my = H - mm - 10, mk = mm / WORLD;
-  x.fillStyle = "#000"; x.fillRect(mx - 3, my - 3, mm + 6, mm + 6); x.fillStyle = "#3a3c42"; x.fillRect(mx, my, mm, mm); x.strokeStyle = "#6d7079"; x.lineWidth = 1; x.beginPath();
-  for (let i = 0; i <= N; i++) { x.moveTo(mx + i * CELL * mk, my); x.lineTo(mx + i * CELL * mk, my + mm); x.moveTo(mx, my + i * CELL * mk); x.lineTo(mx + mm, my + i * CELL * mk); } x.stroke();
-  const dot = (px, py, cl, r) => { x.fillStyle = cl; x.fillRect(mx + clamp(px, 0, WORLD) * mk - r, my + clamp(py, 0, WORLD) * mk - r, r * 2, r * 2); };
-  dot(SPAWN.police[0], SPAWN.police[1], "#2f55c4", 4); dot(SPAWN.hosp[0], SPAWN.hosp[1], "#e63946", 4); dot(GZ.x, GZ.y, "#9aa0ad", 3.5); dot(ZONES.arms.x, ZONES.arms.y, "#ff5a4d", 3.5); dot(ZONES.heal.x, ZONES.heal.y, "#7ae582", 3); if (!mis) GIVERS.forEach(g => dot(g.x, g.y, "#ffd23f", 2.5));
-  for (const d of dCars.values()) if (d.m === "c") dot(d.x, d.y, Math.floor(now / 200) % 2 ? "#ff2a2a" : "#2a5bff", 2.5);
-  for (const d of dCops.values()) dot(d.x, d.y, "#5a7fe0", 2);
-  for (const [u, d] of dP) dot(d.x, d.y, (lp[u] || {}).color || "#fff", 2.5);
-  if (job) dot(job.x, job.y, "#ffd23f", 4);
-  { const mp = misPt(); if (mp) dot(mp.x, mp.y, mp.c, 4); }
-  dot(me.x, me.y, "#fff", 3);
+  const mm = 140, mx = 12, my = H - mm - 12, mk = mm / WORLD;
+  if (!mmBase) mmBase = mkMini();
+  const mpx = wx => mx + clamp(wx, 0, WORLD) * mk, mpy = wy => my + clamp(wy, 0, WORLD) * mk, pul = (per) => (now % per) / per;
+  x.fillStyle = "rgba(0,0,0,.45)"; rrect(mx - 2, my + 3, mm + 4, mm + 4, 14); x.fill();                  // ombre portée
+  x.save(); rrect(mx, my, mm, mm, 12); x.clip(); x.imageSmoothingEnabled = true; x.drawImage(mmBase, mx, my, mm, mm);
+  x.strokeStyle = "rgba(255,255,255,.4)"; x.lineWidth = 1; x.strokeRect(mx + vx0 * mk, my + vy0 * mk, vw * mk, vh * mk);   // ce que l'écran montre
+  const dot = (wx, wy, cl, r) => { x.fillStyle = cl; x.strokeStyle = "rgba(0,0,0,.8)"; x.lineWidth = 1; x.beginPath(); x.arc(mpx(wx), mpy(wy), r, 0, 7); x.fill(); x.stroke(); };
+  const arrow = (wx, wy, a, cl) => { x.save(); x.translate(mpx(wx), mpy(wy)); x.rotate(a); x.fillStyle = cl; x.strokeStyle = "#000"; x.lineWidth = 1.5; x.beginPath(); x.moveTo(6.5, 0); x.lineTo(-4.5, -4.5); x.lineTo(-2, 0); x.lineTo(-4.5, 4.5); x.closePath(); x.fill(); x.stroke(); x.restore(); };
+  const ping = (wx, wy, cl, r) => { const f = pul(1100); x.globalAlpha = .7 * (1 - f); x.strokeStyle = cl; x.lineWidth = 1.5; x.beginPath(); x.arc(mpx(wx), mpy(wy), r + f * 9, 0, 7); x.stroke(); x.globalAlpha = 1; };
+  dot(ZONES.arms.x, ZONES.arms.y, "#ff5a4d", 2.6); dot(ZONES.heal.x, ZONES.heal.y, "#7ae582", 2.6);
+  if (!mis) GIVERS.forEach(g => { dot(g.x, g.y, "#ffd23f", 3); });
+  for (const d of dCars.values()) if (d.m === "c") { const fl = Math.floor(now / 200) % 2; dot(d.x, d.y, fl ? "#ff2a2a" : "#2a5bff", 2.8); }
+  for (const d of dCops.values()) dot(d.x, d.y, "#7da2ff", 1.8);
+  for (const d of dP.values()) arrow(d.x, d.y, d.a, "#ff3b30");                                         // les autres joueurs : flèches rouges
+  if (job) dot(job.x, job.y, "#ffd23f", 3.5);
+  { const mp = misPt(); if (mp) { ping(mp.x, mp.y, mp.c, 4); dot(mp.x, mp.y, mp.c, 4); } }
+  if (me.wl > 0 && Math.floor(now / 250) % 2) { x.strokeStyle = "rgba(255,60,60,.9)"; x.lineWidth = 2; rrect(mx + 1, my + 1, mm - 2, mm - 2, 11); x.stroke(); }   // recherché : le cadre clignote
+  ping(me.x, me.y, "#fff", 3);
+  arrow(me.x, me.y, me.a, "#fff");   // toi : une flèche blanche dans le sens de la marche
+  x.restore();
+  x.strokeStyle = "#0b0c10"; x.lineWidth = 4; rrect(mx, my, mm, mm, 12); x.stroke(); x.strokeStyle = "#e8e8f0"; x.lineWidth = 1.5; rrect(mx, my, mm, mm, 12); x.stroke();   // cadre
+  txt("N", mx + mm - 10, my + 14, 11, "#fffc");
   const bx = W - 56, by = H - 62; x.fillStyle = "#1f4fbf"; x.beginPath(); x.arc(bx, by, 38, 0, 7); x.fill(); x.strokeStyle = "#000"; x.lineWidth = 3; x.stroke(); txt(gAct() ? "GARAGE" : !me.vid && (shopAt() || nearGiver()) ? "ACTION" : me.vid ? "SORTIR" : "ENTRER", bx, by + 4, 12);
   { const ga = gAct(); if (ga || (me.g && inGarage())) txt(ga === "buy" ? `E : ACHETER LE GARAGE ($${GPRICE})` : ga === "store" ? "E : RANGER LA VOITURE" : ga === "take" ? "E : SORTIR TA VOITURE" : me.vid ? "GARAGE PLEIN" : "GARAGE VIDE", W / 2, H - 60, 15, ga === "buy" && me.cash < GPRICE ? "#ff9f43" : "#ffe14d"); }
   if (me.dead <= 0 && !shop) {

@@ -5,7 +5,7 @@
 <meta name="theme-color" content="var(--bg)">
 <!-- ⚠️ À CONSERVER À CHAQUE MISE À JOUR : à chaque nouvelle version (chaque modification), la version affichée doit faire +1.
      Changer le numéro aux 3 endroits, toujours identique : ce <meta name="moda-v">, `const VER` dans app.js, et `VERSION` dans sw.js. -->
-<meta name="moda-v" content="57">
+<meta name="moda-v" content="58">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -89,6 +89,7 @@ input.err{border-color:#ff4d6d}
 .tile.barre{background:linear-gradient(135deg,#7b2ff7,#ff3b5c);color:#fff;cursor:pointer}
 .tile.sumo{background:linear-gradient(135deg,#e8318a,#ffb199);color:#2b0016;cursor:pointer}
 .tile.blockdash{background:linear-gradient(135deg,#172c59,#48a9d6);color:#fff;cursor:pointer}
+.tile.sta{background:linear-gradient(135deg,#f5c518,#ff7a1a);color:#2b1a00;cursor:pointer}
 #pass2[hidden]{display:none}
 section:not([hidden]){animation:fade .28s ease backwards}
 @keyframes fade{from{opacity:0;transform:translateY(6px)}}
@@ -389,7 +390,7 @@ html.neon .adl{border-top-color:#ff1f4b33}
    <p class="sub">Choisis un jeu ci-dessous pour créer un lobby, puis invite tes amis. Ou rejoins un pote avec son code.</p>
    <div class="row"><input id="joincode" placeholder="Code du lobby" maxlength="5" autocapitalize="characters" autocorrect="off" spellcheck="false" autocomplete="off" enterkeyhint="go" style="max-width:160px;text-transform:uppercase"><button class="alt" id="join">Rejoindre</button></div></div>
   <h3 class="gh">🧍 Jouable en solo <small>dès 1 joueur, tu peux lancer seul</small></h3>
-  <div class="grid"><div class="tile snake" id="tsnake">Snake<small>1 à 8 joueurs</small></div><div class="tile surv" id="tsurv">Survie coop<small>1 à 8 joueurs</small></div><div class="tile lab" id="tlab">Évasion coop<small>1 à 8 joueurs · labyrinthe</small></div><div class="tile sim" id="tsim">Mine Simulator<small>1 à 8 joueurs · farme, améliore, renais</small></div><div class="tile fruit" id="tfruit">Fruit Forager<small>1 à 5 joueurs · cueille, vends, progresse</small></div></div>
+  <div class="grid"><div class="tile snake" id="tsnake">Snake<small>1 à 8 joueurs</small></div><div class="tile surv" id="tsurv">Survie coop<small>1 à 8 joueurs</small></div><div class="tile lab" id="tlab">Évasion coop<small>1 à 8 joueurs · labyrinthe</small></div><div class="tile sim" id="tsim">Mine Simulator<small>1 à 8 joueurs · farme, améliore, renais</small></div><div class="tile fruit" id="tfruit">Fruit Forager<small>1 à 5 joueurs · cueille, vends, progresse</small></div><div class="tile sta" id="tsta">🚗 Sta I<small>1 à 24 joueurs · petit GTA, serveur ouvert</small></div></div>
   <h3 class="gh">⚔️ Multijoueur <small>il faut être au moins 2</small></h3>
   <div class="grid"><div class="tile br" id="tbr">Battle Royale<small>2 à 8 joueurs · dernier en vie</small></div><div class="tile tk" id="ttk">Tanks<small>2 à 8 joueurs · obus qui rebondissent</small></div><div class="tile sumo" id="tsumo">Sumo Arena<small>2 à 8 joueurs · pousse-les hors de l'arène</small></div><div class="tile barre" id="tbarre">La barre malicieuse<small>2 à 8 joueurs · esquive, saute, survis 5 s</small></div><div class="tile blockdash" id="tblockdash">🧱 Block Dash<small>2 à 8 joueurs · évite les murs</small></div></div>
   <h3 class="gh">👥 Grand groupe <small>il faut au moins 4 joueurs</small></h3>

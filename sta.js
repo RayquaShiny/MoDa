@@ -20,6 +20,23 @@ const isSpecial = (i, j) => (i === POLICE[0] && j === POLICE[1]) || (i === HOSP[
 const isPark = (i, j) => !isSpecial(i, j) && hs(i, j) % 6 === 0;
 const lo = i => i * CELL + ROAD / 2, rc = v => Math.round(v / CELL) * CELL;
 const angLerp = (a, b, k) => { let d = (b - a) % 6.283185; if (d > 3.141593) d -= 6.283185; if (d < -3.141593) d += 6.283185; return a + d * k; };
+const WPN = [null,
+  { n: "PISTOLET", rate: .34, rng: 340, pel: 1, spr: .02, car: 12, pvp: 14, heat: .05, max: 99, ammo: 30, snd: [330, .07, "square", .05, 140] },
+  { n: "MITRAILLETTE", rate: .09, rng: 300, pel: 1, spr: .07, car: 6, pvp: 6, heat: .03, max: 300, ammo: 100, snd: [240, .05, "square", .04, 100] },
+  { n: "FUSIL À POMPE", rate: .85, rng: 210, pel: 5, spr: .22, car: 9, pvp: 11, heat: .15, max: 50, ammo: 16, snd: [110, .16, "sawtooth", .08, 40] }];
+// dégâts de carrosserie : 2 bits par zone (0 = avant, 1 = droite, 2 = arrière, 3 = gauche), niveau 0 à 3
+const wear = id => hs(id | 0, 99) % 100 < 40 ? 1 << ([1, 1, 3, 0, 2, 1][hs(id | 0, 5) % 6] * 2) : 0;
+const dmx = (a, b) => { let r = 0; for (let z = 0; z < 4; z++) r |= Math.max((a >> (z * 2)) & 3, (b >> (z * 2)) & 3) << (z * 2); return r; };
+const dmSum = d => { let t = 0; for (let z = 0; z < 4; z++) t += ((d | 0) >> (z * 2)) & 3; return t; };
+const inBld = (px, py) => { const i = Math.floor((px - ROAD / 2) / CELL), j = Math.floor((py - ROAD / 2) / CELL); if (i < 0 || j < 0 || i >= N || j >= N || isPark(i, j)) return false; const x0 = lo(i) + SW, y0 = lo(j) + SW; return px > x0 && px < x0 + BL - 2 * SW && py > y0 && py < y0 + BL - 2 * SW; };
+const wallEnd = (ox, oy, ang, rng) => { const dx = Math.cos(ang), dy = Math.sin(ang); for (let t = 8; t <= rng; t += 6) if (inBld(ox + dx * t, oy + dy * t)) return t; return rng; };
+const PICKS = [];
+for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+  if (isPark(i, j) || isSpecial(i, j)) continue; const h = hs(i, j + 404); if (h % 2) continue;
+  const e = (h >>> 3) % 4, t = 30 + (h >>> 6) % (BL - 60), x0 = lo(i), y0 = lo(j), ty = [1, 1, 2, 3][(h >>> 12) % 4];
+  PICKS.push({ id: i * N + j, t: ty, x: e === 2 ? x0 + SW / 2 : e === 3 ? x0 + BL - SW / 2 : x0 + t, y: e === 0 ? y0 + SW / 2 : e === 1 ? y0 + BL - SW / 2 : y0 + t });
+}
+PICKS.push({ id: 900, t: 2, x: lo(POLICE[0]) + 130, y: lo(POLICE[1]) + BL - SW / 2 }, { id: 901, t: 1, x: lo(HOSP[0]) + 130, y: lo(HOSP[1]) + BL - SW / 2 });
 
 // Pousse un cercle (p.x, p.y, rayon r) hors des bâtiments et des bords du monde. Renvoie true s'il y a eu contact.
 function push(p, r) {
@@ -38,7 +55,7 @@ function push(p, r) {
   const o = ROAD / 2 - r; const nx = clamp(p.x, -o, WORLD + o), ny = clamp(p.y, -o, WORLD + o); if (nx !== p.x || ny !== p.y) { p.x = nx; p.y = ny; hit = true; }
   return hit;
 }
-const parseP = s => { const a = String(s).split(","); return { x: +a[0] || 0, y: +a[1] || 0, a: +a[2] || 0, vid: +a[3] || 0, wl: +a[4] || 0, cash: +a[5] || 0, hp: +a[6] || 0, v: +a[7] || 0, hs: +a[8] || 0, hid: +a[9] || 0 }; };
+const parseP = s => { const a = String(s).split(","); return { x: +a[0] || 0, y: +a[1] || 0, a: +a[2] || 0, vid: +a[3] || 0, wl: +a[4] || 0, cash: +a[5] || 0, hp: +a[6] || 0, v: +a[7] || 0, hs: +a[8] || 0, hid: +a[9] || 0, dm: +a[10] || 0, wpn: +a[11] || 0, fc: +a[12] || 0, fw: +a[13] || 0, cs: +a[14] || 0, cid: +a[15] || 0, ca: +a[16] || 0 }; };
 
 export function createStaClient(env) {
   const { R: RF, set, get, remove, onValue, $, beep, getMe, getCode, getLobby, toast } = env;
@@ -57,9 +74,9 @@ export function createStaClient(env) {
   // --- simulation de l'hôte ---
   let hostOn = false, peds = [], cars = [], nid = 1, evs = [], evId = 0, lastHs = {}, spawnCd = 0, streamCd = 0, pubAt = 0, hostT = 0, cleanCd = 0;
   // --- moi ---
-  const me = { x: 0, y: 0, a: 0, v: 0, vid: 0, hp: 100, cash: 0, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, msg: "", hurt: 0, bust: 0, carT: 99 };
+  const me = { x: 0, y: 0, a: 0, v: 0, vid: 0, hp: 100, cash: 0, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, msg: "", hurt: 0, bust: 0, carT: 99, wpn: 0, ammo: [0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9 };
   let keys = new Set(), stick = null, useReq = 0, job = null, myCol = 0, cam = { x: 0, y: 0, z: 1.2 }, sentAt = 0, sentStr = "", savedCash = -1, saveAt = 0, tNow = 0, hitDone = new Set();
-  let splats = [], floats = [], brakeId = null;
+  let splats = [], floats = [], brakeId = null, fireKey = false, fireId = null, killQ = [], carQ = [], killAt = 0, tracers = [], sparks = [], booms = [], wrecks = [], pickT = new Map(), lastFc = {}, lastCs = {};
 
   const lobbyP = () => (getLobby() || {}).players || {};
   const activeP = () => { const lp = lobbyP(); return Object.entries(pd).filter(([u]) => lp[u]); };
@@ -110,10 +127,10 @@ export function createStaClient(env) {
   const nearPt = (a, b) => { const ps = activeP(); if (!ps.length) return null; const p = rnd(ps)[1], an = rr(0, 6.283), d = rr(a, b); return [clamp(p.x + Math.cos(an) * d, 0, WORLD), clamp(p.y + Math.sin(an) * d, 0, WORLD)]; };
 
   function becomeHost() {
-    hostOn = true; peds = []; cars = []; nid = 1; evs = []; evId = lastEv; lastHs = {}; streamCd = 0; spawnCd = 0; hostT = performance.now();
+    hostOn = true; peds = []; cars = []; nid = 1; evs = []; evId = lastEv; lastHs = {}; lastCs = {}; streamCd = 0; spawnCd = 0; hostT = performance.now();
     if (ls && ls.pd) {
       ls.pd.forEach(a => peds.push({ id: a[0], x: a[1], y: a[2], h: a[3], sk: a[4], st: 0, tm: 1 }));
-      ls.cr.forEach(a => { const ang = a[3]; let dx = Math.round(Math.cos(ang)), dy = Math.round(Math.sin(ang)); if (dx && dy) dy = 0; if (!dx && !dy) dx = 1; cars.push({ id: a[0], x: a[1], y: a[2], a: ang, v: a[4], c: a[5], m: a[6] === "t" ? "p" : a[6], o: "", tm: 30, dx, dy, sp: rr(110, 170), tg: "" }); });
+      ls.cr.forEach(a => { const ang = a[3]; let dx = Math.round(Math.cos(ang)), dy = Math.round(Math.sin(ang)); if (dx && dy) dy = 0; if (!dx && !dy) dx = 1; cars.push({ id: a[0], x: a[1], y: a[2], a: ang, v: a[4], c: a[5], m: a[6] === "t" ? "p" : a[6], dm: a[8] | 0, o: "", tm: 30, dx, dy, sp: rr(110, 170), tg: "" }); });
       nid = Math.max(0, ...peds.map(q => q.id), ...cars.map(q => q.id)) + 1;
     }
   }
@@ -122,12 +139,19 @@ export function createStaClient(env) {
     const taken = {}; ps.forEach(([u, p]) => { if (p.vid) taken[p.vid] = [u, p]; });
     cars.forEach(cr => {
       const t = taken[cr.id];
-      if (t) { cr.m = "t"; cr.o = t[0]; cr.x = t[1].x; cr.y = t[1].y; cr.a = t[1].a; cr.v = t[1].v; cr.tm = 0; }
+      if (t) { cr.m = "t"; cr.o = t[0]; cr.x = t[1].x; cr.y = t[1].y; cr.a = t[1].a; cr.v = t[1].v; cr.tm = 0; cr.dm = t[1].dm; }
       else if (cr.m === "t") { cr.m = "p"; cr.o = ""; cr.v = 0; cr.tm = 45; }
     });
     ps.forEach(([u, p]) => {                                              // piétons écrasés (annoncés par le conducteur)
       if (lastHs[u] === undefined) lastHs[u] = p.hs;
       else if (p.hs !== lastHs[u]) { lastHs[u] = p.hs; const i = peds.findIndex(q => q.id === p.hid); if (i >= 0) { evs.push([++evId, Math.round(peds[i].x), Math.round(peds[i].y), 1]); peds.splice(i, 1); } }
+    });
+    ps.forEach(([u, p]) => {                                              // tirs sur les voitures (annoncés par le tireur)
+      if (lastCs[u] === undefined) { lastCs[u] = p.cs; return; }
+      if (p.cs === lastCs[u]) return; lastCs[u] = p.cs;
+      const cr = cars.find(q => q.id === p.cid); if (!cr || cr.rm || (cr.m !== "d" && cr.m !== "c" && cr.m !== "p")) return;
+      cr.hp = (cr.hp === undefined ? (cr.m === "c" ? 100 : 60) : cr.hp) - p.ca;
+      if (cr.hp <= 0) { evs.push([++evId, Math.round(cr.x), Math.round(cr.y), 2, +cr.a.toFixed(2), cr.id, cr.m]); cr.rm = 1; cr.m = "x"; }
     });
     // police : cible = joueur recherché le plus proche
     const wanted = ps.filter(([, p]) => p.wl > 0);
@@ -166,7 +190,7 @@ export function createStaClient(env) {
   }
   function publish() {
     const r = Math.round, f2 = v => +v.toFixed(2);
-    const s = { k: "sta", t: Date.now(), h: myUid, pd: peds.map(q => [q.id, r(q.x), r(q.y), f2(q.h), q.sk, q.st]), cr: cars.filter(q => !q.rm).map(q => [q.id, r(q.x), r(q.y), f2(q.a), r(q.v), q.c, q.m, q.o]), ev: evs };
+    const s = { k: "sta", t: Date.now(), h: myUid, pd: peds.map(q => [q.id, r(q.x), r(q.y), f2(q.h), q.sk, q.st]), cr: cars.filter(q => !q.rm).map(q => [q.id, r(q.x), r(q.y), f2(q.a), r(q.v), q.c, q.m, q.o, q.dm | 0]), ev: evs };
     set(RF(`games/${c}/state`), JSON.stringify(s)).catch(() => { });
   }
   function simLoop() {
@@ -186,16 +210,40 @@ export function createStaClient(env) {
     s.pd.forEach(a => { seen.add(a[0]); let d = dPeds.get(a[0]); if (!d) dPeds.set(a[0], d = { x: a[1], y: a[2], a: a[3] }); d.tx = a[1]; d.ty = a[2]; d.ta = a[3]; d.sk = a[4]; d.st = a[5]; });
     for (const k of dPeds.keys()) if (!seen.has(k)) dPeds.delete(k);
     const sc = new Set();
-    s.cr.forEach(a => { sc.add(a[0]); let d = dCars.get(a[0]); if (!d) dCars.set(a[0], d = { x: a[1], y: a[2], a: a[3] }); d.tx = a[1]; d.ty = a[2]; d.ta = a[3]; d.v = a[4]; d.c = a[5]; d.m = a[6]; d.o = a[7]; });
+    s.cr.forEach(a => { sc.add(a[0]); let d = dCars.get(a[0]); if (!d) dCars.set(a[0], d = { x: a[1], y: a[2], a: a[3] }); d.tx = a[1]; d.ty = a[2]; d.ta = a[3]; d.v = a[4]; d.c = a[5]; d.m = a[6]; d.o = a[7]; d.dm = a[8] | 0; });
     for (const k of dCars.keys()) if (!sc.has(k)) dCars.delete(k);
-    (s.ev || []).forEach(e => { if (e[0] > lastEv) { lastEv = e[0]; splats.push({ x: e[1], y: e[2], t: tNow }); if (splats.length > 40) splats.shift(); if (Math.hypot(e[1] - me.x, e[2] - me.y) < 400) beep(130, .12, "square", .04, 60); } });
+    (s.ev || []).forEach(e => {
+      if (e[0] <= lastEv) return; lastEv = e[0];
+      if (e[3] === 2) {                                                   // voiture détruite : explosion + épave
+        booms.push({ x: e[1], y: e[2], t: tNow }); wrecks.push({ x: e[1], y: e[2], a: e[4] || 0, t: tNow, id: e[5] || 0 }); if (wrecks.length > 8) wrecks.shift();
+        const dd = Math.hypot(e[1] - me.x, e[2] - me.y); if (dd < 500) beep(70, .35, "sawtooth", .09, 30);
+        if (dd < 75 && me.dead <= 0) me.hp -= 30;
+        if (e[5] && e[5] === me.lastCar && tNow - me.lastCarT < 2500) { const rw = e[6] === "c" ? 300 : 100; me.cash += rw; me.heat = Math.min(5, me.heat + (e[6] === "c" ? .5 : .3)); floats.push({ x: e[1], y: e[2] - 20, t: tNow, s: `💥 +$${rw}`, c: "#ffd23f" }); }
+        return;
+      }
+      splats.push({ x: e[1], y: e[2], t: tNow }); if (splats.length > 40) splats.shift(); if (Math.hypot(e[1] - me.x, e[2] - me.y) < 400) beep(130, .12, "square", .04, 60);
+    });
   }
-  function onP(snap) { const o = snap.val() || {}, n = {}; Object.keys(o).forEach(u => { n[u] = parseP(o[u]); }); pd = n; }
+  function onP(snap) {
+    const o = snap.val() || {}, n = {}; Object.keys(o).forEach(u => { n[u] = parseP(o[u]); }); pd = n;
+    for (const u in n) {                                                  // tirs des autres : traceurs + touche calculée chez la victime
+      if (u === myUid) continue; const p = n[u], old = lastFc[u]; lastFc[u] = p.fc; if (old === undefined || old === p.fc) continue;
+      let k = (p.fc - old + 1000) % 1000; if (k > 8) k = 1; const W = WPN[p.fw]; if (!W) continue;
+      const dd = dP.get(u); if (dd) dd.flash = tNow;
+      for (let sh = 0; sh < k; sh++) for (let q = 0; q < W.pel; q++) {
+        const ang = p.a + rr(-W.spr, W.spr), dx = Math.cos(ang), dy = Math.sin(ang), ox = p.x + dx * (p.vid ? 24 : 11), oy = p.y + dy * (p.vid ? 24 : 11), e = wallEnd(ox, oy, ang, W.rng);
+        tracers.push({ x0: ox, y0: oy, x1: ox + dx * e, y1: oy + dy * e, t: tNow });
+        if (me.dead > 0) continue;
+        const rx = me.x - ox, ry = me.y - oy, f = rx * dx + ry * dy;
+        if (f > 0 && f < e && Math.abs(-rx * dy + ry * dx) < (me.vid ? 15 : 8)) { me.hp -= W.pvp * (me.vid ? .6 : 1); beep(150, .05, "square", .04, 50); if (me.vid && Math.random() < .3) dent(ang + Math.PI, 1); }
+      }
+    }
+  }
 
   // ================= MOI =================
   const col = i => CCOL[(i | 0) % 8];
   function spawnAt(p) { me.x = p[0] + rr(-30, 30); me.y = p[1]; me.vid = 0; me.v = 0; me.hp = 100; me.dead = 0; me.heat = 0; me.bust = 0; job = null; cam.x = me.x; cam.y = me.y; }
-  function die(why, loss, where) { me.dead = 2.2; me.msg = why; me.vid = 0; me.v = 0; me.heat = 0; me.cash = Math.floor(me.cash * (1 - loss)); me.where = where; beep(200, .4, "sawtooth", .06, 60); }
+  function die(why, loss, where) { me.dead = 2.2; me.msg = why; me.wpn = 0; me.ammo = [0, 0, 0, 0]; me.vid = 0; me.v = 0; me.heat = 0; me.cash = Math.floor(me.cash * (1 - loss)); me.where = where; beep(200, .4, "sawtooth", .06, 60); }
   function useKey() {
     if (me.dead > 0) return;
     if (me.vid) {
@@ -205,9 +253,50 @@ export function createStaClient(env) {
     let best = 0, bd = 48, bc = null;
     for (const [id, d] of dCars) if ((d.m === "d" || d.m === "p") && Math.hypot(d.x - me.x, d.y - me.y) < bd) { bd = Math.hypot(d.x - me.x, d.y - me.y); best = id; bc = d; }
     if (!best) return;
-    me.vid = best; me.x = bc.x; me.y = bc.y; me.a = bc.a; me.v = bc.m === "d" ? bc.v : 0; myCol = bc.c; me.carT = 0;
+    me.vid = best; me.x = bc.x; me.y = bc.y; me.a = bc.a; me.v = bc.m === "d" ? bc.v : 0; myCol = bc.c; me.carT = 0; me.dm = dmx(bc.dm | 0, wear(best));
     if (bc.m === "d") { me.heat += .8; floats.push({ x: me.x, y: me.y - 20, t: tNow, s: "🚗 Car-jacking !", c: "#ffd23f" }); }
     newJob();
+  }
+  function dent(wa, sev) {                                                // la tôle se déforme du côté de l'impact (wa = angle monde vers le point d'impact)
+    if (!me.vid || me.dmCd > 0) return; me.dmCd = .35;
+    const rel = Math.atan2(Math.sin(wa - me.a), Math.cos(wa - me.a)), z = Math.abs(rel) < .785 ? 0 : Math.abs(rel) > 2.356 ? 2 : rel > 0 ? 1 : 3;
+    for (let k = 0; k < sev; k++) if (((me.dm >> (z * 2)) & 3) < 3) me.dm += 1 << (z * 2);
+    beep(120, .12, "square", .05, 50); navigator.vibrate && navigator.vibrate(30);
+  }
+  const hasGun = () => me.ammo.some(v => v > 0);
+  function selWpn(n) { if (me.ammo[n] > 0) me.wpn = n; }
+  function cycleWpn() { for (let k = 1; k <= 3; k++) { const n = (me.wpn - 1 + k + 3) % 3 + 1; if (me.ammo[n] > 0) { me.wpn = n; return; } } me.wpn = 0; }
+  function trace(ox, oy, ang, W) {                                        // un tir « hitscan » : s'arrête au mur, au piéton ou à la voiture touchée
+    const dx = Math.cos(ang), dy = Math.sin(ang); let bf = wallEnd(ox, oy, ang, W.rng), best = null;
+    for (const [id, d] of dPeds) { if (hitDone.has(id)) continue; const rx = d.x - ox, ry = d.y - oy, f = rx * dx + ry * dy; if (f > 0 && f < bf && Math.abs(-rx * dy + ry * dx) < 8) { bf = f; best = ["p", id, d]; } }
+    for (const [id, d] of dCars) { if (d.m === "t" || id === me.vid) continue; const rx = d.x - ox, ry = d.y - oy, f = rx * dx + ry * dy; if (f > 0 && f - 14 < bf && Math.abs(-rx * dy + ry * dx) < 17) { bf = Math.max(6, f - 14); best = ["c", id, d]; } }
+    if (best) {
+      if (best[0] === "p") { const d = best[2]; hitDone.add(best[1]); killQ.push(best[1]); me.cash += 30; me.heat = Math.min(5, me.heat + .5); floats.push({ x: d.x, y: d.y - 10, t: tNow, s: "+$30", c: "#7ae582" }); splats.push({ x: d.x, y: d.y, t: tNow }); }
+      else { me.lastCar = best[1]; me.lastCarT = tNow; const l = carQ[carQ.length - 1]; if (l && l[0] === best[1]) l[1] += W.car; else carQ.push([best[1], W.car]); if (carQ.length > 8) carQ.shift(); }
+    }
+    if (best || bf < W.rng) sparks.push({ x: ox + dx * bf, y: oy + dy * bf, t: tNow });
+    return bf;
+  }
+  function weapons(dt, now) {
+    me.cd -= dt; me.flash -= dt; me.dmCd -= dt;
+    for (const p of PICKS) {                                              // ramassage des armes
+      if (Math.abs(p.x - me.x) > 24 || Math.abs(p.y - me.y) > 24 || Math.hypot(p.x - me.x, p.y - me.y) > 24) continue;
+      const t = pickT.get(p.id); if (t !== undefined && now - t < 45000) continue; pickT.set(p.id, now);
+      const W = WPN[p.t], had = me.ammo[p.t] > 0; me.ammo[p.t] = Math.min(W.max, me.ammo[p.t] + W.ammo); if (!had || !me.wpn) me.wpn = p.t; me.gunT = now;
+      floats.push({ x: me.x, y: me.y - 22, t: now, s: `🔫 ${W.n} +${W.ammo}`, c: "#ffe14d" }); beep(880, .1, "triangle", .06);
+    }
+    if (me.wpn && me.ammo[me.wpn] <= 0) cycleWpn();
+    if ((fireKey || fireId !== null) && me.wpn && me.cd <= 0 && me.ammo[me.wpn] > 0) {
+      const W = WPN[me.wpn], dx = Math.cos(me.a), dy = Math.sin(me.a), ox = me.x + dx * (me.vid ? 24 : 11), oy = me.y + dy * (me.vid ? 24 : 11);
+      me.ammo[me.wpn]--; me.cd = W.rate; me.fc = (me.fc + 1) % 1000; me.fw = me.wpn; me.flash = .07; me.heat = Math.min(5, me.heat + W.heat);
+      for (let q = 0; q < W.pel; q++) { const ang = me.a + rr(-W.spr, W.spr), e = trace(ox, oy, ang, W); tracers.push({ x0: ox, y0: oy, x1: ox + Math.cos(ang) * e, y1: oy + Math.sin(ang) * e, t: now }); }
+      beep(...W.snd); navigator.vibrate && navigator.vibrate(12);
+    }
+    if (now - killAt > 150) {                                             // on annonce à l'hôte un coup à la fois (piéton abattu / voiture touchée)
+      killAt = now;
+      if (killQ.length) { me.hs++; me.hid = killQ.shift(); }
+      if (carQ.length) { const q = carQ.shift(); me.cs = (me.cs + 1) % 1000; me.cid = q[0]; me.ca = Math.min(255, Math.round(q[1])); }
+    }
   }
   function newJob() { for (let t = 0; t < 8; t++) { const jx = (1 + Math.floor(Math.random() * (N - 1))) * CELL, jy = (1 + Math.floor(Math.random() * (N - 1))) * CELL, d = Math.hypot(jx - me.x, jy - me.y); if (d > 700 || t === 7) { job = { x: jx, y: jy, d }; return; } } }
   function control(dt) {
@@ -223,7 +312,7 @@ export function createStaClient(env) {
         else if (m > .05) { let d = Math.atan2(iy, ix) - me.a; d = Math.atan2(Math.sin(d), Math.cos(d)); sr = clamp(d * 2.2, -1, 1); th = Math.abs(d) < 1.6 ? Math.max(.6, m) : .5; }
         else { th = 0; sr = 0; }
       } else if (brakeId !== null) th = -1;
-      const MAXV = 230, REV = 95;
+      const MAXV = 230 * (1 - .045 * dmSum(me.dm)), REV = 95;
       if (th > 0) me.v += (me.v < -5 ? 620 : 330) * th * dt;
       else if (th < 0) me.v -= (me.v > 10 ? 620 : 190) * -th * dt;
       else me.v -= Math.sign(me.v) * Math.min(Math.abs(me.v), 170 * dt);
@@ -233,7 +322,8 @@ export function createStaClient(env) {
       me.x = sx; me.y = sy;
       if (push(me, 13)) {                                                  // contre un mur : on glisse, et on ne perd de la vitesse que si on le prend de face
         const cx = me.x - sx, cy = me.y - sy, cl = Math.hypot(cx, cy);
-        if (cl > .01 && Math.abs(me.v) > 1) { const dot = (Math.cos(me.a) * cx + Math.sin(me.a) * cy) / cl * Math.sign(me.v); if (dot < 0) { if (Math.abs(me.v) > 140 && -dot > .5) beep(80, .12, "sawtooth", .05, 30); me.v *= 1 + dot * .75; } }
+        if (cl > .01 && Math.abs(me.v) > 1) { const dot = (Math.cos(me.a) * cx + Math.sin(me.a) * cy) / cl * Math.sign(me.v); if (dot > -.35 && Math.abs(me.v) > 70) { me.scr += Math.abs(me.v) * dt; if (me.scr > 110) { me.scr = 0; dent(Math.atan2(-cy, -cx), 1); } }   // frottement : le flanc se froisse
+          if (dot < 0) { if (Math.abs(me.v) > 110 && -dot > .35) dent(Math.atan2(-cy, -cx), Math.abs(me.v) > 190 ? 2 : 1); if (Math.abs(me.v) > 140 && -dot > .5) beep(80, .12, "sawtooth", .05, 30); me.v *= 1 + dot * .75; } }
       }
     } else {
       const m = Math.hypot(ix, iy); if (m > .05) { me.a = Math.atan2(iy, ix); me.x += ix / Math.max(1, m) * 125 * dt; me.y += iy / Math.max(1, m) * 125 * dt; } me.v = m > .05 ? 125 : 0;
@@ -243,7 +333,7 @@ export function createStaClient(env) {
   function interact(dt) {
     // piétons écrasés
     if (me.vid && Math.abs(me.v) > 60) for (const [id, d] of dPeds) if (!hitDone.has(id) && Math.hypot(d.x - me.x, d.y - me.y) < 20) {
-      hitDone.add(id); me.cash += 50; me.heat += .8; me.hs++; me.hid = id; floats.push({ x: d.x, y: d.y - 10, t: tNow, s: "+$50", c: "#7ae582" }); beep(110, .1, "square", .05, 50); navigator.vibrate && navigator.vibrate(40);
+      hitDone.add(id); killQ.push(id); me.cash += 50; me.heat += .8; floats.push({ x: d.x, y: d.y - 10, t: tNow, s: "+$50", c: "#7ae582" }); beep(110, .1, "square", .05, 50); navigator.vibrate && navigator.vibrate(40);
     }
     if (hitDone.size > 30) for (const id of hitDone) if (!dPeds.has(id)) hitDone.delete(id);
     me.hurt -= dt;
@@ -253,7 +343,7 @@ export function createStaClient(env) {
     for (const [ox, oy, ov, om] of ot) {
       const dx = me.x - ox, dy = me.y - oy, d = Math.hypot(dx, dy);
       if (!me.vid) { if (ov > 50 && d < 19 && me.hurt <= 0) { me.hp -= Math.min(60, ov / 6); me.hurt = .6; me.x += dx / (d || 1) * 18; me.y += dy / (d || 1) * 18; beep(90, .15, "sawtooth", .05, 40); navigator.vibrate && navigator.vibrate(80); } }
-      else if (d < 30 && ov !== undefined) { me.x += dx / (d || 1) * (30 - d); me.y += dy / (d || 1) * (30 - d); if (Math.abs(me.v) > 90) { me.v *= .5; beep(100, .1, "square", .04, 30); } if (om === "c") me.heat += dt * .5; }
+      else if (d < 30 && ov !== undefined) { me.x += dx / (d || 1) * (30 - d); me.y += dy / (d || 1) * (30 - d); if (Math.abs(me.v) > 90) { const sv = Math.abs(me.v); me.v *= .5; dent(Math.atan2(-dy, -dx), sv > 170 ? 2 : 1); beep(100, .1, "square", .04, 30); } if (om === "c") me.heat += dt * .5; }
     }
     // police : « arrêté » si un flic est collé à toi et que tu ne fonces pas
     let copNear = false, bust = false;
@@ -269,7 +359,7 @@ export function createStaClient(env) {
     if (me.vid && job && Math.hypot(job.x - me.x, job.y - me.y) < 60) { const r = 200 + Math.round(job.d / 6); me.cash += r; floats.push({ x: me.x, y: me.y - 20, t: tNow, s: `+$${r} livraison !`, c: "#ffd23f" }); beep(660, .12, "triangle", .06); newJob(); }
   }
   function sendP(now) {
-    const s = `${Math.round(me.x)},${Math.round(me.y)},${me.a.toFixed(2)},${me.vid},${me.wl},${Math.round(me.cash)},${Math.round(me.hp)},${Math.round(Math.abs(me.v))},${me.hs},${me.hid}`;
+    const s = `${Math.round(me.x)},${Math.round(me.y)},${me.a.toFixed(2)},${me.vid},${me.wl},${Math.round(me.cash)},${Math.round(me.hp)},${Math.round(Math.abs(me.v))},${me.hs},${me.hid},${me.vid ? me.dm : 0},${me.wpn},${me.fc},${me.fw},${me.cs},${me.cid},${me.ca}`;
     if ((s === sentStr && now - sentAt < 700) || now - sentAt < 110) return;
     sentStr = s; sentAt = now; set(RF(`games/${c}/p/${myUid}`), s).catch(() => { });
     if (now - saveAt > 8000 && Math.round(me.cash) !== savedCash) { saveAt = now; savedCash = Math.round(me.cash); set(RF(`users/${myUid}/sta`), savedCash).catch(() => { }); }
@@ -282,9 +372,9 @@ const shade = (hex, f) => { const k = hex + f; let v = shadeC.get(k); if (!v) { 
 const txt = (s, px, py, size, color, al) => { x.font = `700 ${size}px "Courier New",monospace`; x.textAlign = al || "center"; x.fillStyle = "#000"; x.fillText(s, px + 1.5, py + 1.5); x.fillStyle = color || "#fff"; x.fillText(s, px, py); };
 const WALL = ["#b07a35", "#8b8d99", "#b5523c", "#c9a867", "#5f7fa8", "#8a8f4c", "#c27a3e", "#a9a49a"];
 const rrect = (px, py, w, h, r) => { x.beginPath(); x.moveTo(px + r, py); x.arcTo(px + w, py, px + w, py + h, r); x.arcTo(px + w, py + h, px, py + h, r); x.arcTo(px, py + h, px, py, r); x.arcTo(px, py, px + w, py, r); x.closePath(); };
-function drawCar(px, py, a, color, cop, now, id) {
+function drawCar(px, py, a, color, cop, now, id, dm) {
   const ty = cop ? 0 : (id | 0) % 3, S = 1.18, L = (ty === 2 ? 42 : ty === 1 ? 34 : 38) * S, Wd = (ty === 2 ? 20 : ty === 1 ? 16 : 18) * S, hl = L / 2, hw = Wd / 2;
-  const body = cop ? "#f3f3f3" : color, gl = "#8fc7ea", gd = "#4f7a97";
+  dm |= 0; const body = cop ? "#f3f3f3" : color, gl = "#8fc7ea", gd = "#4f7a97";
   const cx0 = ty === 2 ? -hl + 3 : ty === 1 ? -hl + L * .3 : -hl + L * .2, cx1 = ty === 2 ? hl - L * .26 : hl - L * (ty === 1 ? .3 : .32), mid = (cx0 + cx1) / 2;
   x.save(); x.translate(px, py); x.rotate(a);
   x.fillStyle = "rgba(0,0,0,.4)"; rrect(-hl + 4, -hw + 4, L, Wd, 5); x.fill();                    // ombre
@@ -307,6 +397,12 @@ function drawCar(px, py, a, color, cop, now, id) {
   x.fillStyle = "#2a2a30"; x.fillRect(hl - 1.2, -hw + 4.2, 1.2, Wd - 8.4); x.fillRect(-hl, -hw + 4.2, 1.2, Wd - 8.4);   // pare-chocs
   x.fillStyle = "#fff4a3"; x.fillRect(hl - 2.8, -hw + 1.2, 3, 4); x.fillRect(hl - 2.8, hw - 5.2, 3, 4);                  // phares
   x.fillStyle = "#d1121f"; x.fillRect(-hl, -hw + 1.2, 2.6, 4); x.fillRect(-hl, hw - 5.2, 2.6, 4);                         // feux arrière
+  if (dm) {
+    drawDents(dm, id, hl, hw, body);
+    if ((dm & 3) >= 2) { x.fillStyle = "#2b2b1a"; x.fillRect(hl - 2.8, -hw + 1.2, 3, 4); if ((dm & 3) === 3) x.fillRect(hl - 2.8, hw - 5.2, 3, 4); }
+    if (((dm >> 4) & 3) >= 2) { x.fillStyle = "#3a0d0d"; x.fillRect(-hl, hw - 5.2, 2.6, 4); }
+    if ((dm & 3) >= 2) { x.strokeStyle = "rgba(255,255,255,.85)"; x.lineWidth = 1; x.beginPath(); x.moveTo(cx1 + 1, -hw + 4); x.lineTo(cx1 + L * .09, -1); x.lineTo(cx1 + 2, hw - 4); x.moveTo(cx1 + L * .09, -1); x.lineTo(cx1 + L * .1, 3); x.stroke(); }   // pare-brise fissuré
+  }
   if (cop) {
     const f = Math.floor(now / 150) % 2; x.fillStyle = "#22222a"; x.fillRect(mid - 3, -hw + 2.6, 6, Wd - 5.2);
     x.fillStyle = f ? "rgba(255,40,40,.35)" : "rgba(40,90,255,.35)"; x.beginPath(); x.arc(mid, -hw * .45, 10, 0, 7); x.fill();
@@ -314,15 +410,50 @@ function drawCar(px, py, a, color, cop, now, id) {
     x.fillStyle = f ? "#ff2a2a" : "#2a5bff"; x.fillRect(mid - 2.2, -hw + 3, 4.4, hw - 3); x.fillStyle = f ? "#2a5bff" : "#ff2a2a"; x.fillRect(mid - 2.2, 0, 4.4, hw - 3);
   }
   x.restore();
+  if (dmSum(dm) >= 6) for (let k = 0; k < 3; k++) {                                              // moteur fumant
+    const u = ((now / 45 + k * 9) % 27); x.fillStyle = `rgba(55,55,55,${(.42 - u / 80).toFixed(2)})`; x.beginPath(); x.arc(px + Math.cos(a) * hl * .75 + (k - 1) * 3, py + Math.sin(a) * hl * .75 - u, 3.5 + k * 1.4 + u / 12, 0, 7); x.fill();
+  }
 }
-function drawWalker(px, py, a, body, skin, ph) {
+function drawDents(dm, id, hl, hw, body) {                                                       // tôle enfoncée, plis, métal à nu, brûlures
+  for (let z = 0; z < 4; z++) {
+    const n = (dm >> (z * 2)) & 3; if (!n) continue;
+    const e = z & 1 ? hw : hl, sp = (z & 1 ? hl * 1.7 : hw * 1.7) * (.5 + n * .16), hh = hs(id | 0, z + 11), dp = 1.4 + n * 1.8, st = 8;
+    x.save(); x.rotate(z * Math.PI / 2);
+    const pts = []; for (let k = 0; k <= st; k++) pts.push([e - Math.sin(Math.PI * k / st) * dp * (.55 + ((hh >>> k) & 3) * .22), -sp / 2 + sp * k / st]);
+    x.fillStyle = "#0c0c10"; x.beginPath(); x.moveTo(e + 1.5, -sp / 2); pts.forEach(p => x.lineTo(p[0], p[1])); x.lineTo(e + 1.5, sp / 2); x.closePath(); x.fill();   // la tôle rentre
+    x.fillStyle = shade(body, .55); x.beginPath(); x.moveTo(pts[0][0], pts[0][1]); pts.forEach(p => x.lineTo(p[0], p[1])); for (let k = st; k >= 0; k--) x.lineTo(pts[k][0] - dp * .9 - 1.2 - ((hh >>> (k + 5)) & 3) * .5, pts[k][1]); x.closePath(); x.fill();
+    x.lineWidth = 1; for (let k = 0; k < 2 + n; k++) { const t = -sp / 2 + sp * (k + .6) / (2 + n); x.strokeStyle = k & 1 ? "rgba(255,255,255,.45)" : "rgba(0,0,0,.6)"; x.beginPath(); x.moveTo(e - dp * .4, t); x.lineTo(e - dp * 1.9 - 3.5, t + ((hh >>> k) & 1 ? 2 : -2)); x.stroke(); }
+    if (n >= 2) { x.fillStyle = "#a3a3ab"; for (let k = 0; k < 3; k++) x.fillRect(e - dp - 2 - k, -sp / 3 + k * sp / 3 - 1, 3, 2); }
+    if (n >= 3) { x.fillStyle = "rgba(15,15,15,.55)"; x.fillRect(e - dp - 5, -sp / 4, 5, sp / 2); }
+    x.restore();
+  }
+}
+function drawPick(p, now) {                                                                      // arme au sol
+  const b = Math.sin(now / 280 + p.id) * 1.5;
+  x.fillStyle = "rgba(255,225,90,.22)"; x.beginPath(); x.arc(p.x, p.y, 13 + Math.sin(now / 200 + p.id) * 1.5, 0, 7); x.fill();
+  x.fillStyle = "rgba(0,0,0,.4)"; x.fillRect(p.x - 7, p.y + 5, 15, 3);
+  x.save(); x.translate(p.x, p.y + b); x.rotate(-.35);
+  if (p.t === 1) { x.fillStyle = "#101010"; x.fillRect(-6, -3, 12, 5); x.fillStyle = "#6c6c76"; x.fillRect(-6, -3, 12, 2); x.fillStyle = "#3a2a1a"; x.fillRect(-5, 1, 4, 5); }
+  else if (p.t === 2) { x.fillStyle = "#101010"; x.fillRect(-8, -3, 16, 5); x.fillStyle = "#5a5a64"; x.fillRect(-8, -3, 16, 2); x.fillStyle = "#101010"; x.fillRect(-2, 2, 4, 6); x.fillStyle = "#3a2a1a"; x.fillRect(-9, -2, 4, 4); }
+  else { x.fillStyle = "#5b3a1e"; x.fillRect(-9, -2, 7, 5); x.fillStyle = "#101010"; x.fillRect(-3, -3, 12, 3); x.fillStyle = "#8b8b95"; x.fillRect(-3, -3, 12, 1.5); }
+  x.restore();
+}
+function drawWreck(w, now) {
+  drawCar(w.x, w.y, w.a, "#262626", false, now, w.id, 255);
+  if (now - w.t < 9000) for (let k = 0; k < 3; k++) { x.fillStyle = (Math.floor(now / 90 + k) % 2) ? "#ff7a1a" : "#ffd23f"; x.beginPath(); x.arc(w.x + (k - 1) * 7 + Math.sin(now / 70 + k) * 1.5, w.y + Math.cos(now / 80 + k) * 3 - 4, 4 + (k % 2) * 2, 0, 7); x.fill(); }
+}
+function drawWalker(px, py, a, body, skin, ph, wpn, flash) {
   x.fillStyle = "rgba(0,0,0,.35)"; x.beginPath(); x.arc(px + 2, py + 2, 6, 0, 7); x.fill();
   x.save(); x.translate(px, py); x.rotate(a);
-  const sw = ph !== null ? Math.sin(ph) : 0;
+  const sw = ph !== null ? Math.sin(ph) : 0, sk = skin || "#f1c27d";
   if (ph !== null) { x.fillStyle = "#14141a"; x.fillRect(sw * 3.4 - 2, -4, 4.5, 2.8); x.fillRect(-sw * 3.4 - 2, 1.2, 4.5, 2.8); }   // pieds
   x.fillStyle = "#101010"; x.fillRect(-3.6, -6.8, 7.2, 13.6); x.fillStyle = body; x.fillRect(-2.8, -6, 5.6, 12);                   // épaules / haut
-  x.fillStyle = skin || "#f1c27d"; x.fillRect(sw * 2.4 - 1.5, -7.6, 3.2, 2.4); x.fillRect(-sw * 2.4 - 1.5, 5.2, 3.2, 2.4);       // bras
-  x.fillStyle = "#101010"; x.beginPath(); x.arc(0, 0, 3.3, 0, 7); x.fill(); x.fillStyle = skin || "#f1c27d"; x.beginPath(); x.arc(0, 0, 2.6, 0, 7); x.fill();
+  if (wpn) {                                                                                                                        // bras tendus + arme
+    x.fillStyle = sk; x.fillRect(1, -3.8, 6, 2.2); x.fillRect(1, 1.6, 6, 2.2);
+    if (wpn === 1) { x.fillStyle = "#111"; x.fillRect(6, -1, 6, 2); } else if (wpn === 2) { x.fillStyle = "#111"; x.fillRect(5, -1.3, 10, 2.6); x.fillRect(8, 1.2, 2, 3); } else { x.fillStyle = "#5b3a1e"; x.fillRect(4, -1.3, 4, 2.6); x.fillStyle = "#8b8b95"; x.fillRect(8, -1, 9, 2); }
+    if (flash) { const tx = wpn === 1 ? 12 : wpn === 2 ? 15 : 17; x.fillStyle = "#fff2a8"; x.fillRect(tx, -2.5, 4, 5); x.fillStyle = "#ff9d1e"; x.fillRect(tx + 1, -1, 6, 2); }
+  } else { x.fillStyle = sk; x.fillRect(sw * 2.4 - 1.5, -7.6, 3.2, 2.4); x.fillRect(-sw * 2.4 - 1.5, 5.2, 3.2, 2.4); }              // bras qui balancent
+  x.fillStyle = "#101010"; x.beginPath(); x.arc(0, 0, 3.3, 0, 7); x.fill(); x.fillStyle = sk; x.beginPath(); x.arc(0, 0, 2.6, 0, 7); x.fill();
   x.fillStyle = "#2b1b10"; x.beginPath(); x.arc(-.6, 0, 2.2, 1.57, 4.71); x.fill();                                               // cheveux
   x.restore();
 }
@@ -412,10 +543,10 @@ function frame(now) {
   for (const d of dPeds.values()) { d.x += (d.tx - d.x) * k; d.y += (d.ty - d.y) * k; d.a = angLerp(d.a, d.ta, k); }
   for (const d of dCars.values()) { if (Math.abs(d.tx - d.x) + Math.abs(d.ty - d.y) > 250) { d.x = d.tx; d.y = d.ty; } else { d.x += (d.tx - d.x) * k; d.y += (d.ty - d.y) * k; } d.a = angLerp(d.a, d.ta, k); }
   const lp = lobbyP();
-  for (const [u, p] of activeP()) { if (u === myUid) continue; let d = dP.get(u); if (!d) dP.set(u, d = { x: p.x, y: p.y, a: p.a }); if (Math.abs(p.x - d.x) + Math.abs(p.y - d.y) > 300) { d.x = p.x; d.y = p.y; } else { d.x += (p.x - d.x) * k; d.y += (p.y - d.y) * k; } d.a = angLerp(d.a, p.a, k); d.vid = p.vid; d.cash = p.cash; d.wl = p.wl; d.v = p.v; }
+  for (const [u, p] of activeP()) { if (u === myUid) continue; let d = dP.get(u); if (!d) dP.set(u, d = { x: p.x, y: p.y, a: p.a }); if (Math.abs(p.x - d.x) + Math.abs(p.y - d.y) > 300) { d.x = p.x; d.y = p.y; } else { d.x += (p.x - d.x) * k; d.y += (p.y - d.y) * k; } d.a = angLerp(d.a, p.a, k); d.vid = p.vid; d.cash = p.cash; d.wl = p.wl; d.v = p.v; d.dm = p.dm; d.wpn = p.wpn; }
   for (const u of dP.keys()) if (!lp[u]) dP.delete(u);
   if (me.dead > 0) { me.dead -= dt; if (me.dead <= 0) spawnAt(SPAWN[me.where || "hosp"]); }
-  else { if (useReq) { useReq = 0; useKey(); } control(dt); interact(dt); }
+  else { if (useReq) { useReq = 0; useKey(); } control(dt); interact(dt); weapons(dt, now); }
   useReq = 0; if (me.vid) me.carT += dt;
   sendP(now);
   // caméra (zoom fixe par paliers : l'image pixelisée reste nette)
@@ -430,10 +561,17 @@ function frame(now) {
   const inV = (px, py) => px > vx0 - 60 && px < vx1 + 60 && py > vy0 - 60 && py < vy1 + 60;
   splats.forEach(s => { const a = 1 - (now - s.t) / 30000; if (a > 0 && inV(s.x, s.y)) drawSplat(s, a); });
   splats = splats.filter(s => now - s.t < 30000);
-  for (const d of dPeds.values()) if (inV(d.x, d.y)) drawWalker(d.x, d.y, d.a, SHIRT[d.sk % 6], SKIN[d.sk % 6], now / 85 + d.tx);
-  for (const [id, d] of dCars) if (d.m !== "t" && id !== me.vid && inV(d.x, d.y)) drawCar(d.x, d.y, d.a, col(d.c), d.m === "c", now, id);
-  for (const [u, d] of dP) if (inV(d.x, d.y)) { const pl = lp[u] || {}; if (d.vid) { const cc = dCars.get(d.vid); drawCar(d.x, d.y, d.a, col(cc ? cc.c : 0), false, now, d.vid); } else drawWalker(d.x, d.y, d.a, pl.color || "#fff", "#f1c27d", d.v > 0 ? now / 85 : null); labels.push([pl.name || "?", d.x, d.y - (d.vid ? 20 : 12), "#fff"]); }
-  if (me.dead <= 0) { if (me.vid) drawCar(me.x, me.y, me.a, col(myCol), false, now, me.vid); else drawWalker(me.x, me.y, me.a, (lp[myUid] || {}).color || "#fff", "#f1c27d", me.v > 0 ? now / 85 : null); x.fillStyle = "#ffe14d"; const ay = me.y - (me.vid ? 24 : 15) + Math.sin(now / 160) * 2; x.beginPath(); x.moveTo(me.x, ay + 6); x.lineTo(me.x - 5, ay - 2); x.lineTo(me.x + 5, ay - 2); x.fill(); }
+  for (const p of PICKS) if (inV(p.x, p.y) && !(pickT.has(p.id) && now - pickT.get(p.id) < 45000)) drawPick(p, now);
+  wrecks = wrecks.filter(w => now - w.t < 25000); wrecks.forEach(w => { if (inV(w.x, w.y)) drawWreck(w, now); });
+  for (const [pid, d] of dPeds) if (!hitDone.has(pid) && inV(d.x, d.y)) drawWalker(d.x, d.y, d.a, SHIRT[d.sk % 6], SKIN[d.sk % 6], now / 85 + d.tx);
+  for (const [id, d] of dCars) if (d.m !== "t" && id !== me.vid && inV(d.x, d.y)) drawCar(d.x, d.y, d.a, col(d.c), d.m === "c", now, id, dmx(d.dm | 0, wear(id)));
+  for (const [u, d] of dP) if (inV(d.x, d.y)) { const pl = lp[u] || {}; if (d.vid) { const cc = dCars.get(d.vid); drawCar(d.x, d.y, d.a, col(cc ? cc.c : 0), false, now, d.vid, d.dm); } else drawWalker(d.x, d.y, d.a, pl.color || "#fff", "#f1c27d", d.v > 0 ? now / 85 : null, d.wpn, now - (d.flash || -1e9) < 70); labels.push([pl.name || "?", d.x, d.y - (d.vid ? 20 : 12), "#fff"]); }
+  if (me.dead <= 0) { if (me.vid) drawCar(me.x, me.y, me.a, col(myCol), false, now, me.vid, me.dm); else drawWalker(me.x, me.y, me.a, (lp[myUid] || {}).color || "#fff", "#f1c27d", me.v > 0 ? now / 85 : null, me.wpn, me.flash > 0); x.fillStyle = "#ffe14d"; const ay = me.y - (me.vid ? 24 : 15) + Math.sin(now / 160) * 2; x.beginPath(); x.moveTo(me.x, ay + 6); x.lineTo(me.x - 5, ay - 2); x.lineTo(me.x + 5, ay - 2); x.fill(); }
+  tracers = tracers.filter(t => now - t.t < 90);
+  tracers.forEach(t => { const age = now - t.t; x.globalAlpha = 1 - age / 90; x.strokeStyle = "#fff2a8"; x.lineWidth = 1.6; x.beginPath(); x.moveTo(t.x0, t.y0); x.lineTo(t.x1, t.y1); x.stroke(); if (age < 45) { x.fillStyle = "#ffd23f"; x.beginPath(); x.arc(t.x0, t.y0, 4.5, 0, 7); x.fill(); } });
+  x.globalAlpha = 1;
+  sparks = sparks.filter(q => now - q.t < 160); sparks.forEach(q => { const age = (now - q.t) / 160; x.fillStyle = age < .5 ? "#fff6c2" : "#ff9d1e"; for (let k = 0; k < 4; k++) x.fillRect(q.x + Math.cos(k * 1.7 + q.x) * age * 7 - 1, q.y + Math.sin(k * 1.7 + q.x) * age * 7 - 1, 2, 2); });
+  booms = booms.filter(q => now - q.t < 650); booms.forEach(q => { const a2 = (now - q.t) / 650, r = 8 + a2 * 60; x.globalAlpha = 1 - a2; x.fillStyle = "#ff9d1e"; x.beginPath(); x.arc(q.x, q.y, r, 0, 7); x.fill(); x.fillStyle = "#ffe066"; x.beginPath(); x.arc(q.x, q.y, r * .65, 0, 7); x.fill(); x.fillStyle = "#fff"; x.beginPath(); x.arc(q.x, q.y, r * .3, 0, 7); x.fill(); }); x.globalAlpha = 1;
   if (job) { const f = (Math.sin(now / 250) + 1) / 2; x.strokeStyle = "#ffd23f"; x.lineWidth = 4; x.beginPath(); x.arc(job.x, job.y, 50 + f * 8, 0, 7); x.stroke(); x.fillStyle = "rgba(255,210,63,.25)"; x.fill(); labels.push(["📦", job.x, job.y + 8, "#fff", 26]); }
   x = mx2; x.setTransform(1, 0, 0, 1, 0, 0); x.imageSmoothingEnabled = false; x.drawImage(lc, 0, 0, cv.width, cv.height);   // …puis agrandie sans lissage = look GTA 1
   x.setTransform(S, 0, 0, S, 0, 0);
@@ -443,6 +581,9 @@ function frame(now) {
   txt(`$${Math.round(me.cash)}`, 14, 32, 28, "#ffe14d", "left");
   for (let i = 0; i < 5; i++) { const hx = 22 + i * 22, on = i < me.wl, fl = on && Math.floor(now / 250) % 2; x.fillStyle = "#000"; x.beginPath(); x.arc(hx, 46, 9, 0, 7); x.fill(); x.fillStyle = on ? "#f1c27d" : "#3a3a40"; x.beginPath(); x.arc(hx, 47, 7, 0, 7); x.fill(); x.fillStyle = on ? (fl ? "#ff3b3b" : "#2a5bff") : "#2a2a30"; x.fillRect(hx - 8, 38, 16, 6); x.fillRect(hx - 5, 34, 10, 5); x.fillStyle = on ? "#ffe14d" : "#3a3a40"; x.fillRect(hx - 2, 35, 4, 3); }
   x.fillStyle = "#000"; x.fillRect(13, 62, 112, 11); x.fillStyle = me.hp > 40 ? "#3ee62f" : "#ff3b30"; x.fillRect(15, 64, 108 * clamp(me.hp, 0, 100) / 100, 7);
+  if (me.wpn) { const W = WPN[me.wpn]; txt(`${W.n} ×${me.ammo[me.wpn]}`, 14, 94, 14, "#fff", "left"); txt(me.ammo.slice(1).map((v, i) => v ? `${i + 1}:${v}` : "").filter(Boolean).join("  "), 14, 110, 11, "#ffe14d", "left"); }
+  if (!TOUCH && hasGun() && now - me.gunT < 9000) txt("F : TIRER · X ou 1-2-3 : CHANGER D'ARME", W / 2, H - 40, 13, "#ffe14d");
+  if (TOUCH && hasGun()) { const fb = fireId !== null; x.fillStyle = fb ? "#ff5a4d" : "#b3261e"; x.beginPath(); x.arc(W - 56, H - 142, 34, 0, 7); x.fill(); x.strokeStyle = "#000"; x.lineWidth = 3; x.stroke(); txt("FEU", W - 56, H - 138, 14); x.fillStyle = "#555a66"; x.beginPath(); x.arc(W - 136, H - 136, 26, 0, 7); x.fill(); x.stroke(); txt("ARME", W - 136, H - 132, 11); }
   const rank = [[myUid, me.cash]].concat(activeP().filter(([u]) => u !== myUid).map(([u, p]) => [u, p.cash])).sort((a, b) => b[1] - a[1]);
   txt(`SERVEUR ${c} · ${rank.length} JOUEUR${rank.length > 1 ? "S" : ""}${hostOn ? " · HÔTE" : ""}`, W - 12, 18, 12, "#fffa", "right");
   rank.slice(0, 6).forEach(([u, cs], i) => { const pl = lp[u] || {}; x.fillStyle = pl.color || "#fff"; x.fillRect(W - 170, 28 + i * 18, 9, 9); txt(`${(pl.name || "?").slice(0, 10)}${u === myUid ? "*" : ""}`, W - 156, 37 + i * 18, 12, "#fff", "left"); txt(`$${Math.round(cs)}`, W - 12, 37 + i * 18, 12, "#ffe14d", "right"); });
@@ -460,7 +601,7 @@ function frame(now) {
   if (!me.vid && me.dead <= 0) { let near = false; for (const d of dCars.values()) if ((d.m === "d" || d.m === "p") && Math.hypot(d.x - me.x, d.y - me.y) < 48) near = true; if (near) txt("E : MONTER DANS LA VOITURE", W / 2, H - 24, 14, "#ffe14d"); }
   if (me.vid && me.dead <= 0) {
     const kmh = Math.round(Math.abs(me.v) * .5);
-    txt(`${kmh} km/h${me.v < -3 ? "  ◄ MARCHE ARRIÈRE" : ""}`, W / 2, H - 14, 16, me.v < -3 ? "#ff9f43" : "#fff");
+    txt(`${kmh} km/h · ÉTAT ${Math.round(100 - dmSum(me.dm) / 12 * 100)}%${me.v < -3 ? "  ◄ MARCHE ARRIÈRE" : ""}`, W / 2, H - 14, 16, me.v < -3 ? "#ff9f43" : "#fff");
     if (me.carT < 9) { x.fillStyle = "rgba(0,0,0,.65)"; x.fillRect(W / 2 - 230, H - 96, 460, 54); txt(TOUCH ? "POUSSE LE JOYSTICK VERS OÙ TU VEUX ALLER" : "↑ ACCÉLÉRER · ↓ FREINER / RECULER", W / 2, H - 74, 13, "#fff"); txt(TOUCH ? "LÂCHE = ROULE LIBRE · FREIN = FREINER / RECULER" : "← → TOURNER (SEULEMENT QUAND LA VOITURE ROULE) · E = SORTIR", W / 2, H - 54, 12, "#ffe14d"); }
     if (job) { const a = Math.atan2(job.y - me.y, job.x - me.x); txt(`📦 ${Math.round(Math.hypot(job.x - me.x, job.y - me.y) / 10)} m`, W / 2, 26, 15, "#ffd23f"); x.save(); x.translate(W / 2, 52); x.rotate(a); x.fillStyle = "#ffd23f"; x.strokeStyle = "#000"; x.lineWidth = 2; x.beginPath(); x.moveTo(15, 0); x.lineTo(-9, -10); x.lineTo(-9, 10); x.closePath(); x.fill(); x.stroke(); x.restore(); }
   }
@@ -472,15 +613,20 @@ function frame(now) {
 // ================= ENTRÉES =================
   addEventListener("keydown", e => {
     if (!active || /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+    if (e.key === "f" || e.key === "F") { fireKey = true; e.preventDefault(); return; }
+    if (e.key === "x" || e.key === "X") { if (!e.repeat) cycleWpn(); e.preventDefault(); return; }
+    const dg = /^(Digit|Numpad)([1-3])$/.exec(e.code || ""); if (dg) { selWpn(+dg[2]); return; }
     if (e.key === " " || e.key === "e" || e.key === "E") { e.preventDefault(); if (!e.repeat) useReq = 1; return; }
     const k = KEYS[e.key.length > 1 ? e.key : e.key.toLowerCase()]; if (k) { e.preventDefault(); keys.add(k); }
   });
-  addEventListener("keyup", e => { const k = KEYS[e.key.length > 1 ? e.key : e.key.toLowerCase()]; if (k) keys.delete(k); });
-  addEventListener("blur", () => { keys.clear(); stick = null; brakeId = null; });
-  document.addEventListener("visibilitychange", () => { if (document.hidden) { keys.clear(); stick = null; brakeId = null; } });
+  addEventListener("keyup", e => { if (e.key === "f" || e.key === "F") fireKey = false; const k = KEYS[e.key.length > 1 ? e.key : e.key.toLowerCase()]; if (k) keys.delete(k); });
+  addEventListener("blur", () => { keys.clear(); stick = null; brakeId = null; fireKey = false; fireId = null; });
+  document.addEventListener("visibilitychange", () => { if (document.hidden) { keys.clear(); stick = null; brakeId = null; fireKey = false; fireId = null; } });
   const rel = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height }; };
   cv.addEventListener("pointerdown", e => {
     if (!active) return; e.preventDefault(); const p = rel(e);
+    if (hasGun() && Math.hypot(p.x - (W - 56), p.y - (H - 142)) < 38) { fireId = e.pointerId; try { cv.setPointerCapture(e.pointerId); } catch { } return; }
+    if (hasGun() && Math.hypot(p.x - (W - 136), p.y - (H - 136)) < 30) { cycleWpn(); return; }
     if (e.button === 2 || Math.hypot(p.x - (W - 56), p.y - (H - 62)) < 40) { useReq = 1; return; }
     if (me.vid && Math.hypot(p.x - (W - 140), p.y - (H - 48)) < 38) { brakeId = e.pointerId; try { cv.setPointerCapture(e.pointerId); } catch { } return; }
     if (stick) return;
@@ -493,7 +639,7 @@ function frame(now) {
     if (d > m) { stick.ox += dx / d * (d - m); stick.oy += dy / d * (d - m); dx = dx / d * m; dy = dy / d * m; }
     stick.dx = dx / m; stick.dy = dy / m;
   });
-  const end = e => { if (brakeId === e.pointerId) brakeId = null; if (stick && e.pointerId === stick.id) stick = null; };
+  const end = e => { if (fireId === e.pointerId) fireId = null; if (brakeId === e.pointerId) brakeId = null; if (stick && e.pointerId === stick.id) stick = null; };
   cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end);
   cv.addEventListener("contextmenu", e => { if (active) e.preventDefault(); });
 
@@ -501,15 +647,16 @@ function frame(now) {
     enter(code) {
       active = true; c = code; myUid = getMe().uid; ls = null; lastT = 0; lastH = ""; lastEv = 0; pd = {}; hostOn = false; keys = new Set(); stick = null; brakeId = null; useReq = 0;
       dPeds.clear(); dCars.clear(); dP.clear(); splats = []; floats = []; hitDone = new Set(); lastHs = {}; sentStr = ""; sentAt = 0; savedCash = -1; saveAt = performance.now();
-      Object.assign(me, { vid: 0, hp: 100, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, bust: 0, hurt: 0, v: 0, a: 0, cash: 0 });
+      Object.assign(me, { vid: 0, hp: 100, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, bust: 0, hurt: 0, v: 0, a: 0, cash: 0, wpn: 0, ammo: [0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9 });
+      killQ = []; carQ = []; tracers = []; sparks = []; booms = []; wrecks = []; pickT = new Map(); lastFc = {}; lastCs = {}; fireKey = false; fireId = null;
       const ix = 2 + Math.floor(Math.random() * 5), iy = 2 + Math.floor(Math.random() * 5); spawnAt([ix * CELL, iy * CELL]);
-      $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : monter / descendre d'une voiture · en voiture ↑ accélère, ↓ freine, ←→ tourne · livre les colis 📦, écrase des piétons, évite la police !";
+      $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : monter / descendre d'une voiture · en voiture ↑ accélère, ↓ freine, ←→ tourne · livre les colis 📦, écrase des piétons, évite la police ! · Ramasse les armes au sol : F tirer, X changer d'arme (1-2-3) · les voitures se cabossent !";
       get(RF(`users/${myUid}/sta`)).then(s => { const v = +s.val(); if (v > 0 && me.cash === 0) { me.cash = v; savedCash = v; } }).catch(() => { });
       unS = onValue(RF(`games/${c}/state`), onState); unP = onValue(RF(`games/${c}/p`), onP);
       timer = setInterval(simLoop, 50); raf = requestAnimationFrame(frame);
       env.played && env.played("sta", true);
       return () => {
-        active = false; clearInterval(timer); unS && unS(); unP && unP(); if (raf) cancelAnimationFrame(raf); raf = 0; keys.clear(); stick = null; hostOn = false;
+        active = false; clearInterval(timer); unS && unS(); unP && unP(); if (raf) cancelAnimationFrame(raf); raf = 0; keys.clear(); stick = null; hostOn = false; fireKey = false; fireId = null;
         set(RF(`users/${myUid}/sta`), Math.round(me.cash)).catch(() => { }); remove(RF(`games/${c}/p/${myUid}`)).catch(() => { });
         x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.setLineDash([]); x.textAlign = "start";
       };

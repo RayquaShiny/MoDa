@@ -56,7 +56,7 @@ function push(p, r) {
   const o = ROAD / 2 - r; const nx = clamp(p.x, -o, WORLD + o), ny = clamp(p.y, -o, WORLD + o); if (nx !== p.x || ny !== p.y) { p.x = nx; p.y = ny; hit = true; }
   return hit;
 }
-const parseP = s => { const a = String(s).split(","); return { x: +a[0] || 0, y: +a[1] || 0, a: +a[2] || 0, vid: +a[3] || 0, wl: +a[4] || 0, cash: +a[5] || 0, hp: +a[6] || 0, v: +a[7] || 0, hs: +a[8] || 0, hid: +a[9] || 0, dm: +a[10] || 0, wpn: +a[11] || 0, fc: +a[12] || 0, fw: +a[13] || 0, cs: +a[14] || 0, cid: +a[15] || 0, ca: +a[16] || 0, gn: +a[17] || 0, go: +a[18] || 0, gi: +a[19] || 0, gm: +a[20] || 0 }; };
+const parseP = s => { const a = String(s).split(","); return { x: +a[0] || 0, y: +a[1] || 0, a: +a[2] || 0, vid: +a[3] || 0, wl: +a[4] || 0, cash: +a[5] || 0, hp: +a[6] || 0, v: +a[7] || 0, hs: +a[8] || 0, hid: +a[9] || 0, dm: +a[10] || 0, wpn: +a[11] || 0, fc: +a[12] || 0, fw: +a[13] || 0, cs: +a[14] || 0, cid: +a[15] || 0, ca: +a[16] || 0, gn: +a[17] || 0, go: +a[18] || 0, gi: +a[19] || 0, gm: +a[20] || 0, hn: +a[21] || 0 }; };
 
 export function createStaClient(env) {
   const { R: RF, set, get, remove, onValue, $, beep, getMe, getCode, getLobby, toast } = env;
@@ -264,19 +264,19 @@ export function createStaClient(env) {
       if (e[3] === 3) {                                                   // un policier tire : traceur + touche calculée chez la victime
         const ang = e[4], dx = Math.cos(ang), dy = Math.sin(ang), ox = e[1] + dx * 10, oy = e[2] + dy * 10, en = wallEnd(ox, oy, ang, 330), cd = dCops.get(e[5]);
         tracers.push({ x0: ox, y0: oy, x1: ox + dx * en, y1: oy + dy * en, t: tNow }); if (cd) cd.flash = tNow;
-        if (Math.hypot(e[1] - me.x, e[2] - me.y) < 450) beep(300, .05, "square", .03, 120);
+        if (Math.hypot(e[1] - me.x, e[2] - me.y) < 450) SND.shot(1, dv(e[1], e[2], 450));
         if (me.dead <= 0) { const rx = me.x - ox, ry = me.y - oy, f = rx * dx + ry * dy; if (f > 0 && f < en && Math.abs(-rx * dy + ry * dx) < (me.vid ? 15 : 8)) { me.hp -= 9 * (me.vid ? .6 : 1); beep(150, .06, "square", .05, 50); navigator.vibrate && navigator.vibrate(40); if (me.vid && Math.random() < .35) dent(ang + Math.PI, 1); } }
         return;
       }
       if (e[3] === 2) {                                                   // voiture détruite : explosion + épave
         booms.push({ x: e[1], y: e[2], t: tNow }); wrecks.push({ x: e[1], y: e[2], a: e[4] || 0, t: tNow, id: e[5] || 0 }); if (wrecks.length > 8) wrecks.shift();
-        const dd = Math.hypot(e[1] - me.x, e[2] - me.y); if (dd < 500) beep(70, .35, "sawtooth", .09, 30);
+        const dd = Math.hypot(e[1] - me.x, e[2] - me.y); SND.boom(dv(e[1], e[2], 700));
         if (dd < 75 && me.dead <= 0) me.hp -= 30;
         if (e[5] && e[5] === me.lastCar && tNow - me.lastCarT < 2500) { const rw = e[6] === "c" ? 300 : 100; me.cash += rw; me.heat = Math.min(5, me.heat + (e[6] === "c" ? .5 : .3)); floats.push({ x: e[1], y: e[2] - 20, t: tNow, s: `💥 +$${rw}`, c: "#ffd23f" }); }
         return;
       }
       if (e[4] && e[4] === me.lastCar && tNow - me.lastCarT < 2500) { me.cash += 150; me.heat = Math.min(5, me.heat + .8); floats.push({ x: e[1], y: e[2] - 14, t: tNow, s: "🚓 policier abattu +$150", c: "#ffd23f" }); }
-      splats.push({ x: e[1], y: e[2], t: tNow }); if (splats.length > 40) splats.shift(); if (Math.hypot(e[1] - me.x, e[2] - me.y) < 400) beep(130, .12, "square", .04, 60);
+      splats.push({ x: e[1], y: e[2], t: tNow }); if (splats.length > 40) splats.shift(); { const sv = dv(e[1], e[2], 420); SND.thud(sv * .6); SND.ped(sv); }
     });
   }
   function onP(snap) {
@@ -284,7 +284,7 @@ export function createStaClient(env) {
     for (const u in n) {                                                  // tirs des autres : traceurs + touche calculée chez la victime
       if (u === myUid) continue; const p = n[u], old = lastFc[u]; lastFc[u] = p.fc; if (old === undefined || old === p.fc) continue;
       let k = (p.fc - old + 1000) % 1000; if (k > 8) k = 1; const W = WPN[p.fw]; if (!W) continue;
-      const dd = dP.get(u); if (dd) dd.flash = tNow;
+      const dd = dP.get(u); if (dd) dd.flash = tNow; SND.shot(p.fw, dv(p.x, p.y, 520) * .8);
       for (let sh = 0; sh < k; sh++) for (let q = 0; q < W.pel; q++) {
         const ang = p.a + rr(-W.spr, W.spr), dx = Math.cos(ang), dy = Math.sin(ang), ox = p.x + dx * (p.vid ? 24 : 11), oy = p.y + dy * (p.vid ? 24 : 11), e = wallEnd(ox, oy, ang, W.rng);
         tracers.push({ x0: ox, y0: oy, x1: ox + dx * e, y1: oy + dy * e, t: tNow });
@@ -298,7 +298,7 @@ export function createStaClient(env) {
   // ================= MOI =================
   const col = i => CCOL[(i | 0) % 8];
   function spawnAt(p) { me.x = p[0] + rr(-30, 30); me.y = p[1]; me.vid = 0; me.v = 0; me.hp = 100; me.dead = 0; me.heat = 0; me.bust = 0; job = null; cam.x = me.x; cam.y = me.y; }
-  function die(why, loss, where) { me.dead = 2.2; me.msg = why; me.wpn = 0; me.ammo = [0, 0, 0, 0]; me.vid = 0; me.v = 0; me.heat = 0; me.cash = Math.floor(me.cash * (1 - loss)); me.where = where; beep(200, .4, "sawtooth", .06, 60); }
+  function die(why, loss, where) { me.dead = 2.2; me.msg = why; me.wpn = 0; me.ammo = [0, 0, 0, 0]; me.vid = 0; me.v = 0; me.heat = 0; me.cash = Math.floor(me.cash * (1 - loss)); me.where = where; SND.wasted(); }
   const gStr = () => JSON.stringify({ g: me.g, c: me.gcar, a: me.ammo.slice(1), w: me.wpn });
   function persist(force) {                                               // argent (users/<uid>/sta) + garage, voiture rangée, armes et munitions (users/<uid>/sta2)
     const cash = Math.round(me.cash);
@@ -364,12 +364,12 @@ export function createStaClient(env) {
     if (garageDo()) return;
     if (me.vid) {
       for (const sg of [1, -1]) { const t = { x: me.x + Math.cos(me.a + sg * 1.5708) * 30, y: me.y + Math.sin(me.a + sg * 1.5708) * 30 }, q = { x: t.x, y: t.y }; if (!push(q, 8)) { me.x = t.x; me.y = t.y; break; } }
-      me.vid = 0; me.v = 0; job = null; return;
+      me.vid = 0; me.v = 0; job = null; SND.door(); return;
     }
     let best = 0, bd = 48, bc = null;
     for (const [id, d] of dCars) if ((d.m === "d" || d.m === "p") && Math.hypot(d.x - me.x, d.y - me.y) < bd) { bd = Math.hypot(d.x - me.x, d.y - me.y); best = id; bc = d; }
     if (!best) return;
-    me.vid = best; me.x = bc.x; me.y = bc.y; me.a = bc.a; me.v = bc.m === "d" ? bc.v : 0; myCol = bc.c; me.carT = 0; me.dm = dmx(bc.dm | 0, wear(best));
+    SND.door(); SND.ignition(); me.vid = best; me.x = bc.x; me.y = bc.y; me.a = bc.a; me.v = bc.m === "d" ? bc.v : 0; myCol = bc.c; me.carT = 0; me.dm = dmx(bc.dm | 0, wear(best));
     me.cop = bc.cp | 0; if (bc.cp) { me.heat += 1.2; floats.push({ x: me.x, y: me.y - 20, t: tNow, s: "🚓 Voiture de police volée !", c: "#ffd23f" }); }
     if (bc.m === "d") { ejectDriver(bc.x, bc.y, bc.a, best); me.heat += .8; floats.push({ x: me.x, y: me.y - 20, t: tNow, s: "🚗 Car-jacking !", c: "#ffd23f" }); }
     newJob();
@@ -378,7 +378,7 @@ export function createStaClient(env) {
     if (!me.vid || me.dmCd > 0) return; me.dmCd = .35;
     const rel = Math.atan2(Math.sin(wa - me.a), Math.cos(wa - me.a)), z = Math.abs(rel) < .785 ? 0 : Math.abs(rel) > 2.356 ? 2 : rel > 0 ? 1 : 3;
     for (let k = 0; k < sev; k++) if (((me.dm >> (z * 2)) & 3) < 3) me.dm += 1 << (z * 2);
-    beep(120, .12, "square", .05, 50); navigator.vibrate && navigator.vibrate(30);
+    SND.crash(sev); navigator.vibrate && navigator.vibrate(30);
   }
   const hasGun = () => me.ammo.some(v => v > 0);
   function selWpn(n) { if (me.ammo[n] > 0) me.wpn = n; }
@@ -409,7 +409,7 @@ export function createStaClient(env) {
       const W = WPN[me.wpn], dx = Math.cos(me.a), dy = Math.sin(me.a), ox = me.x + dx * (me.vid ? 24 : 11), oy = me.y + dy * (me.vid ? 24 : 11);
       me.ammo[me.wpn]--; me.cd = W.rate; me.fc = (me.fc + 1) % 1000; me.fw = me.wpn; me.flash = .07; me.heat = Math.min(5, me.heat + W.heat);
       for (let q = 0; q < W.pel; q++) { const ang = me.a + rr(-W.spr, W.spr), e = trace(ox, oy, ang, W); tracers.push({ x0: ox, y0: oy, x1: ox + Math.cos(ang) * e, y1: oy + Math.sin(ang) * e, t: now }); }
-      beep(...W.snd); navigator.vibrate && navigator.vibrate(12);
+      SND.shot(me.wpn, 1); navigator.vibrate && navigator.vibrate(12);
     }
     if (now - killAt > 150) {                                             // on annonce à l'hôte un coup à la fois (piéton abattu / voiture touchée)
       killAt = now;
@@ -432,6 +432,7 @@ export function createStaClient(env) {
         else { th = 0; sr = 0; }
       } else if (brakeId !== null) th = -1;
       const MAXV = 230 * (1 - .045 * dmSum(me.dm)), REV = 95;
+      me.thr = th > 0 ? Math.min(1, th) : 0; me.sk = (th < 0 && me.v > 100) || (Math.abs(sr) > .85 && Math.abs(me.v) > 170) ? 1 : 0;   // pour le son : accélère / crisse
       if (th > 0) me.v += (me.v < -5 ? 620 : 330) * th * dt;
       else if (th < 0) me.v -= (me.v > 10 ? 620 : 190) * -th * dt;
       else me.v -= Math.sign(me.v) * Math.min(Math.abs(me.v), 170 * dt);
@@ -480,12 +481,193 @@ export function createStaClient(env) {
     if (me.vid && job && Math.hypot(job.x - me.x, job.y - me.y) < 60) { const r = 200 + Math.round(job.d / 6); me.cash += r; floats.push({ x: me.x, y: me.y - 20, t: tNow, s: `+$${r} livraison !`, c: "#ffd23f" }); beep(660, .12, "triangle", .06); newJob(); }
   }
   function sendP(now) {
-    const s = `${Math.round(me.x)},${Math.round(me.y)},${me.a.toFixed(2)},${me.vid},${me.wl},${Math.round(me.cash)},${Math.round(me.hp)},${Math.round(Math.abs(me.v))},${me.hs},${me.hid},${me.vid ? me.dm : 0},${me.wpn},${me.fc},${me.fw},${me.cs},${me.cid},${me.ca},${me.gn},${me.go},${me.gi},${me.gm}`;
+    const s = `${Math.round(me.x)},${Math.round(me.y)},${me.a.toFixed(2)},${me.vid},${me.wl},${Math.round(me.cash)},${Math.round(me.hp)},${Math.round(Math.abs(me.v))},${me.hs},${me.hid},${me.vid ? me.dm : 0},${me.wpn},${me.fc},${me.fw},${me.cs},${me.cid},${me.ca},${me.gn},${me.go},${me.gi},${me.gm},${me.hn | 0}`;
     if ((s === sentStr && now - sentAt < 700) || now - sentAt < 110) return;
     sentStr = s; sentAt = now; set(RF(`games/${c}/p/${myUid}`), s).catch(() => { });
     if (now - saveAt > 8000) { saveAt = now; persist(false); }
   }
 
+  // ================= SON : tout est synthétisé en direct avec la Web Audio (aucun fichier audio, aucune musique existante) =================
+  // Moteur à rapports de vitesse, sirène de police, klaxon (entendu par les autres joueurs), crissements, bruits de ville,
+  // armes, explosions, tôle froissée, cris, argent, alerte « recherché », et une radio de voiture à 4 stations (touche R).
+  let ac = null, mg = null, nbuf = null, eng = null, sirV = null, scrV = null, trfV = null, rIn = null, rOut = null, hornV = new Map();
+  let sPrevCash = 0, sPrevWl = 0, sAmbT = 0, hornKey = false, hornId = null;
+  const radio = { st: 1, next: 0, step: 0, nameT: -1e9 };
+  try { const sv = +localStorage.getItem("moda.sta.radio"); if (sv >= 0 && sv <= 4) radio.st = sv; } catch { }
+  const mtof = n => 440 * Math.pow(2, (n - 69) / 12);
+  const A = () => {
+    if (ac) return ac;
+    try { ac = env.audio && env.audio(); } catch { ac = null; }
+    if (!ac) return null;
+    mg = ac.createGain(); mg.gain.value = .9; mg.connect(ac.destination);
+    nbuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate); const d = nbuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    return ac;
+  };
+  // bruit filtré : (départ, durée, filtre, fréquence début, fréquence fin, volume, résonance, sortie)
+  const nz = (t, d, type, f0, f1, vol, q, dst) => {
+    const s = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = nbuf; s.loop = true; fl.type = type; fl.frequency.setValueAtTime(f0, t); if (f1 !== f0) fl.frequency.exponentialRampToValueAtTime(f1, t + d); fl.Q.value = q || 1;
+    g.gain.setValueAtTime(Math.max(.0002, vol), t); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+    s.connect(fl); fl.connect(g); g.connect(dst || mg); s.start(t, Math.random() * .8); s.stop(t + d + .03);
+  };
+  // note qui glisse de f0 à f1 en s'éteignant
+  const sw = (t, f0, f1, d, type, vol, dst, cut) => {
+    const o = ac.createOscillator(), g = ac.createGain(); o.type = type || "square"; o.frequency.setValueAtTime(f0, t); if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + d);
+    g.gain.setValueAtTime(Math.max(.0002, vol), t); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+    if (cut) { const fl = ac.createBiquadFilter(); fl.type = "lowpass"; fl.frequency.value = cut; o.connect(fl); fl.connect(g); } else o.connect(g);
+    g.connect(dst || mg); o.start(t); o.stop(t + d + .03);
+  };
+  // note de musique (attaque courte, filtre qui se ferme)
+  const nt = (f, t, d, type, vol, dst, cut) => {
+    const o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.value = f;
+    g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(vol, t + .012); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+    if (cut) { const fl = ac.createBiquadFilter(); fl.type = "lowpass"; fl.frequency.setValueAtTime(cut[0], t); fl.frequency.exponentialRampToValueAtTime(cut[1], t + d); o.connect(fl); fl.connect(g); } else o.connect(g);
+    g.connect(dst); o.start(t); o.stop(t + d + .03);
+  };
+  const kick = (t, v, o) => sw(t, 160, 42, .2, "sine", v, o);
+  const snr = (t, v, o) => { nz(t, .15, "highpass", 1400, 1400, v, 1, o); sw(t, 200, 120, .09, "triangle", v * .6, o); };
+  const hat = (t, v, op, o) => nz(t, op ? .2 : .05, "highpass", 7500, 7500, v, 1, o);
+  // ---- Stations de radio (compositions originales, jouées par synthèse) ----
+  const FB = [0, null, 0, null, 12, null, 0, 3, null, 5, null, 7, null, 5, 3, null], ACID = [0, 0, 12, null, 3, 0, null, 15, 0, 7, null, 10, 0, null, 5, 0];
+  const PENT = [64, 67, 69, 71, 74], JCH = [[50, 53, 57, 60], [55, 59, 62, 65], [48, 52, 55, 59], [45, 49, 55, 59]], JRT = [38, 43, 36, 45], JSC = [62, 64, 65, 67, 69, 71, 72];
+  const STN = [
+    { n: "FUNK 88.1", bpm: 106, swing: 0, play(s, t, d, o) {                                   // funk : basse slap, accords « chicken scratch », batterie
+      const st = s % 16, bar = Math.floor(s / 16) % 4, tr = [0, 0, 3, -2][bar], b = FB[st];
+      if (b !== null) nt(mtof(40 + tr + b), t, d * 1.6, "sawtooth", .16, o, [900, 200]);
+      if (st === 2 || st === 7 || st === 10 || st === 14) [64, 67, 71, 74].forEach(n => nt(mtof(n + tr), t, d * .9, "square", .03, o, [2800, 700]));
+      if (st === 0 || st === 6 || st === 10 || (bar % 2 && st === 11)) kick(t, .5, o);
+      if (st === 4 || st === 12) snr(t, .22, o);
+      hat(t, st % 2 ? .05 : .09, st === 14, o);
+    } },
+    { n: "ROCK FM 99.5", bpm: 138, swing: 0, play(s, t, d, o) {                               // rock : accords de puissance, riff, crash
+      const st = s % 16, bar = Math.floor(s / 16) % 4, r = [40, 43, 45, 38][bar];
+      if (st % 2 === 0) { const L = st === 0 || st === 6 || st === 10 ? d * 3 : d * 1.2; nt(mtof(r), t, L, "sawtooth", .09, o, [1900, 500]); nt(mtof(r + 7), t, L, "sawtooth", .07, o, [1900, 500]); nt(mtof(r + 12), t, L, "sawtooth", .05, o, [1900, 500]); }
+      if (bar >= 2 && (st === 0 || st === 3 || st === 6 || st === 10 || st === 12)) nt(mtof(PENT[(s * 7 + Math.floor(s / 16) * 3) % 5] + 12), t, d * 2.2, "square", .035, o, [3200, 900]);
+      if (st === 0 || st === 8 || st === 10) kick(t, .6, o);
+      if (st === 4 || st === 12) snr(t, .3, o);
+      if (st === 0 && bar === 0) nz(t, .9, "highpass", 5000, 5000, .07, 1, o); else if (st % 2 === 0) hat(t, .06, false, o);
+    } },
+    { n: "TECHNO 303", bpm: 130, swing: 0, play(s, t, d, o) {                                  // techno : grosse caisse, basse acid, charleston
+      const st = s % 16, bar = Math.floor(s / 16) % 4, a = ACID[st];
+      if (st % 4 === 0) kick(t, .6, o);
+      if (st === 4 || st === 12) nz(t, .12, "bandpass", 1800, 1800, .16, 1.5, o);
+      if (st % 4 === 2) hat(t, .08, true, o); else hat(t, .03, false, o);
+      if (a !== null) nt(mtof(36 + [0, 0, 3, -2][bar] + a), t, d * 1.1, "sawtooth", .12, o, [2600 + 800 * Math.sin(s / 7), 140]);
+      if (st === 3 && bar % 2) [60, 63, 67].forEach(n => nt(mtof(n), t, d * 2, "triangle", .04, o, [2400, 500]));
+    } },
+    { n: "LOUNGE JAZZ", bpm: 96, swing: .22, play(s, t, d, o) {                                // jazz : contrebasse, ride swingué, piano électrique
+      const st = s % 16, bar = Math.floor(s / 16) % 4, bt = st >> 2, rt = JRT[bar];
+      if (st % 4 === 0) nt(mtof(rt + [0, 7, 12, 5][bt]), t, d * 3.4, "triangle", .22, o, [700, 220]);
+      if (st === 0 || st === 4 || st === 6 || st === 8 || st === 12 || st === 14) hat(t, .05, true, o);
+      if (st === 4 || st === 12) hat(t, .04, false, o);
+      if (st === 0 || st === 10) JCH[bar].forEach(n => { nt(mtof(n + 12), t, d * 5, "sine", .04, o); nt(mtof(n + 24), t, d * 3, "triangle", .012, o, [3000, 800]); });
+      if (st % 2 === 0 && hs(s, 13) % 5 === 0) nt(mtof(JSC[hs(s, 7) % 7] + 12), t, d * 3, "triangle", .05, o, [2600, 700]);
+    } }
+  ];
+  function radioInit() {
+    if (rIn) return;
+    const hp = ac.createBiquadFilter(), lp = ac.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 130; lp.type = "lowpass"; lp.frequency.value = 4800;
+    rOut = ac.createGain(); rOut.gain.value = 0; hp.connect(lp); lp.connect(rOut); rOut.connect(mg); rIn = hp;
+  }
+  function nextStation() {
+    if (!me.vid || me.dead > 0 || !A()) return;
+    radio.st = (radio.st + 1) % (STN.length + 1); radio.step = 0; radio.next = 0; radio.nameT = tNow;
+    try { localStorage.setItem("moda.sta.radio", String(radio.st)); } catch { }
+    const t = ac.currentTime; nz(t, .35, "bandpass", 400, 3800, .14, 2); sw(t, 600, 1900, .18, "sine", .03);          // « tuning » entre deux stations
+  }
+  function mkLoop(type, f, q) {
+    const s = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = nbuf; s.loop = true; fl.type = type; fl.frequency.value = f; fl.Q.value = q || 1; g.gain.value = 0; s.connect(fl); fl.connect(g); g.connect(mg); s.start(); return { s, g, fl };
+  }
+  function mkEngine() {
+    const o1 = ac.createOscillator(), o2 = ac.createOscillator(), fl = ac.createBiquadFilter(), g = ac.createGain(), g2 = ac.createGain();
+    o1.type = "sawtooth"; o2.type = "square"; fl.type = "lowpass"; fl.frequency.value = 400; g.gain.value = 0; g2.gain.value = .5;
+    o1.connect(fl); o2.connect(g2); g2.connect(fl); fl.connect(g); g.connect(mg); o1.start(); o2.start(); eng = { o1, o2, fl, g };
+  }
+  function mkSiren() {
+    const o = ac.createOscillator(), l = ac.createOscillator(), lg = ac.createGain(), fl = ac.createBiquadFilter(), g = ac.createGain();
+    o.type = "square"; o.frequency.value = 800; l.type = "sine"; l.frequency.value = .6; lg.gain.value = 260; l.connect(lg); lg.connect(o.frequency);
+    fl.type = "lowpass"; fl.frequency.value = 1800; g.gain.value = 0; o.connect(fl); fl.connect(g); g.connect(mg); o.start(); l.start(); sirV = { o, l, g };
+  }
+  function hornOn(u, v, now) {
+    let hv = hornV.get(u);
+    if (!hv) {
+      const o1 = ac.createOscillator(), o2 = ac.createOscillator(), fl = ac.createBiquadFilter(), g = ac.createGain();
+      o1.type = o2.type = "square"; o1.frequency.value = 392; o2.frequency.value = 494; fl.type = "lowpass"; fl.frequency.value = 1700; g.gain.value = 0;
+      o1.connect(fl); o2.connect(fl); fl.connect(g); g.connect(mg); o1.start(); o2.start(); hornV.set(u, hv = { o1, o2, g, t: now });
+    }
+    hv.g.gain.setTargetAtTime(v, ac.currentTime, .015); hv.t = now;
+  }
+  function sndStop() {
+    const stop = v => { try { v && v.stop && v.stop(); } catch { } };
+    if (eng) { stop(eng.o1); stop(eng.o2); } if (sirV) { stop(sirV.o); stop(sirV.l); } if (scrV) stop(scrV.s); if (trfV) stop(trfV.s);
+    hornV.forEach(v => { stop(v.o1); stop(v.o2); }); hornV.clear();
+    try { mg && mg.disconnect(); } catch { }
+    eng = sirV = scrV = trfV = rIn = rOut = mg = ac = nbuf = null;
+  }
+  const dv = (px, py, r) => Math.pow(clamp(1 - Math.hypot(px - me.x, py - me.y) / (r || 520), 0, 1), 1.2);   // volume selon la distance
+  const SND = {
+    stop: sndStop,
+    shot(w, v) {
+      if (!A() || v <= .02) return; const t = ac.currentTime;
+      if (w === 3) { nz(t, .28, "lowpass", 2600, 200, .5 * v, 1); sw(t, 120, 38, .22, "sawtooth", .35 * v, mg, 600); }
+      else if (w === 2) { nz(t, .07, "bandpass", 2200, 900, .35 * v, 1.5); sw(t, 260, 90, .06, "square", .12 * v, mg, 1500); }
+      else { nz(t, .12, "bandpass", 1800, 500, .45 * v, 1.2); sw(t, 340, 70, .1, "square", .16 * v, mg, 1800); }
+    },
+    boom(v) { if (!A() || v <= .02) return; const t = ac.currentTime; nz(t, .9, "lowpass", 1400, 70, .9 * v, 1); sw(t, 90, 28, .6, "sine", .7 * v); nz(t + .05, .5, "bandpass", 500, 120, .3 * v, 1); },
+    crash(sev) { if (!A()) return; const t = ac.currentTime; nz(t, .22, "bandpass", 1100, 250, .25 * Math.min(1, .5 + sev * .25), 1.2); sw(t, 480, 170, .14, "square", .06); if (sev >= 2) nz(t + .02, .25, "highpass", 5200, 5200, .1, 1); },
+    door() { if (!A()) return; const t = ac.currentTime; nz(t, .08, "lowpass", 900, 150, .35, 1); sw(t, 150, 60, .09, "triangle", .3); nz(t + .1, .05, "bandpass", 1500, 800, .15, 2); },
+    ignition() { if (!A()) return; const t = ac.currentTime; sw(t + .1, 38, 85, .55, "sawtooth", .12, mg, 420); for (let k = 0; k < 3; k++) sw(t + k * .07, 75, 60, .05, "square", .04, mg, 500); },
+    cash(big) { if (!A()) return; const t = ac.currentTime; [988, 1319].forEach((f, i) => sw(t + i * .07, f, f, .12, "square", .05)); if (big) { sw(t + .14, 1568, 1568, .25, "square", .05); nz(t + .14, .2, "highpass", 6500, 6500, .04, 1); } },
+    wanted() { if (!A()) return; const t = ac.currentTime; for (let k = 0; k < 6; k++) { const f = k % 2 ? 660 : 880; sw(t + k * .11, f, f, .1, "square", .05); } },
+    wasted() { if (!A()) return; const t = ac.currentTime; sw(t, 420, 70, 1, "sawtooth", .09, mg, 1500); nz(t, .5, "lowpass", 900, 90, .25, 1); sw(t + .15, 300, 50, .9, "triangle", .08); },
+    thud(v) { if (!A() || v <= .02) return; const t = ac.currentTime; sw(t, 110, 40, .15, "sine", .5 * v); nz(t, .1, "lowpass", 400, 100, .3 * v, 1); },
+    ped(v) {
+      if (!A() || v <= .02) return; const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(), fl = ac.createBiquadFilter();
+      o.type = "sawtooth"; o.frequency.setValueAtTime(720, t); o.frequency.linearRampToValueAtTime(1150, t + .09); o.frequency.exponentialRampToValueAtTime(320, t + .42);
+      fl.type = "lowpass"; fl.frequency.value = 2600; g.gain.setValueAtTime(.07 * v, t); g.gain.exponentialRampToValueAtTime(.0001, t + .45);
+      o.connect(fl); fl.connect(g); g.connect(mg); o.start(t); o.stop(t + .5);
+    }
+  };
+  function sndFrame(now) {
+    if (!A()) return;
+    const t = ac.currentTime, drv = me.vid && me.dead <= 0, sp = Math.abs(me.v), thr = me.thr || 0;
+    mg.gain.value = env.muted && env.muted() ? 0 : .9;
+    if (!eng) mkEngine(); if (!sirV) mkSiren(); if (!scrV) scrV = mkLoop("bandpass", 2300, 5); if (!trfV) trfV = mkLoop("lowpass", 240, .7); radioInit();
+    // moteur : le régime remonte à chaque rapport (4 rapports)
+    const gear = Math.min(3, Math.floor(sp / 58)), f = 46 + (sp - gear * 58) * 1.35 + gear * 7;
+    eng.o1.frequency.setTargetAtTime(f, t, .04); eng.o2.frequency.setTargetAtTime(f * 1.005, t, .04);
+    eng.fl.frequency.setTargetAtTime(260 + sp * 4 + thr * 250, t, .06);
+    eng.g.gain.setTargetAtTime(drv ? .055 + .05 * Math.min(1, sp / 200) + .02 * thr : 0, t, .08);
+    // circulation autour + sirènes de police proches
+    let nc = 0, dm = 1e9;
+    for (const d of dCars.values()) { const q = Math.hypot(d.x - me.x, d.y - me.y); if ((d.m === "d" || d.m === "c") && q < 320) nc++; if ((d.m === "c" || d.m === "s") && q < dm) dm = q; }
+    for (const d of dP.values()) if (d.vid && Math.hypot(d.x - me.x, d.y - me.y) < 320) nc++;
+    trfV.g.gain.setTargetAtTime(Math.min(.06, nc * .012), t, .3);
+    sirV.g.gain.setTargetAtTime(dm < 700 ? .08 * Math.pow(1 - dm / 700, 1.5) : 0, t, .12);
+    scrV.g.gain.setTargetAtTime(drv && me.sk ? .05 : 0, t, .04); scrV.fl.frequency.setTargetAtTime(1900 + sp * 3, t, .05);
+    // klaxon (H) : les joueurs proches l'entendent aussi
+    me.hn = (hornKey || hornId !== null) && drv ? 1 : 0;
+    const act = new Set();
+    if (me.hn) { hornOn(myUid, .09, now); act.add(myUid); }
+    for (const [u, d] of dP) if (d.hn && d.vid) { const q = Math.hypot(d.x - me.x, d.y - me.y); if (q < 700) { hornOn(u, .09 * Math.pow(1 - q / 700, 1.3), now); act.add(u); } }
+    hornV.forEach((v, u) => { if (!act.has(u)) { v.g.gain.setTargetAtTime(0, t, .02); if (now - v.t > 250) { try { v.o1.stop(); v.o2.stop(); } catch { } hornV.delete(u); } } });
+    // radio : seulement dans une voiture
+    rOut.gain.setTargetAtTime(drv && radio.st ? .55 : 0, t, .15);
+    if (drv && radio.st) {
+      const S = STN[radio.st - 1], d = 60 / S.bpm / 4;
+      if (radio.next < t - .3) radio.next = t + .06;
+      for (let n = 0; radio.next < t + .25 && n < 8; n++) { S.play(radio.step, radio.next + (S.swing && radio.step % 2 ? d * S.swing : 0), d, rIn); radio.next += d; radio.step++; }
+    } else radio.next = 0;
+    // argent gagné, niveau de recherche qui monte
+    if (me.cash > sPrevCash + 19 && me.dead <= 0) SND.cash(me.cash - sPrevCash >= 100); sPrevCash = me.cash;
+    if (me.wl > sPrevWl) SND.wanted(); sPrevWl = me.wl;
+    // ambiance : klaxons et sirènes au loin
+    if (now > sAmbT) {
+      sAmbT = now + rr(7000, 16000);
+      if (Math.random() < .65) { sw(t, 400, 400, .12, "square", .025, mg, 900); sw(t + .2, 400, 400, .25, "square", .025, mg, 900); } else sw(t, 600, 900, 1.2, "square", .02, mg, 1200);
+    }
+  }
   // ================= DESSIN (style GTA 1 : vue de dessus, rendu pixelisé 2×, ombres portées, toits plats) =================
 const ROOF = [["#8b5a3c", "#a8714b", "#5e3a25"], ["#7d7d86", "#9a9aa5", "#55555d"], ["#a33b3b", "#c25353", "#6e2424"], ["#c9b27c", "#dcc794", "#8f7c4f"], ["#3d5a80", "#5577a3", "#27394f"], ["#6b7a3a", "#8a9a50", "#444f22"], ["#b0663a", "#cf8352", "#7a4222"], ["#9b9b9b", "#bdbdbd", "#666666"]];
 const shadeC = new Map();
@@ -687,12 +869,12 @@ function frame(now) {
   for (const d of dCops.values()) { d.x += (d.tx - d.x) * k; d.y += (d.ty - d.y) * k; d.a = angLerp(d.a, d.ta, k); }
   for (const d of dCars.values()) { if (Math.abs(d.tx - d.x) + Math.abs(d.ty - d.y) > 250) { d.x = d.tx; d.y = d.ty; } else { d.x += (d.tx - d.x) * k; d.y += (d.ty - d.y) * k; } d.a = angLerp(d.a, d.ta, k); }
   const lp = lobbyP();
-  for (const [u, p] of activeP()) { if (u === myUid) continue; let d = dP.get(u); if (!d) dP.set(u, d = { x: p.x, y: p.y, a: p.a }); if (Math.abs(p.x - d.x) + Math.abs(p.y - d.y) > 300) { d.x = p.x; d.y = p.y; } else { d.x += (p.x - d.x) * k; d.y += (p.y - d.y) * k; } d.a = angLerp(d.a, p.a, k); d.vid = p.vid; d.cash = p.cash; d.wl = p.wl; d.v = p.v; d.dm = p.dm; d.wpn = p.wpn; }
+  for (const [u, p] of activeP()) { if (u === myUid) continue; let d = dP.get(u); if (!d) dP.set(u, d = { x: p.x, y: p.y, a: p.a }); if (Math.abs(p.x - d.x) + Math.abs(p.y - d.y) > 300) { d.x = p.x; d.y = p.y; } else { d.x += (p.x - d.x) * k; d.y += (p.y - d.y) * k; } d.a = angLerp(d.a, p.a, k); d.vid = p.vid; d.cash = p.cash; d.wl = p.wl; d.v = p.v; d.dm = p.dm; d.wpn = p.wpn; d.hn = p.hn; }
   for (const u of dP.keys()) if (!lp[u]) dP.delete(u);
   if (me.dead > 0) { me.dead -= dt; if (me.dead <= 0) spawnAt(SPAWN[me.where || "hosp"]); }
   else { if (useReq) { useReq = 0; useKey(); } control(dt); interact(dt); weapons(dt, now); }
   useReq = 0; if (me.vid) me.carT += dt;
-  sendP(now);
+  sendP(now); sndFrame(now);
   // caméra (zoom fixe par paliers : l'image pixelisée reste nette)
   const spd = me.vid ? Math.abs(me.v) : 0, tz = me.vid ? 1.1 - Math.min(.2, spd / 230 * .2) : 1.45;
   cam.z += (tz - cam.z) * Math.min(1, 3 * dt);
@@ -745,9 +927,10 @@ function frame(now) {
   dot(me.x, me.y, "#fff", 3);
   const bx = W - 56, by = H - 62; x.fillStyle = "#1f4fbf"; x.beginPath(); x.arc(bx, by, 38, 0, 7); x.fill(); x.strokeStyle = "#000"; x.lineWidth = 3; x.stroke(); txt(gAct() ? "GARAGE" : me.vid ? "SORTIR" : "ENTRER", bx, by + 4, 12);
   { const ga = gAct(); if (ga || (me.g && inGarage())) txt(ga === "buy" ? `E : ACHETER LE GARAGE ($${GPRICE})` : ga === "store" ? "E : RANGER LA VOITURE" : ga === "take" ? "E : SORTIR TA VOITURE" : me.vid ? "GARAGE PLEIN" : "GARAGE VIDE", W / 2, H - 60, 15, ga === "buy" && me.cash < GPRICE ? "#ff9f43" : "#ffe14d"); }
-  if (me.vid && TOUCH) { const bb = brakeId !== null; x.fillStyle = bb ? "#ff5a4d" : "#b3261e"; x.beginPath(); x.arc(W - 140, H - 48, 34, 0, 7); x.fill(); x.stroke(); txt("FREIN", W - 140, H - 44, 13); }
+  if (me.vid && TOUCH) { const bb = brakeId !== null; x.fillStyle = bb ? "#ff5a4d" : "#b3261e"; x.beginPath(); x.arc(W - 140, H - 48, 34, 0, 7); x.fill(); x.stroke(); txt("FREIN", W - 140, H - 44, 13); x.fillStyle = "#2f4f9f"; x.beginPath(); x.arc(W - 224, H - 48, 28, 0, 7); x.fill(); x.stroke(); txt("RADIO", W - 224, H - 44, 11); x.fillStyle = hornId !== null ? "#ffd23f" : "#8a6d1a"; x.beginPath(); x.arc(W - 196, H - 106, 28, 0, 7); x.fill(); x.stroke(); txt("KLAXON", W - 196, H - 102, 10); }
   if (!me.vid && me.dead <= 0) { let near = false; for (const d of dCars.values()) if ((d.m === "d" || d.m === "p") && Math.hypot(d.x - me.x, d.y - me.y) < 48) near = true; if (near) txt("E : MONTER DANS LA VOITURE", W / 2, H - 24, 14, "#ffe14d"); }
   if (me.vid && me.dead <= 0) {
+    { const ro = radio.st > 0, fresh = now - radio.nameT < 2500; txt(`📻 ${ro ? STN[radio.st - 1].n : "RADIO COUPÉE"}${TOUCH ? "" : "  ·  R : CHANGER  ·  H : KLAXON"}`, W / 2, H - 34, fresh ? 15 : 12, ro ? "#9be7ff" : "#9a9aa5"); }
     const kmh = Math.round(Math.abs(me.v) * .5);
     txt(`${kmh} km/h · ÉTAT ${Math.round(100 - dmSum(me.dm) / 12 * 100)}%${me.v < -3 ? "  ◄ MARCHE ARRIÈRE" : ""}`, W / 2, H - 14, 16, me.v < -3 ? "#ff9f43" : "#fff");
     if (me.carT < 9) { x.fillStyle = "rgba(0,0,0,.65)"; x.fillRect(W / 2 - 230, H - 96, 460, 54); txt(TOUCH ? "POUSSE LE JOYSTICK VERS OÙ TU VEUX ALLER" : "↑ ACCÉLÉRER · ↓ FREINER / RECULER", W / 2, H - 74, 13, "#fff"); txt(TOUCH ? "LÂCHE = ROULE LIBRE · FREIN = FREINER / RECULER" : "← → TOURNER (SEULEMENT QUAND LA VOITURE ROULE) · E = SORTIR", W / 2, H - 54, 12, "#ffe14d"); }
@@ -763,13 +946,15 @@ function frame(now) {
     if (!active || /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
     if (e.key === "f" || e.key === "F") { fireKey = true; e.preventDefault(); return; }
     if (e.key === "x" || e.key === "X") { if (!e.repeat) cycleWpn(); e.preventDefault(); return; }
+    if (e.key === "r" || e.key === "R") { if (!e.repeat) nextStation(); e.preventDefault(); return; }
+    if (e.key === "h" || e.key === "H") { hornKey = true; e.preventDefault(); return; }
     const dg = /^(Digit|Numpad)([1-3])$/.exec(e.code || ""); if (dg) { selWpn(+dg[2]); return; }
     if (e.key === " " || e.key === "e" || e.key === "E") { e.preventDefault(); if (!e.repeat) useReq = 1; return; }
     const k = KEYS[e.key.length > 1 ? e.key : e.key.toLowerCase()]; if (k) { e.preventDefault(); keys.add(k); }
   });
-  addEventListener("keyup", e => { if (e.key === "f" || e.key === "F") fireKey = false; const k = KEYS[e.key.length > 1 ? e.key : e.key.toLowerCase()]; if (k) keys.delete(k); });
-  addEventListener("blur", () => { keys.clear(); stick = null; brakeId = null; fireKey = false; fireId = null; });
-  document.addEventListener("visibilitychange", () => { if (document.hidden) { keys.clear(); stick = null; brakeId = null; fireKey = false; fireId = null; } });
+  addEventListener("keyup", e => { if (e.key === "f" || e.key === "F") fireKey = false; if (e.key === "h" || e.key === "H") hornKey = false; const k = KEYS[e.key.length > 1 ? e.key : e.key.toLowerCase()]; if (k) keys.delete(k); });
+  addEventListener("blur", () => { keys.clear(); stick = null; brakeId = null; fireKey = false; fireId = null; hornKey = false; hornId = null; });
+  document.addEventListener("visibilitychange", () => { if (document.hidden) { keys.clear(); stick = null; brakeId = null; fireKey = false; fireId = null; hornKey = false; hornId = null; } });
   const rel = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height }; };
   cv.addEventListener("pointerdown", e => {
     if (!active) return; e.preventDefault(); const p = rel(e);
@@ -777,6 +962,8 @@ function frame(now) {
     if (hasGun() && Math.hypot(p.x - (W - 136), p.y - (H - 136)) < 30) { cycleWpn(); return; }
     if (e.button === 2 || Math.hypot(p.x - (W - 56), p.y - (H - 62)) < 40) { useReq = 1; return; }
     if (me.vid && Math.hypot(p.x - (W - 140), p.y - (H - 48)) < 38) { brakeId = e.pointerId; try { cv.setPointerCapture(e.pointerId); } catch { } return; }
+    if (me.vid && Math.hypot(p.x - (W - 224), p.y - (H - 48)) < 32) { nextStation(); return; }
+    if (me.vid && Math.hypot(p.x - (W - 196), p.y - (H - 106)) < 32) { hornId = e.pointerId; try { cv.setPointerCapture(e.pointerId); } catch { } return; }
     if (stick) return;
     try { cv.setPointerCapture(e.pointerId); } catch { }
     stick = { id: e.pointerId, ox: p.x, oy: p.y, dx: 0, dy: 0 };
@@ -787,19 +974,19 @@ function frame(now) {
     if (d > m) { stick.ox += dx / d * (d - m); stick.oy += dy / d * (d - m); dx = dx / d * m; dy = dy / d * m; }
     stick.dx = dx / m; stick.dy = dy / m;
   });
-  const end = e => { if (fireId === e.pointerId) fireId = null; if (brakeId === e.pointerId) brakeId = null; if (stick && e.pointerId === stick.id) stick = null; };
+  const end = e => { if (fireId === e.pointerId) fireId = null; if (hornId === e.pointerId) hornId = null; if (brakeId === e.pointerId) brakeId = null; if (stick && e.pointerId === stick.id) stick = null; };
   cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end);
   cv.addEventListener("contextmenu", e => { if (active) e.preventDefault(); });
 
   return {
     enter(code) {
       active = true; c = code; myUid = getMe().uid; ls = null; lastT = 0; lastH = ""; lastEv = 0; pd = {}; hostOn = false; keys = new Set(); stick = null; brakeId = null; useReq = 0;
-      dPeds.clear(); dCars.clear(); dCops.clear(); dP.clear(); ejected = []; splats = []; floats = []; hitDone = new Set(); lastHs = {}; sentStr = ""; sentAt = 0; savedCash = -1; saveAt = performance.now(); gLoaded = false; savedG = ""; lastGn = {};
+      dPeds.clear(); dCars.clear(); dCops.clear(); dP.clear(); ejected = []; sPrevCash = 0; sPrevWl = 0; sAmbT = performance.now() + 8000; hornKey = false; hornId = null; splats = []; floats = []; hitDone = new Set(); lastHs = {}; sentStr = ""; sentAt = 0; savedCash = -1; saveAt = performance.now(); gLoaded = false; savedG = ""; lastGn = {};
       Object.assign(me, { vid: 0, hp: 100, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, bust: 0, hurt: 0, v: 0, a: 0, cash: 0, cop: 0, wpn: 0, ammo: [0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, gcar: null, gn: 0, go: 0, gi: 0, gm: 0 });
       killQ = []; carQ = []; tracers = []; sparks = []; booms = []; wrecks = []; pickT = new Map(); lastFc = {}; lastCs = {}; fireKey = false; fireId = null;
       const ix = 2 + Math.floor(Math.random() * 5), iy = 2 + Math.floor(Math.random() * 5); spawnAt([ix * CELL, iy * CELL]);
-      $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : monter / descendre d'une voiture · en voiture ↑ accélère, ↓ freine, ←→ tourne · livre les colis 📦, écrase des piétons, évite la police ! · Ramasse les armes au sol : F tirer, X changer d'arme (1-2-3) · les voitures se cabossent ! · garage ($3500) : va sur la zone jaune et appuie sur E";
-      get(RF(`users/${myUid}/sta`)).then(s => { const v = +s.val(); if (v > 0 && me.cash === 0) { me.cash = v; savedCash = v; } }).catch(() => { });
+      $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : monter / descendre d'une voiture · en voiture ↑ accélère, ↓ freine, ←→ tourne · livre les colis 📦, écrase des piétons, évite la police ! · Ramasse les armes au sol : F tirer, X changer d'arme (1-2-3) · les voitures se cabossent ! · garage ($3500) : va sur la zone jaune et appuie sur E · R : changer de radio (4 stations), H : klaxon";
+      get(RF(`users/${myUid}/sta`)).then(s => { const v = +s.val(); if (v > 0 && me.cash === 0) { me.cash = v; savedCash = v; sPrevCash = v; } }).catch(() => { });
       get(RF(`users/${myUid}/sta2`)).then(s => {                           // garage, voiture rangée, armes et munitions
         try {
           const v = JSON.parse(String(s.val() || "null"));
@@ -815,7 +1002,7 @@ function frame(now) {
       env.played && env.played("sta", true);
       return () => {
         active = false; clearInterval(timer); unS && unS(); unP && unP(); if (raf) cancelAnimationFrame(raf); raf = 0; keys.clear(); stick = null; hostOn = false; fireKey = false; fireId = null;
-        persist(true); remove(RF(`games/${c}/p/${myUid}`)).catch(() => { });
+        SND.stop(); persist(true); remove(RF(`games/${c}/p/${myUid}`)).catch(() => { });
         x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.setLineDash([]); x.textAlign = "start";
       };
     }

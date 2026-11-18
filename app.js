@@ -13,7 +13,7 @@ import {createVoice} from "./voice.js";
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="58";
+const VER="59";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -283,7 +283,7 @@ function renderLobby(){
   Object.entries(pl).forEach(([u,p])=>{const r=h("div",null);r.className="pl";const sw=h("span");sw.className="sw";sw.style.background=p.color;
     r.append(sw,h("span",(p.ow?"🛡️ ":"")+p.name+(u===lobby.host?" (hôte)":"")+(p.wins?` 🏆${p.wins}`:"")),h("span",p.ready?"✔ prêt":"…"));b.append(r)});
   $("ready").hidden=host;$("ready").textContent=pl[me.uid]?.ready?"Pas prêt":"Prêt";
-  $("ltitle").textContent={snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",tk:"💥 Tanks",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",barre:"🌀 La barre malicieuse",fruit:"🍎 Fruit Forager",sta:"🚗 Sta I",amog:"🚀 Amog Us",blockdash:"🧱 Block Dash"}[lobby.game]||"Lobby";
+  $("ltitle").textContent={snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",tk:"💥 Tanks",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",barre:"🌀 La barre malicieuse",fruit:"🍎 Fruit Forager",sta:"STA I",amog:"🚀 Amog Us",blockdash:"🧱 Block Dash"}[lobby.game]||"Lobby";
   $("opts").style.display=lobby.game==="snake"?"":"none";
   const op=lobby.opts||{};$("oSp").textContent="⚡ Vitesse : "+["lente","normale","rapide"][op.sp??1];
   $("oWr").textContent=op.wr?"🌀 Murs : traversables":"🧱 Murs : mortels";$("oBo").textContent=op.bo===0?"🎁 Bonus : non":"🎁 Bonus : oui";
@@ -321,8 +321,8 @@ async function joinSta(){
       await update(R(`lobbies/${k}`),{host:me.uid,game:"sta",status:"playing",opts:{},[`players/${me.uid}`]:{name:me.name,color:firstColor(pl),ready:true,j:Date.now(),...ownTag()}});
       c=k;
     }
-  }catch{return toast("Impossible de rejoindre le serveur Sta I")}
-  if(!c)return toast("Tous les serveurs Sta I sont pleins");
+  }catch{return toast("Impossible de rejoindre le serveur STA I")}
+  if(!c)return toast("Tous les serveurs STA I sont pleins");
   onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();enter(c);
 }
 async function leaveLobby(){
@@ -1661,7 +1661,7 @@ function startStats(){
 function renderStats(D){
   const pr=D.presence||{},us=D.users||{},lobs=Object.entries(D.lobbies||{}),fr=D.friends||{},now=Date.now();
   const online=Object.keys(pr).filter(u=>pr[u]),made=Object.values(us).map(u=>u.createdAt||0),nUsers=Object.keys(us).length;
-  const GN={tk:["💥","Tanks"],snake:["🐍","Snake"],surv:["🧟","Survie coop"],br:["🔫","Battle Royale"],lab:["🧩","Évasion coop"],sim:["⛏️","Mine Simulator"],sumo:["🤼","Sumo Arena"],barre:["🌀","La barre malicieuse"],fruit:["🍎","Fruit Forager"],amog:["🚀","Amog Us"],blockdash:["🧱","Block Dash"],sta:["🚗","Sta I"]};
+  const GN={tk:["💥","Tanks"],snake:["🐍","Snake"],surv:["🧟","Survie coop"],br:["🔫","Battle Royale"],lab:["🧩","Évasion coop"],sim:["⛏️","Mine Simulator"],sumo:["🤼","Sumo Arena"],barre:["🌀","La barre malicieuse"],fruit:["🍎","Fruit Forager"],amog:["🚀","Amog Us"],blockdash:["🧱","Block Dash"],sta:["","STA I"]};
   const ago=t=>{if(!t)return"date inconnue";const m=Math.floor((now-t)/6e4);return m<1?"à l'instant":m<60?`il y a ${m} min`:m<1440?`il y a ${Math.floor(m/60)} h`:`il y a ${Math.floor(m/1440)} j`};
   const card=([ic,v,l])=>{const d=h("div");d.className="stat";const i=h("span",ic);i.className="ic";d.append(i,h("b",String(v)),h("span",l));return d};
   const playing=lobs.filter(([,l])=>l&&l.status==="playing"),open=lobs.filter(([,l])=>l&&l.status==="lobby");
@@ -1935,7 +1935,7 @@ function drawTk(now){
 
 // ---------- Panneau admin (owners) : onglet 2 du menu Stats ----------
 
-const GAME_NAMES={snake:"Snake",surv:"Survie coop",br:"Battle Royale",lab:"Évasion coop",sim:"Mine Simulator",tk:"Tanks",sumo:"Sumo Arena",barre:"La barre malicieuse",fruit:"Fruit Forager",amog:"Amog Us",blockdash:"Block Dash",sta:"Sta I"};
+const GAME_NAMES={snake:"Snake",surv:"Survie coop",br:"Battle Royale",lab:"Évasion coop",sim:"Mine Simulator",tk:"Tanks",sumo:"Sumo Arena",barre:"La barre malicieuse",fruit:"Fruit Forager",amog:"Amog Us",blockdash:"Block Dash",sta:"STA I"};
 const GAME_TILES={snake:"tsnake",surv:"tsurv",br:"tbr",lab:"tlab",sim:"tsim",tk:"ttk",sumo:"tsumo",barre:"tbarre",fruit:"tfruit",amog:"tamog",blockdash:"tblockdash",sta:"tsta"};
 // État de maintenance : variable À PART (stD est vidé à chaque ouverture du panneau stats, ce qui effaçait la maintenance)
 let maint=null,unMaint=null,maintTry=0,maintRetry=0;   // maint=null : pas encore lu
@@ -2020,7 +2020,7 @@ $("adReset").onclick=async()=>{if(!confirm("Remettre le compteur « parties jou�
 function renderAdmin(D){
   if(!me||!me.owner)return;
   paintMaintenance();renderMaintenanceAdmin();
-  const GN={tk:"💥 Tanks",snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",barre:"🌀 La barre malicieuse",fruit:"🍎 Fruit Forager",sta:"🚗 Sta I",amog:"🚀 Amog Us",blockdash:"🧱 Block Dash"};
+  const GN={tk:"💥 Tanks",snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",barre:"🌀 La barre malicieuse",fruit:"🍎 Fruit Forager",sta:"STA I",amog:"🚀 Amog Us",blockdash:"🧱 Block Dash"};
   const lobs=Object.entries(D.lobbies||{}).filter(([,l])=>l).sort((x,y)=>(y[1].status==="playing")-(x[1].status==="playing"));
   $("adLobH").textContent=`Lobbys (${lobs.length})`;$("adAll").hidden=!lobs.length;
   $("adLob").replaceChildren(...(lobs.length?lobs.map(([c,l])=>{

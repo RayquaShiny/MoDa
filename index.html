@@ -1,11 +1,11 @@
 <!doctype html>
 <html lang="fr"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,viewport-fit=cover">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="var(--bg)">
 <!-- ⚠️ À CONSERVER À CHAQUE MISE À JOUR : à chaque nouvelle version (chaque modification), la version affichée doit faire +1.
      Changer le numéro aux 3 endroits, toujours identique : ce <meta name="moda-v">, `const VER` dans app.js, et `VERSION` dans sw.js. -->
-<meta name="moda-v" content="56">
+<meta name="moda-v" content="57">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -48,7 +48,7 @@ input{font:inherit;padding:9px 12px;border-radius:10px;border:2px solid var(--s2
 .dot{color:var(--s2);margin-right:4px}.dot.on{color:var(--b)}
 #friends>div,#reqs>div{padding:4px 0}
 canvas{touch-action:none;-webkit-user-select:none;user-select:none;width:100%;max-width:800px;border-radius:var(--r);display:block;background:var(--deep)}
-#pad{display:none;grid-template-columns:repeat(3,72px);grid-template-rows:repeat(2,72px);gap:8px;justify-content:center;margin:14px auto;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+#pad{display:none;grid-template-columns:repeat(3,72px);grid-template-rows:repeat(2,72px);gap:8px;justify-content:center;margin:14px auto;user-select:none;-webkit-user-select:none;touch-action:pan-x pan-y}
 #pad button{font-size:28px;padding:0;background:var(--s2);color:var(--ink)}
 @media(pointer:coarse){button:not(#sw):not(.eye):not(.mini){min-height:44px}button.mini{padding:8px 12px;min-height:40px}}
 @media(max-width:500px){header{padding:10px 14px}main{padding:14px 12px}.code{font-size:36px}}
@@ -88,7 +88,6 @@ input.err{border-color:#ff4d6d}
 .tile.amog{background:linear-gradient(135deg,#ff3b5c,#7b2ff7);color:#fff;cursor:pointer}
 .tile.barre{background:linear-gradient(135deg,#7b2ff7,#ff3b5c);color:#fff;cursor:pointer}
 .tile.sumo{background:linear-gradient(135deg,#e8318a,#ffb199);color:#2b0016;cursor:pointer}
-.tile.sta{background:linear-gradient(135deg,#ff9f1c,#e63946 60%,#6a040f);color:#fff;cursor:pointer}
 .tile.blockdash{background:linear-gradient(135deg,#172c59,#48a9d6);color:#fff;cursor:pointer}
 #pass2[hidden]{display:none}
 section:not([hidden]){animation:fade .28s ease backwards}
@@ -106,7 +105,7 @@ section:not([hidden]){animation:fade .28s ease backwards}
 
 /* ===== iPhone / iPad : confort tactile ===== */
 html{-webkit-text-size-adjust:100%}
-body{touch-action:manipulation;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+body{touch-action:pan-x pan-y;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
 button,.tile,.stat{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 /* marges de sécurité (encoche, coins arrondis) en paysage */
 header,main{padding-left:max(var(--px,24px),env(safe-area-inset-left));padding-right:max(var(--px,24px),env(safe-area-inset-right))}
@@ -159,7 +158,7 @@ body[data-g=sim] #pad,body[data-g=sim] #gctl{display:none!important}
 .scard{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--s1);border-radius:12px;padding:10px 12px;font-size:14px}
 .scard button{white-space:nowrap}.shatch{background:#3ee6c422;border:1px solid #3ee6c466;color:var(--b);border-radius:10px;padding:8px 10px;font-weight:600}
 /* ===== Sumo Arena ===== */
-body[data-g=sta] #pad,body[data-g=sta] #gctl,body[data-g=sta] #score,body[data-g=amog] #pad,body[data-g=amog] #gctl,body[data-g=amog] #score,body[data-g=sumo] #pad,body[data-g=sumo] #gctl,body[data-g=sumo] #score,body[data-g=barre] #pad,body[data-g=barre] #gctl,body[data-g=barre] #score{display:none!important}
+body[data-g=amog] #pad,body[data-g=amog] #gctl,body[data-g=amog] #score,body[data-g=sumo] #pad,body[data-g=sumo] #gctl,body[data-g=sumo] #score,body[data-g=barre] #pad,body[data-g=barre] #gctl,body[data-g=barre] #score{display:none!important}
 #sdash{display:none;position:absolute;right:10px;bottom:10px;width:78px;height:78px;padding:0;border-radius:50%;font-size:34px;z-index:6;align-items:center;justify-content:center;background:#ff4d6dd0;color:#fff;touch-action:none;-webkit-user-select:none;user-select:none;opacity:.45}
 body[data-g=sumo] #sdash,body[data-g=barre] #sdash{display:flex}
 #semo{position:absolute;right:8px;bottom:60px;display:flex;gap:6px;background:#14102bec;border-radius:12px;padding:6px;z-index:6}
@@ -395,8 +394,6 @@ html.neon .adl{border-top-color:#ff1f4b33}
   <div class="grid"><div class="tile br" id="tbr">Battle Royale<small>2 à 8 joueurs · dernier en vie</small></div><div class="tile tk" id="ttk">Tanks<small>2 à 8 joueurs · obus qui rebondissent</small></div><div class="tile sumo" id="tsumo">Sumo Arena<small>2 à 8 joueurs · pousse-les hors de l'arène</small></div><div class="tile barre" id="tbarre">La barre malicieuse<small>2 à 8 joueurs · esquive, saute, survis 5 s</small></div><div class="tile blockdash" id="tblockdash">🧱 Block Dash<small>2 à 8 joueurs · évite les murs</small></div></div>
   <h3 class="gh">👥 Grand groupe <small>il faut au moins 4 joueurs</small></h3>
   <div class="grid"><div class="tile amog" id="tamog">Amog Us<small>4 à 10 joueurs · trouve les imposteurs</small></div></div>
-  <h3 class="gh">🌍 Serveur ouvert <small>pas de lobby : tu arrives direct, comme un jeu en ligne</small></h3>
-  <div class="grid"><div class="tile sta" id="tsta">Sta I<small>serveur en ligne · vole des voitures, fuis la police</small></div></div>
  </section>
  <section id="stats" hidden>
   <div class="stabs" role="tablist"><button type="button" id="tbStats" class="on" role="tab" aria-selected="true">📊 Stats</button><button type="button" id="tbAdm" role="tab" aria-selected="false">🛠️ Admin</button></div>

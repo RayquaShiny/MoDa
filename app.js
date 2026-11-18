@@ -13,7 +13,7 @@ import {createVoice} from "./voice.js";
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="62";
+const VER="64";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -234,6 +234,8 @@ function withBots(l){ // joueurs réels + bots (ids « bot_1 », « bot_2 »…,
   const pl={...((l&&l.players)||{})},used=new Set(Object.values(pl).map(p=>p.color)),n=botCount(l);
   for(let i=0;i<n;i++){const c=COLORS.find(x=>!used.has(x))||COLORS[i%COLORS.length];used.add(c);pl["bot_"+(i+1)]={name:"🤖 "+BOTN[i],color:c,ready:true}}
   return pl}
+let spec=false; // admin qui regarde une partie sans y jouer (pas dans la liste des joueurs)
+const specTag=document.createElement("div");specTag.style.cssText="position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:60;padding:4px 12px;border-radius:999px;background:#000a;color:#fff;font:700 13px sans-serif;pointer-events:none";specTag.textContent="👁️ Observateur";specTag.hidden=true;document.body.append(specTag);
 const ownTag=()=>me&&me.owner?{ow:1}:{}; // badge 🛡️ affiché en lobby (purement visuel)
 let gStart=Date.now();
 // Compte une partie terminée : total, par jeu (nombre + secondes) et par heure UTC (open=true : partie sans fin, durée ignorée)
@@ -269,8 +271,9 @@ function enter(c){
     const l=s.val();if(!l){if(code){local();toast("Le lobby a été fermé")}return}
     if(l.kick&&l.kick[me.uid]){if(code){local();toast("Un admin t'a retiré du lobby")}return}
     lobby=l;
+    if(spec&&l.status==="lobby")spec=false;   // la partie est finie / pas lancée : l'admin redevient un joueur du lobby
     if(isMaintained(l.game)){toast(maintMsg(l.game));leaveLobby();return}
-    if(((l.status==="lobby"||l.game==="sim"||l.game==="fruit")&&l.host!==me.uid||l.game==="sta")&&!(l.players&&l.players[me.uid])){ // coupure puis retour : on se réinscrit
+    if(((l.status==="lobby"||l.game==="sim"||l.game==="fruit")&&l.host!==me.uid||l.game==="sta")&&!(l.players&&l.players[me.uid])&&!spec){ // coupure puis retour : on se réinscrit
       set(R(`lobbies/${c}/players/${me.uid}`),{name:me.name,color:firstColor(l.players),ready:false,...(l.game==="sta"?{j:Date.now()}:{}),...ownTag()});onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();return}
     renderLobby();
     if(l.status==="playing"&&cur!=="game")enterGame(c);
@@ -325,6 +328,21 @@ async function joinSta(){
   if(!c)return toast("Tous les serveurs STA I sont pleins");
   onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();enter(c);
 }
+// Admin (owners) : rejoindre un lobby, jouer dans une partie ouverte (STA I, Mine Simulator, Fruit Forager) ou observer une partie déjà lancée
+async function admJoin(c){
+  if(!me||!me.owner)return;
+  if(code)await leaveLobby();
+  let l;try{l=(await get(R(`lobbies/${c}`))).val()}catch{return admErr()}
+  if(!l)return toast("Lobby introuvable");
+  try{if(l.kick&&l.kick[me.uid])await remove(R(`lobbies/${c}/kick/${me.uid}`))}catch{}   // un owner n'est jamais bloqué
+  if(l.game==="sta"){
+    const pl=l.players||{};if(Object.keys(pl).length>=STA_MAX&&!pl[me.uid])return toast("Serveur plein");
+    try{await update(R(`lobbies/${c}`),{[`players/${me.uid}`]:{name:me.name,color:firstColor(pl),ready:true,j:Date.now(),...ownTag()}})}catch{return admErr()}
+    onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();return enter(c);
+  }
+  if(l.status==="lobby"||l.game==="sim"||l.game==="fruit")return joinLobby(c);   // lobby non lancé (ou monde ouvert) : on rejoint normalement
+  spec=true;enter(c);toast("👁️ Mode observateur : tu regardes la partie sans jouer");
+}
 async function leaveLobby(){
   if(!code)return;const c=code,sta=!!lobby&&lobby.game==="sta",host=lobby&&lobby.host===me.uid&&!sta;local();
   onDisconnect(R(`lobbies/${c}`)).cancel();onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).cancel();
@@ -349,7 +367,7 @@ let staC=null;
 function enterStaGame(c){staC=staC||createStaClient(simEnv());return staC.enter(c)}
 let bd=null;
 function enterBlockDashGame(c){bd=bd||createBlockDashClient(simEnv());return bd.enter(c)}
-function local(){voice&&voice.stop();unLobby&&unLobby();unState&&unState();unLobby=unState=null;code=lobby=null;if(me)showHome()}
+function local(){spec=false;specTag.hidden=true;voice&&voice.stop();unLobby&&unLobby();unState&&unState();unLobby=unState=null;code=lobby=null;if(me)showHome()}
 
 // ---------- Jeu : affichage (tous les joueurs) ----------
 let gk="snake",lastMv="",st=null,pv=null,tAt=0,tDt=130,raf=0,parts=[],mute=false,ac,pred=null,scoreKey="",gx=null,vsc=1;
@@ -407,8 +425,9 @@ function unwake(){try{wl&&wl.release()}catch{}wl=null}
 let hinted=0;
 function orientHint(){if(!TOUCH||hinted||gk==="snake")return;if(matchMedia("(orientation:portrait)").matches){hinted=1;setTimeout(()=>{if(cur==="game")toast("📱 Astuce : tourne ton téléphone en paysage pour une vue plus grande")},1600)}}
 // ---------- Chat vocal de proximité (voice.js) : actif seulement en partie, désactivable par l'hôte dans le lobby (opts.vc) ----------
-const vcOn=()=>!!(code&&lobby&&(lobby.opts||{}).vc!==0);
+const vcOn=()=>!!(code&&lobby&&!spec&&(lobby.opts||{}).vc!==0);
 function vsync(){
+  specTag.hidden=!(spec&&cur==="game");
   const want=cur==="game"&&vcOn();
   if(want&&!voice)voice=createVoice({R,set,remove,onValue,onDisconnect,getMe:()=>me,toast,onState:s=>{vst=s;vmicUI()}});
   if(want&&!voice.isOn())voice.start(code);else if(!want&&voice&&voice.isOn())voice.stop();
@@ -2027,7 +2046,7 @@ function renderAdmin(D){
     const pl=Object.entries(l.players||{}),box=h("div");box.className="adl";
     const hd=h("div");hd.className="adh";const g=h("span",GN[l.game]||l.game||"Jeu");g.className="g";
     const bd=h("span",l.status==="playing"?"En partie":"Lobby");bd.className="badge"+(l.status==="playing"?" pl2":"");
-    const sp=h("span");sp.className="sp";hd.append(g,h("code",c),bd,sp,Object.assign(h("button","Fermer",()=>{if(confirm(`Fermer le lobby ${c} ?`))admClose(c)}),{className:"danger mini"}));
+    const sp=h("span");sp.className="sp";const open=l.status==="lobby"||["sim","fruit","sta"].includes(l.game);hd.append(g,h("code",c),bd,sp,Object.assign(h("button",open?"Rejoindre":"Observer",()=>admJoin(c)),{className:"alt mini"}),Object.assign(h("button","Fermer",()=>{if(confirm(`Fermer le lobby ${c} ?`))admClose(c)}),{className:"danger mini"}));
     const ps=h("div");ps.className="adp";
     pl.forEach(([u,p])=>{const ch=h("span");ch.className="chip";ch.append((p.name||"?")+(u===l.host?" 👑":""));
       if(u!==l.host){const k=h("button","✕",()=>admKick(c,u,p.name||"ce joueur"));k.setAttribute("aria-label","Retirer "+(p.name||"ce joueur"));ch.append(k)}ps.append(ch)});

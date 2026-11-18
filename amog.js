@@ -1160,10 +1160,11 @@ export function createAmogClient(env) {
     cdm = ls.dr | 0; if (ls.ph !== "p") sabMenu = false;
     if (ls.ph !== lastPh) { if (ls.ph === "m") { mStart = now; mMax = 0; lastTick = -1; } else if (ls.ph === "r") rStart = now; if (ls.ph !== "p") bigMap = false; lastPh = ls.ph; }
     if (ls.mt) mid = ls.mt.id;
-    const me = sa.p[myIdx], ghost = !!me && !me[2], imp = isImp();
+    const spectator = myIdx < 0, fi = spectator ? Math.max(0, sa.p.findIndex(q => q[2])) : myIdx;   // admin observateur : vue fantôme, caméra sur le premier joueur en vie
+    const me = sa.p[myIdx], ghost = spectator || (!!me && !me[2]), imp = isImp();
     const pos = sa.p.map((qa, i) => { const qb = sb.p[i]; return qb && qa[2] && qb[2] ? [qa[0] + (qb[0] - qa[0]) * f, qa[1] + (qb[1] - qa[1]) * f] : [qa[0], qa[1]]; });
     const mvg = sa.p.map((qa, i) => { const qb = sb.p[i]; return !!qb && Math.hypot(qb[0] - qa[0], qb[1] - qa[1]) > .5; });   // en train de marcher ? (animation des jambes)
-    const mp = pos[myIdx] || [TB[0], TB[1]], cam = !!ls.cm && ls.cm.includes(myIdx), dark = !!ls.sb && ls.sb[0] === 0 && !imp, VV = dark ? 85 : VIS;
+    const mp = pos[fi] || [TB[0], TB[1]], cam = !!ls.cm && ls.cm.includes(myIdx), dark = !!ls.sb && ls.sb[0] === 0 && !imp, VV = dark ? 85 : VIS;
     mpL = mp; ghL = ghost;
     const vis = (px, py) => ghost || (cam && inCam(px, py)) || (Math.hypot(px - mp[0], py - mp[1]) < VV && losc(mp[0], mp[1], px, py));   // pas de vision à travers les murs (les fantômes voient tout)
 

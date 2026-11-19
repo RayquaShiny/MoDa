@@ -13,7 +13,7 @@ import {createVoice} from "./voice.js";
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="66";
+const VER="67";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -314,18 +314,25 @@ const STA_MAX=24;
 async function joinSta(){
   if(isMaintained("sta"))return toast(maintMsg("sta"));
   if(code)await leaveLobby();
-  let c=null;
-  try{
-    for(let i=1;i<=30&&!c;i++){
-      const k="STA"+i,l=(await get(R(`lobbies/${k}`))).val(),pl=(l&&l.players)||{},n=Object.keys(pl).length;
+  let c=null,err=null;
+  for(let i=1;i<=30&&!c;i++){
+    const k="STA"+i;
+    try{   // une erreur sur UN serveur ne bloque plus tout : on essaie le suivant
+      const l=(await get(R(`lobbies/${k}`))).val(),pl=(l&&l.players)||{},n=Object.keys(pl).length;
       if(l&&l.game!=="sta")continue;
       if(l&&n>=STA_MAX&&!pl[me.uid])continue;
-      if(l&&!n)await remove(R(`games/${k}`));   // serveur vide : on repart d'un monde neuf
-      await update(R(`lobbies/${k}`),{host:me.uid,game:"sta",status:"playing",opts:{},[`players/${me.uid}`]:{name:me.name,color:firstColor(pl),ready:true,j:Date.now(),...ownTag()}});
+      if(l&&l.kick&&l.kick[me.uid])continue;   // retiré par un admin de CE serveur : on passe au suivant
+      const mine={name:me.name,color:firstColor(pl),ready:true,j:Date.now(),...ownTag()};
+      if(l&&n)await set(R(`lobbies/${k}/players/${me.uid}`),mine);   // serveur déjà occupé : on s'ajoute SEULEMENT dans players/<uid> (on ne réécrit pas l'en-tête du lobby)
+      else{                                                          // serveur inexistant ou vide : on le (re)crée avec un monde neuf
+        if(l)await remove(R(`games/${k}`)).catch(()=>{});
+        try{await update(R(`lobbies/${k}`),{host:me.uid,game:"sta",status:"playing",opts:{},[`players/${me.uid}`]:mine})}
+        catch{if(!l)throw 0;await set(R(`lobbies/${k}/players/${me.uid}`),mine)}   // lobby resté en place : les règles peuvent refuser de réécrire l'en-tête
+      }
       c=k;
-    }
-  }catch{return toast("Impossible de rejoindre le serveur STA I")}
-  if(!c)return toast("Tous les serveurs STA I sont pleins");
+    }catch(e){err=e||{}}
+  }
+  if(!c)return toast(err?`Impossible de rejoindre STA I (${err.code||"erreur"})`:"Tous les serveurs STA I sont pleins");
   onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();enter(c);
 }
 // Admin (owners) : rejoindre un lobby, jouer dans une partie ouverte (STA I, Mine Simulator, Fruit Forager) ou observer une partie déjà lancée

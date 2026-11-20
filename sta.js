@@ -528,7 +528,7 @@ export function createStaClient(env) {
   }
   const hasGun = () => me.ammo.some(v => v > 0);
   function selWpn(n) { if (n === 0 || me.ammo[n] > 0) me.wpn = n; }                // 0 = les poings 👊
-  function cycleWpn() { for (let k = 1; k <= 4; k++) { const n = (me.wpn + k) % 4; if (n === 0 || me.ammo[n] > 0) { me.wpn = n; return; } } me.wpn = 0; }   // poings → armes possédées → poings
+  function cycleWpn() { for (let k = 1; k <= 4; k++) { const n = (me.wpn + k) % 5; if (n === 0 || me.ammo[n] > 0) { me.wpn = n; return; } } me.wpn = 0; }   // poings → armes possédées → poings
   function trace(ox, oy, ang, W) {                                        // un tir « hitscan » : s'arrête au mur, au piéton ou à la voiture touchée
     const dx = Math.cos(ang), dy = Math.sin(ang); let bf = me.vid === HELI ? W.rng : wallEnd(ox, oy, ang, W.rng), best = null;
     for (const [id, d] of dPeds) { if (hitDone.has(id)) continue; const rx = d.x - ox, ry = d.y - oy, f = rx * dx + ry * dy; if (f > 0 && f < bf && Math.abs(-rx * dy + ry * dx) < 8) { bf = f; best = ["p", id, d]; } }
@@ -581,7 +581,7 @@ export function createStaClient(env) {
         const wi = heli ? 2 : me.wpn, W = WPN[wi], dx = Math.cos(me.a), dy = Math.sin(me.a), ox = me.x + dx * (me.vid ? 24 : 11), oy = me.y + dy * (me.vid ? 24 : 11);
         if (!heli) me.ammo[wi]--;
         me.cd = W.rate; me.fc = (me.fc + 1) % 1000; me.fw = wi; me.flash = .07; me.heat = Math.min(5, me.heat + W.heat);
-        for (let q = 0; q < W.pel; q++) { const ang = me.a + rr(-W.spr, W.spr), e = trace(ox, oy, ang, W); tracers.push({ x0: ox, y0: oy, x1: ox + Math.cos(ang) * e, y1: oy + Math.sin(ang) * e, t: now }); }
+        for (let q = 0; q < W.pel; q++) { const ang = me.a + rr(-W.spr, W.spr), e = trace(ox, oy, ang, W), ex = ox + Math.cos(ang) * e, ey = oy + Math.sin(ang) * e; tracers.push({ x0: ox, y0: oy, x1: ex, y1: ey, t: now }); if (wi === 4) booms.push({x:ex,y:ey,t:now}); }
         SND.shot(wi, 1); navigator.vibrate && navigator.vibrate(12);
       } else if (!me.wpn && !me.vid) punch(now);                           // pas d'arme en main : coup de poing 👊
     }
@@ -1637,6 +1637,8 @@ function frame(now) {
   splats.forEach(s => { const a = 1 - (now - s.t) / 30000; if (a > 0 && inV(s.x, s.y)) drawSplat(s, a); });
   splats = splats.filter(s => now - s.t < 30000);
   for (const p of PICKS) if (inV(p.x, p.y) && !(pickT.has(p.id) && now - pickT.get(p.id) < 45000)) drawPick(p, now);
+   RPG_PART_SPOTS.forEach((q,i)=>{if(me.rpgQuest&&!me.rpgParts.includes(i)&&Math.hypot(q.x-me.x,q.y-me.y)<75){x.fillStyle="rgba(255,210,63,.25)";x.beginPath();x.arc(q.x,q.y,9+Math.sin(now/120)*2,0,7);x.fill();labels.push(["✦",q.x,q.y-8,"#ffd23f",13]);}});
+   AMMO_TAG_SPOTS.forEach((q,i)=>{if(me.ammoQuest&&!me.ammoTags.includes(i)&&Math.hypot(q.x-me.x,q.y-me.y)<75){x.fillStyle="rgba(62,230,196,.22)";x.beginPath();x.arc(q.x,q.y,8+Math.sin(now/140)*2,0,7);x.fill();labels.push(["✦",q.x,q.y-8,"#3ee6c4",12]);}});
    RPG_PART_SPOTS.forEach((q,i)=>{if(me.rpgQuest&&!me.rpgParts.includes(i)&&Math.hypot(q.x-me.x,q.y-me.y)<75){x.fillStyle="rgba(255,210,63,.25)";x.beginPath();x.arc(q.x,q.y,9+Math.sin(now/120)*2,0,7);x.fill();labels.push(["✦",q.x,q.y-8,"#ffd23f",13]);}});
    AMMO_TAG_SPOTS.forEach((q,i)=>{if(me.ammoQuest&&!me.ammoTags.includes(i)&&Math.hypot(q.x-me.x,q.y-me.y)<75){x.fillStyle="rgba(62,230,196,.22)";x.beginPath();x.arc(q.x,q.y,8+Math.sin(now/140)*2,0,7);x.fill();labels.push(["✦",q.x,q.y-8,"#3ee6c4",12]);}});
   wrecks = wrecks.filter(w => now - w.t < 25000); wrecks.forEach(w => { if (inV(w.x, w.y)) drawWreck(w, now); });

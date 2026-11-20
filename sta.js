@@ -581,13 +581,13 @@ export function createStaClient(env) {
       if (heli || (me.wpn && me.ammo[me.wpn] > 0)) {                       // en hélico : mitraillette à munitions INFINIES (uniquement là) ; à pied / en voiture : munitions normales
         const wi = heli ? 2 : me.wpn, W = WPN[wi], dx = Math.cos(me.a), dy = Math.sin(me.a), ox = me.x + dx * (me.vid ? 24 : 11), oy = me.y + dy * (me.vid ? 24 : 11);
         if (!heli) me.ammo[wi]--;
-        me.cd = wi === 4 ? .92 : W.rate; me.fc = (me.fc + 1) % 1000; me.fw = wi; me.flash = .07; me.heat = Math.min(5, me.heat + W.heat);
+        me.cd = wi === 4 ? .92 : W.rate; me.fc = (me.fc + 1) % 1000; me.fw = wi; me.flash = wi === 4 ? .18 : .07; me.heat = Math.min(5, me.heat + W.heat);
         for (let q = 0; q < W.pel; q++) {
            const ang = me.a + rr(-W.spr, W.spr), e = trace(ox, oy, ang, W), ex = ox + Math.cos(ang) * e, ey = oy + Math.sin(ang) * e;
            if (wi === 4) rockets.push({ x0: ox, y0: oy, x1: ex, y1: ey, t: now, dur: Math.max(260, e / 620 * 1000), impact: 0 });
            else tracers.push({ x0: ox, y0: oy, x1: ex, y1: ey, t: now });
          }
-        SND.shot(wi, 1); navigator.vibrate && navigator.vibrate(12);
+        SND.shot(wi, 1); navigator.vibrate && navigator.vibrate(wi === 4 ? 34 : 12);
       } else if (!me.wpn && !me.vid) punch(now);                           // pas d'arme en main : coup de poing 👊
     }
     if (now - killAt > 150) {                                             // on annonce à l'hôte un coup à la fois (piéton abattu / voiture touchée)
@@ -1639,7 +1639,7 @@ function frame(now) {
   cam.z += (tz - cam.z) * Math.min(1, 3 * dt);
   cam.x += (me.x + (me.vid ? Math.cos(me.a) * me.v * .12 : 0) - cam.x) * Math.min(1, 9 * dt); cam.y += (me.y + (me.vid ? Math.sin(me.a) * me.v * .12 : 0) - cam.y) * Math.min(1, 9 * dt);
   const S = cv.width / W, z = cam.z, vw = W / z, vh = H / z, vx0 = cam.x - vw / 2, vy0 = cam.y - vh / 2, vx1 = vx0 + vw, vy1 = vy0 + vh;
-  const boomPower = booms.reduce((v,b)=>{const age=now-b.t,dist=Math.hypot(b.x-me.x,b.y-me.y);return age>=0&&age<420?Math.max(v,(1-age/420)*Math.max(0,1-dist/1000)):v;},0), shake=boomPower*7;
+  const boomPower = booms.reduce((v,b)=>{const age=now-b.t,dist=Math.hypot(b.x-me.x,b.y-me.y),power=b.rpg?1.65:1;return age>=0&&age<(b.rpg?680:420)?Math.max(v,(1-age/(b.rpg?680:420))*Math.max(0,1-dist/(b.rpg?1250:1000))*power):v;},0), shake=boomPower*8;
    const tx = Math.round((W / 2 - cam.x * z) / LR + (shake?Math.sin(now*.12)*shake:0)), ty = Math.round((H / 2 - cam.y * z) / LR + (shake?Math.cos(now*.15)*shake*.7:0)), sxy = (wx, wy) => [wx * z + tx * LR, wy * z + ty * LR];
   const labels = [];
   x = lx; x.setTransform(z / LR, 0, 0, z / LR, tx, ty);                              // le monde est dessiné en basse résolution…
@@ -1711,7 +1711,20 @@ function frame(now) {
   tracers.forEach(t => { const age = now - t.t; x.globalAlpha = 1 - age / 90; x.strokeStyle = "#fff2a8"; x.lineWidth = 1.6; x.beginPath(); x.moveTo(t.x0, t.y0); x.lineTo(t.x1, t.y1); x.stroke(); if (age < 45) { x.fillStyle = "#ffd23f"; x.beginPath(); x.arc(t.x0, t.y0, 4.5, 0, 7); x.fill(); } });
   x.globalAlpha = 1;
   sparks = sparks.filter(q => now - q.t < 160); sparks.forEach(q => { const age = (now - q.t) / 160; x.fillStyle = age < .5 ? "#fff6c2" : "#ff9d1e"; for (let k = 0; k < 4; k++) x.fillRect(q.x + Math.cos(k * 1.7 + q.x) * age * 7 - 1, q.y + Math.sin(k * 1.7 + q.x) * age * 7 - 1, 2, 2); });
-  booms = booms.filter(q => now - q.t < 650); booms.forEach(q => { const a2 = (now - q.t) / 650, r = 8 + a2 * 60; x.globalAlpha = 1 - a2; x.fillStyle = "#ff9d1e"; x.beginPath(); x.arc(q.x, q.y, r, 0, 7); x.fill(); x.fillStyle = "#ffe066"; x.beginPath(); x.arc(q.x, q.y, r * .65, 0, 7); x.fill(); x.fillStyle = "#fff"; x.beginPath(); x.arc(q.x, q.y, r * .3, 0, 7); x.fill(); }); x.globalAlpha = 1;
+  booms = booms.filter(q => now - q.t < (q.rpg ? 1050 : 650)); booms.forEach(q => {
+     const age = now - q.t, life = q.rpg ? 1050 : 650, a2 = clamp(age / life, 0, 1), r = 8 + a2 * (q.rpg ? 118 : 60);
+     x.save(); x.globalAlpha = (1-a2) * (q.rpg ? .9 : 1);
+     if (q.rpg) {
+       x.strokeStyle = "#fff0a6"; x.lineWidth = 5*(1-a2)+1; x.beginPath(); x.arc(q.x,q.y,r*.82,0,7); x.stroke();
+       x.strokeStyle = "#ff7626"; x.lineWidth = 3*(1-a2)+.5; x.beginPath(); x.arc(q.x,q.y,r,0,7); x.stroke();
+       x.fillStyle = "#3c3330"; for(let k=0;k<7;k++){const ang=k*2.399, rr2=r*.48+a2*18, rad=5+(k%3)*2; x.globalAlpha=(1-a2)*.38; x.beginPath(); x.arc(q.x+Math.cos(ang)*rr2,q.y+Math.sin(ang)*rr2,rad*(.7+a2),0,7); x.fill();}
+       x.globalAlpha=(1-a2)*.9;
+     }
+     x.fillStyle = "#ff9d1e"; x.beginPath(); x.arc(q.x,q.y,r*(q.rpg?.72:1),0,7); x.fill();
+     x.fillStyle = "#ffe066"; x.beginPath(); x.arc(q.x,q.y,r*.65,0,7); x.fill();
+     x.fillStyle = "#fff"; x.beginPath(); x.arc(q.x,q.y,r*.3,0,7); x.fill();
+     x.restore();
+   }); x.globalAlpha = 1;
   if (job) { const f = (Math.sin(now / 250) + 1) / 2; x.strokeStyle = "#ffd23f"; x.lineWidth = 4; x.beginPath(); x.arc(job.x, job.y, 50 + f * 8, 0, 7); x.stroke(); x.fillStyle = "rgba(255,210,63,.25)"; x.fill(); labels.push(["📦", job.x, job.y + 8, "#fff", 26]); }
   if (mis && mis.k === "car" && mis.st === 1) { const f = (Math.sin(now / 250) + 1) / 2; x.strokeStyle = "#5ee1ff"; x.lineWidth = 4; x.beginPath(); x.arc(mis.x, mis.y, 50 + f * 8, 0, 7); x.stroke(); x.fillStyle = "rgba(94,225,255,.25)"; x.fill(); labels.push(["🏁", mis.x, mis.y + 8, "#fff", 26]); }
   if (mis && mis.k === "heli" && mis.st === 0) for (const q of mis.cr) if (!q.got && inV(q.x, q.y)) drawPart(q, now, labels);

@@ -10,6 +10,7 @@
 
 const W = 800, H = 560, CELL = 360, ROAD = 100, N = 9, WORLD = N * CELL, BL = CELL - ROAD, SW = 18;
 const POLICE = [6, 2], HOSP = [2, 6], GARAGE = [2, 2], GPRICE = 3500, ARMS = [6, 6];
+const HELI = 4000002, HELI_V = 300, HEL_HP = 200;   // hélicoptère du joueur (id spécial) · vitesse max · PV des hélicos de police
 const GHOST = 4000001, GHOST_V = 560;   // voiture fantôme (owners ayant le garage) : id spécial, vitesse max (la normale est de 230)
 const SPAWN = { police: [6 * CELL + 180, 3 * CELL], hosp: [2 * CELL + 180, 7 * CELL] };
 const CCOL = ["#e63946", "#f4a261", "#2a9d8f", "#457b9d", "#e9c46a", "#9b5de5", "#8d99ae", "#f1f1f1"];
@@ -30,6 +31,9 @@ const ZONES = {
 const gcell = (i, j) => { while (isPark(i, j) || isSpecial(i, j)) i = (i + 1) % N; return [i, j]; };
 const GIVERS = [["any", "LE BOSS", "MISSIONS", [0, 4], "#2b2b3a", 3]]   // un seul donneur, au bord ouest de la carte : il distribue TOUTES les missions, au hasard
   .map(([k, n, l, c, sh, sk]) => { const [i, j] = gcell(c[0], c[1]); return { k, n, l, x: lo(i) + SW / 2, y: lo(j) + BL / 2, a: Math.PI, sh, sk }; });
+// le PILOTE : donneur de la quête de l'hélico. Caché : jamais sur la minicarte, étiquette visible seulement de près
+const PILOT = (() => { const [i, j] = gcell(8, 7); return { n: "LE PILOTE", x: lo(i) + SW / 2, y: lo(j) + BL / 2, a: Math.PI }; })();
+const RP = { x: lo(GARAGE[0]) + BL / 2, y: lo(GARAGE[1]) + BL / 2 + 10 };   // héliport sur le toit du garage
 const CNAME = ["rouge", "orange", "turquoise", "bleue", "jaune", "violette", "grise", "blanche"];   // même ordre que CCOL
 const SHOP_ARMS = [{ n: 1, p: 120 }, { n: 2, p: 400 }, { n: 3, p: 360 }];
 const angLerp = (a, b, k) => { let d = (b - a) % 6.283185; if (d > 3.141593) d -= 6.283185; if (d < -3.141593) d += 6.283185; return a + d * k; };
@@ -68,7 +72,7 @@ function push(p, r) {
   const o = ROAD / 2 - r; const nx = clamp(p.x, -o, WORLD + o), ny = clamp(p.y, -o, WORLD + o); if (nx !== p.x || ny !== p.y) { p.x = nx; p.y = ny; hit = true; }
   return hit;
 }
-const parseP = s => { const a = String(s).split(","); return { x: +a[0] || 0, y: +a[1] || 0, a: +a[2] || 0, vid: +a[3] || 0, wl: +a[4] || 0, cash: +a[5] || 0, hp: +a[6] || 0, v: +a[7] || 0, hs: +a[8] || 0, hid: +a[9] || 0, dm: +a[10] || 0, wpn: +a[11] || 0, fc: +a[12] || 0, fw: +a[13] || 0, cs: +a[14] || 0, cid: +a[15] || 0, ca: +a[16] || 0, gn: +a[17] || 0, go: +a[18] || 0, gi: +a[19] || 0, gm: +a[20] || 0, hn: +a[21] || 0, pgx: +a[22] || 0, pgy: +a[23] || 0, pga: +a[24] || 0, ib: +a[25] || 0 }; };
+const parseP = s => { const a = String(s).split(","); return { x: +a[0] || 0, y: +a[1] || 0, a: +a[2] || 0, vid: +a[3] || 0, wl: +a[4] || 0, cash: +a[5] || 0, hp: +a[6] || 0, v: +a[7] || 0, hs: +a[8] || 0, hid: +a[9] || 0, dm: +a[10] || 0, wpn: +a[11] || 0, fc: +a[12] || 0, fw: +a[13] || 0, cs: +a[14] || 0, cid: +a[15] || 0, ca: +a[16] || 0, gn: +a[17] || 0, go: +a[18] || 0, gi: +a[19] || 0, gm: +a[20] || 0, hn: +a[21] || 0, pgx: +a[22] || 0, pgy: +a[23] || 0, pga: +a[24] || 0, ib: +a[25] || 0, hz: +a[26] || 0 }; };
 
 export function createStaClient(env) {
   const { R: RF, set, get, remove, onValue, $, beep, getMe, getCode, getLobby, toast } = env;
@@ -83,11 +87,11 @@ export function createStaClient(env) {
   let active = false, raf = 0, timer = 0, tPrev = 0, c = "", myUid = "", unS = null, unP = null;
   // --- état partagé reçu ---
   let ls = null, lastT = 0, lastH = "", lastEv = 0, pd = {};
-  const dPeds = new Map(), dCars = new Map(), dP = new Map(), dCops = new Map();
+  const dPeds = new Map(), dCars = new Map(), dP = new Map(), dCops = new Map(), dHelis = new Map();
   // --- simulation de l'hôte ---
-  let cops = [], hostOn = false, peds = [], cars = [], nid = 1, evs = [], evId = 0, lastHs = {}, spawnCd = 0, streamCd = 0, pubAt = 0, hostT = 0, cleanCd = 0, lastGn = {};
+  let cops = [], helis = [], heliCd = 0, hostOn = false, peds = [], cars = [], nid = 1, evs = [], evId = 0, lastHs = {}, spawnCd = 0, streamCd = 0, pubAt = 0, hostT = 0, cleanCd = 0, lastGn = {};
   // --- moi ---
-  const me = { x: 0, y: 0, a: 0, v: 0, vid: 0, hp: 100, cash: 0, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, msg: "", hurt: 0, bust: 0, carT: 99, wpn: 0, ammo: [0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, gcar: null, gn: 0, go: 0, gi: 0, gm: 0 };
+  const me = { x: 0, y: 0, a: 0, v: 0, vid: 0, hp: 100, cash: 0, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, msg: "", hurt: 0, bust: 0, carT: 99, wpn: 0, ammo: [0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, gcar: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0 };
   let keys = new Set(), stick = null, useReq = 0, job = null, myCol = 0, cam = { x: 0, y: 0, z: 1.2 }, sentAt = 0, sentStr = "", savedCash = -1, saveAt = 0, tNow = 0, hitDone = new Set(), gLoaded = false, savedG = "";
   let inn = null, mis = null, tgt = null, lastMk = "", shop = "", mmBase = null;   // mission en cours, cible à éliminer, boutique ouverte
   let ejected = [], splats = [], floats = [], brakeId = null, fireKey = false, fireId = null, killQ = [], carQ = [], killAt = 0, tracers = [], sparks = [], booms = [], wrecks = [], pickT = new Map(), lastFc = {}, lastCs = {};
@@ -143,12 +147,13 @@ export function createStaClient(env) {
   const nearPt = (a, b) => { const ps = activeP(); if (!ps.length) return null; const p = rnd(ps)[1], an = rr(0, 6.283), d = rr(a, b); return [clamp(p.x + Math.cos(an) * d, 0, WORLD), clamp(p.y + Math.sin(an) * d, 0, WORLD)]; };
 
   function becomeHost() {
-    hostOn = true; peds = []; cars = []; cops = []; nid = 1; evs = []; evId = lastEv; lastHs = {}; lastCs = {}; lastGn = {}; streamCd = 0; spawnCd = 0; hostT = performance.now();
+    hostOn = true; peds = []; cars = []; cops = []; helis = []; heliCd = 0; nid = 1; evs = []; evId = lastEv; lastHs = {}; lastCs = {}; lastGn = {}; streamCd = 0; spawnCd = 0; hostT = performance.now();
     if (ls && ls.pd) {
       ls.pd.forEach(a => peds.push({ id: a[0], x: a[1], y: a[2], h: a[3], sk: a[4], st: 0, tm: 1 }));
       ls.cr.forEach(a => { const ang = a[3]; let dx = Math.round(Math.cos(ang)), dy = Math.round(Math.sin(ang)); if (dx && dy) dy = 0; if (!dx && !dy) dx = 1; cars.push({ id: a[0], x: a[1], y: a[2], a: ang, v: a[4], c: a[5], m: a[6] === "t" ? "p" : a[6], dm: a[8] | 0, cp: a[9] | 0, cn: 2, o: "", tm: 30, dx, dy, sp: rr(110, 170), tg: "" }); });
       (ls.co || []).forEach(a => cops.push({ id: a[0], x: a[1], y: a[2], a: a[3], hp: a[4], car: a[5], cd: 1, tm: 0, bt: 0, bh: 0, idle: 0 }));
-      nid = Math.max(0, ...peds.map(q => q.id), ...cars.map(q => q.id), ...cops.map(q => q.id)) + 1;
+      (ls.he || []).forEach(a => helis.push({ id: a[0], x: a[1], y: a[2], a: a[3], hp: a[4], tg: "", cd: 1.5, ph: rr(0, 6.28), dr: Math.random() < .5 ? 1 : -1, vx: 0, vy: 0, burst: 0, lv: 0, hit: 0 }));
+      nid = Math.max(0, ...peds.map(q => q.id), ...cars.map(q => q.id), ...cops.map(q => q.id), ...helis.map(q => q.id)) + 1;
     }
   }
   function hostTick(dt) {
@@ -167,7 +172,7 @@ export function createStaClient(env) {
       if (lastCs[u] === undefined) { lastCs[u] = p.cs; return; }
       if (p.cs === lastCs[u]) return; lastCs[u] = p.cs;
       const cr = cars.find(q => q.id === p.cid);
-      if (!cr) { const cq = cops.find(q => q.id === p.cid); if (cq) { cq.hp -= p.ca; if (cq.hp <= 0) copDown(cq); } return; }
+      if (!cr) { const cq = cops.find(q => q.id === p.cid); if (cq) { cq.hp -= p.ca; if (cq.hp <= 0) copDown(cq); } else { const he = helis.find(q => q.id === p.cid); if (he) { he.hp -= p.ca; he.hit = .15; if (he.hp <= 0) heliDown(he); } } return; }
       if (cr.rm || (cr.m !== "d" && cr.m !== "c" && cr.m !== "p" && cr.m !== "s")) return;
       cr.hp = (cr.hp === undefined ? (cr.m === "c" || cr.m === "s" ? 100 : 60) : cr.hp) - p.ca;
       if (cr.hp <= 0) {
@@ -216,6 +221,7 @@ export function createStaClient(env) {
       if (los && b < 290 && q.cd <= 0) { const sa = ang + rr(-1, 1) * (.05 + b / 2500); evs.push([++evId, Math.round(q.x), Math.round(q.y), 3, +sa.toFixed(2), q.id]); q.cd = rr(.8, 1.4); }
     });
     cops = cops.filter(q => q.idle < 25 && !far(q.x, q.y, 1500));
+    heliSim(dt, wanted);
     peds.forEach(q => {
       q.tm -= dt; let sp = 38, dg = null;
       for (const cr of cars) if ((cr.m === "d" || cr.m === "c" || cr.m === "t") && cr.v > 40 && Math.hypot(cr.x - q.x, cr.y - q.y) < 80) { dg = cr; break; }
@@ -239,6 +245,43 @@ export function createStaClient(env) {
     const now = performance.now();
     if (now - pubAt > 130) { pubAt = now; publish(); }
   }
+
+  // --- hélicoptères de police (hôte) : à 5★ ils arrivent du ciel, tournent autour de toi, te mitraillent et t'éclairent.
+  //     Ils volent au-dessus des bâtiments. À 3★ ou moins ils repartent. On les abat avec les armes (PV : HEL_HP).
+  function heliDown(h) {
+    helis = helis.filter(o => o !== h); evs.push([++evId, Math.round(h.x), Math.round(h.y), 6, +h.a.toFixed(2), h.id]);
+    cops.slice().forEach(q => { if (Math.hypot(q.x - h.x, q.y - h.y) < 70) { q.hp -= 60; if (q.hp <= 0) copDown(q); } });
+  }
+  function heliSim(dt, wanted) {
+    const tg = wanted.filter(([, p]) => p.wl >= 4 && !p.ib), t5 = wanted.filter(([, p]) => p.wl >= 5 && !p.ib);
+    heliCd -= dt;
+    if (t5.length && helis.filter(h => !h.lv).length < Math.min(3, t5.length) && heliCd <= 0) {
+      const t = rnd(t5)[1], an = rr(0, 6.283), d = rr(750, 950);
+      helis.push({ id: nid++, x: clamp(t.x + Math.cos(an) * d, -40, WORLD + 40), y: clamp(t.y + Math.sin(an) * d, -40, WORLD + 40), a: an + Math.PI, hp: HEL_HP, tg: "", cd: 1.5, ph: an, dr: Math.random() < .5 ? 1 : -1, vx: 0, vy: 0, burst: 0, lv: 0, hit: 0 });
+      heliCd = 5;
+    }
+    helis.forEach(h => {
+      h.hit -= dt; let b = 1e18, t = null;
+      tg.forEach(([, p]) => { const d = Math.hypot(p.x - h.x, p.y - h.y); if (d < b) { b = d; t = p; } });
+      const e = Math.min(1, 1.8 * dt);
+      if (!t) {                                                          // plus de suspect : l'hélico s'éloigne
+        h.lv += dt; const ax = h.x - WORLD / 2, ay = h.y - WORLD / 2, m = Math.hypot(ax, ay) || 1;
+        h.vx += (ax / m * 230 - h.vx) * e; h.vy += (ay / m * 230 - h.vy) * e; h.x += h.vx * dt; h.y += h.vy * dt;
+        h.a = angLerp(h.a, Math.atan2(h.vy, h.vx), Math.min(1, 3 * dt)); return;
+      }
+      h.lv = 0; h.ph += h.dr * .5 * dt;                                  // il décrit un cercle autour de la cible, le nez pointé dessus
+      const gx = t.x + Math.cos(h.ph) * 125, gy = t.y + Math.sin(h.ph) * 125, dx = gx - h.x, dy = gy - h.y, dd = Math.hypot(dx, dy), sp = clamp(dd * 1.4, 0, 270);
+      h.vx += ((dd > 1 ? dx / dd * sp : 0) - h.vx) * e; h.vy += ((dd > 1 ? dy / dd * sp : 0) - h.vy) * e;
+      h.x += h.vx * dt; h.y += h.vy * dt;
+      h.a = angLerp(h.a, Math.atan2(t.y - h.y, t.x - h.x), Math.min(1, 3.2 * dt));
+      h.cd -= dt;
+      if (b < 340 && h.cd <= 0) {                                        // rafales de 6 coups, puis pause
+        const sa = h.a + rr(-1, 1) * (.06 + b / 1800); evs.push([++evId, Math.round(h.x), Math.round(h.y), 5, +sa.toFixed(2), h.id]);
+        if (++h.burst >= 6) { h.burst = 0; h.cd = rr(1.4, 2.4); } else h.cd = .16;
+      }
+    });
+    helis = helis.filter(h => !(h.lv > 0 && (h.lv > 20 || far(h.x, h.y, 1200))));
+  }
   function copDown(q) {                                                   // policier abattu : sang ; si les deux sont morts, la voiture est libre
     cops = cops.filter(o => o !== q); evs.push([++evId, Math.round(q.x), Math.round(q.y), 1, q.id]);
     const cr = cars.find(c2 => c2.id === q.car);
@@ -246,7 +289,7 @@ export function createStaClient(env) {
   }
   function publish() {
     const r = Math.round, f2 = v => +v.toFixed(2);
-    const s = { k: "sta", t: Date.now(), h: myUid, pd: peds.map(q => [q.id, r(q.x), r(q.y), f2(q.h), q.sk, q.st]), cr: cars.filter(q => !q.rm).map(q => [q.id, r(q.x), r(q.y), f2(q.a), r(q.v), q.c, q.m, q.o, q.dm | 0, q.cp | 0]), co: cops.map(q => [q.id, r(q.x), r(q.y), f2(q.a), q.hp, q.car]), ev: evs };
+    const s = { k: "sta", t: Date.now(), h: myUid, pd: peds.map(q => [q.id, r(q.x), r(q.y), f2(q.h), q.sk, q.st]), cr: cars.filter(q => !q.rm).map(q => [q.id, r(q.x), r(q.y), f2(q.a), r(q.v), q.c, q.m, q.o, q.dm | 0, q.cp | 0]), co: cops.map(q => [q.id, r(q.x), r(q.y), f2(q.a), q.hp, q.car]), he: helis.map(q => [q.id, r(q.x), r(q.y), f2(q.a), r(q.hp), q.hit > 0 ? 1 : 0]), ev: evs };
     set(RF(`games/${c}/state`), JSON.stringify(s)).catch(() => { });
   }
   function simLoop() {
@@ -271,6 +314,9 @@ export function createStaClient(env) {
     const so = new Set();
     (s.co || []).forEach(a => { so.add(a[0]); let d = dCops.get(a[0]); if (!d) dCops.set(a[0], d = { x: a[1], y: a[2], a: a[3] }); d.tx = a[1]; d.ty = a[2]; d.ta = a[3]; d.hp = a[4]; });
     for (const k of dCops.keys()) if (!so.has(k)) dCops.delete(k);
+    const sh = new Set();
+    (s.he || []).forEach(a => { sh.add(a[0]); let d = dHelis.get(a[0]); if (!d) dHelis.set(a[0], d = { x: a[1], y: a[2], a: a[3] }); d.tx = a[1]; d.ty = a[2]; d.ta = a[3]; d.hp = a[4]; if (a[5]) d.fl = tNow; });
+    for (const k of dHelis.keys()) if (!sh.has(k)) dHelis.delete(k);
     (s.ev || []).forEach(e => {
       if (e[0] <= lastEv) return; lastEv = e[0]; if (firstSnap) return;                // à l'arrivée on ignore l'historique des événements
       if (e[3] === 4) { ejectDriver(e[1], e[2], e[4] || 0, e[5] || 0); return; }   // conducteur éjecté d'une voiture volée
@@ -278,7 +324,20 @@ export function createStaClient(env) {
         const ang = e[4], dx = Math.cos(ang), dy = Math.sin(ang), ox = e[1] + dx * 10, oy = e[2] + dy * 10, en = wallEnd(ox, oy, ang, 330), cd = dCops.get(e[5]);
         tracers.push({ x0: ox, y0: oy, x1: ox + dx * en, y1: oy + dy * en, t: tNow }); if (cd) cd.flash = tNow;
         if (Math.hypot(e[1] - me.x, e[2] - me.y) < 450) SND.shot(1, dv(e[1], e[2], 450));
-        if (me.dead <= 0) { const rx = me.x - ox, ry = me.y - oy, f = rx * dx + ry * dy; if (f > 0 && f < en && Math.abs(-rx * dy + ry * dx) < (me.vid ? 15 : 8)) { me.hp -= 9 * (me.vid ? .6 : 1); beep(150, .06, "square", .05, 50); navigator.vibrate && navigator.vibrate(40); if (me.vid && Math.random() < .35) dent(ang + Math.PI, 1); } }
+        if (me.dead <= 0 && me.vid !== HELI) { const rx = me.x - ox, ry = me.y - oy, f = rx * dx + ry * dy; if (f > 0 && f < en && Math.abs(-rx * dy + ry * dx) < (me.vid ? 15 : 8)) { me.hp -= 9 * (me.vid ? .6 : 1); beep(150, .06, "square", .05, 50); navigator.vibrate && navigator.vibrate(40); if (me.vid && Math.random() < .35) dent(ang + Math.PI, 1); } }
+        return;
+      }
+      if (e[3] === 5) {                                                   // hélico de police : mitrailleuse, tir du ciel (aucun mur ne l'arrête)
+        const ang = e[4], dx = Math.cos(ang), dy = Math.sin(ang), ox = e[1] + dx * 24, oy = e[2] + dy * 24, en = 400, hd = dHelis.get(e[5]);
+        tracers.push({ x0: ox, y0: oy, x1: ox + dx * en, y1: oy + dy * en, t: tNow }); if (hd) hd.fl = tNow;
+        if (Math.hypot(e[1] - me.x, e[2] - me.y) < 600) SND.shot(2, dv(e[1], e[2], 600));
+        if (me.dead <= 0 && !inn) { const rx = me.x - ox, ry = me.y - oy, f = rx * dx + ry * dy; if (f > 0 && f < en && Math.abs(-rx * dy + ry * dx) < (me.vid ? 16 : 8)) { me.hp -= 7 * (me.vid ? .7 : 1); beep(150, .06, "square", .05, 50); navigator.vibrate && navigator.vibrate(40); if (me.vid && me.vid !== HELI && Math.random() < .35) dent(ang + Math.PI, 1); } }
+        return;
+      }
+      if (e[3] === 6) {                                                   // hélico abattu : explosion + épave qui brûle
+        booms.push({ x: e[1], y: e[2], t: tNow }); booms.push({ x: e[1] + 14, y: e[2] - 10, t: tNow + 120 }); wrecks.push({ x: e[1], y: e[2], a: e[4] || 0, t: tNow, id: e[5] || 0, he: 1 }); if (wrecks.length > 8) wrecks.shift();
+        SND.boom(dv(e[1], e[2], 900)); if (Math.hypot(e[1] - me.x, e[2] - me.y) < 80 && me.dead <= 0) me.hp -= 30;
+        if (e[5] && e[5] === me.lastCar && tNow - me.lastCarT < 2500) { me.cash += 600; me.heat = Math.min(5, me.heat + .5); floats.push({ x: e[1], y: e[2] - 24, t: tNow, s: "🚁 HÉLICO ABATTU +$600", c: "#ffd23f" }); }
         return;
       }
       if (e[3] === 2) {                                                   // voiture détruite : explosion + épave
@@ -310,9 +369,9 @@ export function createStaClient(env) {
 
   // ================= MOI =================
   const col = i => CCOL[(i | 0) % 8];
-  function spawnAt(p) { me.x = p[0] + rr(-30, 30); me.y = p[1]; me.vid = 0; me.v = 0; me.hp = 100; me.dead = 0; me.heat = 0; me.bust = 0; job = null; cam.x = me.x; cam.y = me.y; }
-  function die(why, loss, where) { shop = ""; if (mis) missionFail("tu es tombé"); me.dead = 2.2; me.msg = why; me.wpn = 0; me.ammo = [0, 0, 0, 0]; me.vid = 0; me.v = 0; me.heat = 0; me.cash = Math.floor(me.cash * (1 - loss)); me.where = where; SND.wasted(); }
-  const gStr = () => JSON.stringify({ g: me.g, c: me.gcar, a: me.ammo.slice(1), w: me.wpn });
+  function spawnAt(p) { me.hz = 0; me.land = 0; me.x = p[0] + rr(-30, 30); me.y = p[1]; me.vid = 0; me.v = 0; me.hp = 100; me.dead = 0; me.heat = 0; me.bust = 0; job = null; cam.x = me.x; cam.y = me.y; }
+  function die(why, loss, where) { me.hz = 0; me.land = 0; shop = ""; if (mis) missionFail("tu es tombé"); me.dead = 2.2; me.msg = why; me.wpn = 0; me.ammo = [0, 0, 0, 0]; me.vid = 0; me.v = 0; me.heat = 0; me.cash = Math.floor(me.cash * (1 - loss)); me.where = where; SND.wasted(); }
+  const gStr = () => JSON.stringify({ g: me.g, c: me.gcar, a: me.ammo.slice(1), w: me.wpn, h: me.hu ? 1 : 0 });
   function persist(force) {                                               // argent (users/<uid>/sta) + garage, voiture rangée, armes et munitions (users/<uid>/sta2)
     const cash = Math.round(me.cash);
     if (force || cash !== savedCash) { savedCash = cash; set(RF(`users/${myUid}/sta`), cash).catch(() => { }); }
@@ -322,7 +381,7 @@ export function createStaClient(env) {
   const inGarage = () => me.dead <= 0 && Math.hypot(me.x - GZ.x, me.y - GZ.y) < 62;
   const isOwner = () => { try { const o = env.isOwner; if (o !== undefined) return !!(typeof o === "function" ? o() : o); const m = getMe() || {}; return !!(m.owner || m.isOwner || m.role === "owner"); } catch { return false; } };
   function gAct() {                                                       // action de garage possible ici : "" | "buy" | "store" | "take" | "ghost" | "ghostPut"
-    if (!inGarage()) return "";
+    if (me.vid === HELI || !inGarage()) return "";
     if (!me.g) return "buy";
     if (me.vid) return me.vid === GHOST ? "ghostPut" : me.gcar ? "" : "store";
     if (me.gcar) return "take";
@@ -331,6 +390,53 @@ export function createStaClient(env) {
   function ghostTake() {                                                  // voiture fantôme : rapide, aucun dégât ; n'existe pas dans le monde (pas de go/gi), seulement chez son conducteur
     me.pg = null; me.vid = GHOST; me.v = 0; myCol = 7; me.dm = 0; me.cop = 0; me.carT = 0; me.hp = 100; job = null;
     floats.push({ x: me.x, y: me.y - 22, t: tNow, s: "👻 VOITURE FANTÔME", c: "#9ad8ff" }); beep(880, .14, "triangle", .06);
+  }
+
+  // ================= HÉLICOPTÈRE DU JOUEUR =================
+  // Débloqué par la quête du PILOTE (me.hu, sauvegardé dans users/<uid>/sta2). Il se range sur le toit du garage :
+  // on le sort par l'échelle du garage (comme la voiture), on ne peut le poser que sur l'héliport (zone 🅷), jamais dans la rue.
+  function heliTake() {
+    if (!me.hu || !me.g) return;
+    me.pg = null; me.vid = HELI; me.x = RP.x; me.y = RP.y; me.a = -Math.PI / 2; me.v = 0; me.hvx = 0; me.hvy = 0; me.hz = 0; me.land = 0; myCol = 7; me.dm = 0; me.cop = 0; me.carT = 0; job = null;
+    cam.x = me.x; cam.y = me.y;
+    floats.push({ x: me.x, y: me.y - 30, t: tNow, s: "🚁 DÉCOLLAGE !", c: "#ffd23f" }); beep(660, .12, "triangle", .06);
+  }
+  function heliLand() {
+    if (me.hz < .95 || me.land) return;
+    if (Math.hypot(me.x - RP.x, me.y - RP.y) > 62) { toast("Pose l'hélico sur l'héliport 🅷 du toit de ton garage"); return; }
+    if (Math.abs(me.v) > 120) { toast("Ralentis pour te poser !"); return; }
+    me.land = 1;
+  }
+  function heliStow() {
+    me.vid = 0; me.v = 0; me.hvx = 0; me.hvy = 0; me.hz = 0; me.land = 0; me.x = GZ.x; me.y = GZ.y; me.a = Math.PI / 2;
+    floats.push({ x: me.x, y: me.y - 22, t: tNow, s: "🚁 HÉLICO RANGÉ SUR LE TOIT", c: "#7ae582" }); beep(520, .1, "triangle", .06);
+  }
+  function heliFly(dt, ix, iy) {                                          // vol « arcade » : ↑ avance, ↓ freine / recule, ←→ pivote sur place ; l'hélico glisse un peu
+    if (me.land) {                                                        // atterrissage automatique sur l'héliport
+      me.hz -= dt / 1.3; const k = Math.max(0, 1 - 3 * dt); me.hvx *= k; me.hvy *= k;
+      me.x += (RP.x - me.x) * Math.min(1, 3 * dt) + me.hvx * dt; me.y += (RP.y - me.y) * Math.min(1, 3 * dt) + me.hvy * dt; me.v = Math.hypot(me.hvx, me.hvy); me.thr = 0;
+      if (me.hz <= 0) heliStow(); return;
+    }
+    if (me.hz < 1) me.hz = Math.min(1, me.hz + dt / 1.1);
+    let th = -iy, sr = ix;
+    if (stick) {
+      const m = Math.hypot(ix, iy);
+      if (brakeId !== null) { th = -1; sr = ix; }
+      else if (m > .05) { let d = Math.atan2(iy, ix) - me.a; d = Math.atan2(Math.sin(d), Math.cos(d)); sr = clamp(d * 2.5, -1, 1); th = Math.abs(d) < 1.3 ? Math.max(.6, m) : .15; }
+      else { th = 0; sr = 0; }
+    } else if (brakeId !== null) th = -1;
+    const ctl = me.hz > .55 ? 1 : 0;
+    me.a += sr * 2.6 * ctl * dt;
+    const fx = Math.cos(me.a), fy = Math.sin(me.a);
+    me.thr = th > 0 ? Math.min(1, th) : 0; me.sk = 0;
+    if (th > 0) { me.hvx += fx * 320 * th * ctl * dt; me.hvy += fy * 320 * th * ctl * dt; }
+    else if (th < 0) { const k = Math.max(0, 1 - 2.6 * -th * dt); me.hvx *= k; me.hvy *= k; me.hvx -= fx * 120 * -th * ctl * dt; me.hvy -= fy * 120 * -th * ctl * dt; }
+    else { const k = Math.max(0, 1 - .55 * dt); me.hvx *= k; me.hvy *= k; }
+    { const vf = me.hvx * fx + me.hvy * fy, lx = me.hvx - fx * vf, ly = me.hvy - fy * vf, k = Math.max(0, 1 - 1.6 * dt); me.hvx = fx * vf + lx * k; me.hvy = fy * vf + ly * k; }   // glissade latérale amortie
+    const sp = Math.hypot(me.hvx, me.hvy); if (sp > HELI_V) { me.hvx *= HELI_V / sp; me.hvy *= HELI_V / sp; }
+    me.x += me.hvx * dt; me.y += me.hvy * dt;
+    const o = ROAD / 2 - 13; me.x = clamp(me.x, -o, WORLD + o); me.y = clamp(me.y, -o, WORLD + o);   // il survole les bâtiments, seules les limites de la carte l'arrêtent
+    me.v = Math.hypot(me.hvx, me.hvy);
   }
   function garageDo(fromInn) {
     if (!fromInn && !me.vid && me.g && inGarage()) { enterInn("garage"); return true; }   // à pied devant ton garage : on entre
@@ -385,6 +491,7 @@ export function createStaClient(env) {
     if (me.dead > 0) return;
     if (shop) { shop = ""; return; }
     if (inn) { innUse(); return; }
+    if (me.vid === HELI) { heliLand(); return; }
     if (!me.vid) {
       const z = shopAt(); if (z) { if (z === "heal") healDo(); else enterInn(z); return; }
       if (talkDo()) return;
@@ -407,7 +514,7 @@ export function createStaClient(env) {
     newJob();
   }
   function dent(wa, sev) {                                                // la tôle se déforme du côté de l'impact (wa = angle monde vers le point d'impact)
-    if (!me.vid || me.vid === GHOST || me.dmCd > 0) return; me.dmCd = .35;
+    if (!me.vid || me.vid === GHOST || me.vid === HELI || me.dmCd > 0) return; me.dmCd = .35;
     const rel = Math.atan2(Math.sin(wa - me.a), Math.cos(wa - me.a)), z = Math.abs(rel) < .785 ? 0 : Math.abs(rel) > 2.356 ? 2 : rel > 0 ? 1 : 3;
     for (let k = 0; k < sev; k++) if (((me.dm >> (z * 2)) & 3) < 3) me.dm += 1 << (z * 2);
     SND.crash(sev); navigator.vibrate && navigator.vibrate(30);
@@ -416,10 +523,11 @@ export function createStaClient(env) {
   function selWpn(n) { if (me.ammo[n] > 0) me.wpn = n; }
   function cycleWpn() { for (let k = 1; k <= 3; k++) { const n = (me.wpn - 1 + k + 3) % 3 + 1; if (me.ammo[n] > 0) { me.wpn = n; return; } } me.wpn = 0; }
   function trace(ox, oy, ang, W) {                                        // un tir « hitscan » : s'arrête au mur, au piéton ou à la voiture touchée
-    const dx = Math.cos(ang), dy = Math.sin(ang); let bf = wallEnd(ox, oy, ang, W.rng), best = null;
+    const dx = Math.cos(ang), dy = Math.sin(ang); let bf = me.vid === HELI ? W.rng : wallEnd(ox, oy, ang, W.rng), best = null;
     for (const [id, d] of dPeds) { if (hitDone.has(id)) continue; const rx = d.x - ox, ry = d.y - oy, f = rx * dx + ry * dy; if (f > 0 && f < bf && Math.abs(-rx * dy + ry * dx) < 8) { bf = f; best = ["p", id, d]; } }
     for (const [id, d] of dCars) { if (d.m === "t" || id === me.vid) continue; const rx = d.x - ox, ry = d.y - oy, f = rx * dx + ry * dy; if (f > 0 && f - 14 < bf && Math.abs(-rx * dy + ry * dx) < 17) { bf = Math.max(6, f - 14); best = ["c", id, d]; } }
     for (const [id, d] of dCops) { if (hitDone.has(id)) continue; const rx = d.x - ox, ry = d.y - oy, f = rx * dx + ry * dy; if (f > 0 && f < bf && Math.abs(-rx * dy + ry * dx) < 8) { bf = f; best = ["k", id, d]; } }
+    for (const [id, d] of dHelis) { const rx = d.x - ox, ry = d.y - oy, f = rx * dx + ry * dy; if (f > 0 && f < W.rng && Math.abs(-rx * dy + ry * dx) < 20 && (!best || f < bf)) { bf = f; best = ["h", id, d]; } }   // les hélicos volent : aucun mur ne les protège
     if (tgt && tgt.hp > 0) { const rx = tgt.x - ox, ry = tgt.y - oy, f = rx * dx + ry * dy; if (f > 0 && f < bf && Math.abs(-rx * dy + ry * dx) < 9) { bf = f; best = ["t", 0, tgt]; } }
     if (mis && mis.k === "truck" && mis.trk.hp > 0) { const q = mis.trk, rx = q.x - ox, ry = q.y - oy, f = rx * dx + ry * dy; if (f > 0 && f - 20 < bf && Math.abs(-rx * dy + ry * dx) < 18) { bf = Math.max(6, f - 20); best = ["u", 0, q]; } }
     if (best) {
@@ -546,6 +654,7 @@ export function createStaClient(env) {
     if (!inn) return null; const R = ROOMS[inn.k], p = inn;
     if (Math.hypot(p.x - R.door.x, p.y - (R.h - 20)) < 46) return { k: "door", h: "E : SORTIR" };
     if (inn.k === "arms") { if (p.y > 134 && p.y < 180 && p.x > 60 && p.x < 340) return { k: "counter", h: "E : ACHETER DES ARMES" }; return null; }
+    if (me.hu && Math.hypot(p.x - 240, p.y - 98) < 36) return { k: "roof", h: "E : MONTER SUR LE TOIT · SORTIR L'HÉLICO 🚁" };
     if (p.y < 130 && p.x < 200) return { k: "bench", h: "E : ATELIER DE RICO (RÉPARER / REPEINDRE)" };
     if (Math.hypot(p.x - 150, p.y - 190) < 64) return me.gcar ? { k: "take", h: "E : SORTIR TA VOITURE" } : { k: "none", h: "EMPLACEMENT LIBRE : RANGE TA VOITURE DEPUIS LA RUE" };
     if (isOwner() && Math.hypot(p.x - 300, p.y - 190) < 64) return { k: "ghost", h: "E : SORTIR LA VOITURE FANTÔME 👻" };
@@ -558,6 +667,7 @@ export function createStaClient(env) {
     else if (sp.k === "bench") { shop = "garage"; beep(660, .06, "triangle", .05); }
     else if (sp.k === "take") { leaveInn(); garageDo(true); }
     else if (sp.k === "ghost") { leaveInn(); ghostTake(); }
+    else if (sp.k === "roof") { leaveInn(); heliTake(); }
   }
   function repairDo() {
     const g = me.gcar; if (!g) { toast("Aucune voiture rangée"); return; }
@@ -625,6 +735,12 @@ export function createStaClient(env) {
     else labels.push(["LIBRE", 150, 194, "#e6c83c", 11]);
     if (own) { x.save(); x.globalAlpha = .6 + .25 * Math.sin(now / 260); drawCar(300, 190, -Math.PI / 2, "#cfeeff", false, now, GHOST, 0); x.restore(); labels.push(["👻 FANTÔME", 300, 250, "#9ad8ff", 10]); }
     else labels.push(["RÉSERVÉ", 300, 194, "#e6c83c", 11]);
+    if (me.hu) {                                                                                  // échelle + trappe vers le toit (héliport)
+      fr(228, 8, 3, 50, "#9aa0ad"); fr(250, 8, 3, 50, "#9aa0ad"); for (let r = 14; r < 56; r += 8) fr(231, r, 19, 2, "#c0c4cf");
+      fr(214, 80, 52, 36, "#2e3139"); for (let k = 0; k < 7; k++) { fr(214 + k * 8, 80, 8, 4, k & 1 ? "#e6c83c" : "#14141a"); fr(214 + k * 8, 112, 8, 4, k & 1 ? "#14141a" : "#e6c83c"); }
+      fr(222, 92, 36, 12, "#1b1d23"); labels.push(["🚁 TOIT", 240, 102, "#ffd23f", 11]);
+      if (sp && sp.k === "roof") labels.push(["💬", 240, 72 + Math.sin(now / 200) * 2, "#fff", 16]);
+    }
     labels.push(["SORTIE", dx, h - 24, "#fff", 10]);
     pool(150, 170, 90, "rgba(255,240,200,.16)"); pool(300, 170, 90, own ? "rgba(150,210,255,.18)" : "rgba(255,240,200,.1)"); pool(90, 90, 80, "rgba(255,230,180,.12)"); pool(dx, h - 10, 70, "rgba(190,225,255,.2)");
   }
@@ -655,7 +771,34 @@ export function createStaClient(env) {
   // ================= MISSIONS =================
   // Chaque mission est personnelle (calculée chez toi, rien n'est écrit sur Firebase) : voiture volée à livrer, police à semer, cible à éliminer.
   const nearGiver = () => (me.vid || me.dead > 0) ? null : GIVERS.find(g => Math.hypot(g.x - me.x, g.y - me.y) < 52) || null;
+
+  // --- quête spéciale du PILOTE (hélicoptère) : 3 caisses de pièces à ramasser en ville, puis retour chez lui.
+  //     Comme les autres missions elle est personnelle (chez toi) ; seule la réussite est sauvegardée (me.hu).
+  const nearPilot = () => (me.vid || me.dead > 0 || inn) ? null : (Math.hypot(PILOT.x - me.x, PILOT.y - me.y) < 52 ? PILOT : null);
+  function partSpots() {
+    const out = [];
+    for (let t = 0; t < 80 && out.length < 3; t++) {
+      const jx = (1 + Math.floor(Math.random() * (N - 1))) * CELL, jy = (1 + Math.floor(Math.random() * (N - 1))) * CELL;
+      if (Math.hypot(jx - me.x, jy - me.y) < 500 || out.some(q => Math.hypot(q.x - jx, q.y - jy) < 700)) continue;
+      out.push({ x: jx, y: jy, got: 0 });
+    }
+    while (out.length < 3) out.push({ x: ((out.length * 3 + 1) % (N - 1) + 1) * CELL, y: ((out.length * 5 + 2) % (N - 1) + 1) * CELL, got: 0 });
+    return out;
+  }
+  function pilotTalk() {
+    if (me.hu) { toast(me.g ? "LE PILOTE : « Ton hélico est sur le toit de ton garage. Bon vol ! »" : "LE PILOTE : « Il te faut le garage ($3500) : l'hélico se range sur son toit ! »"); return; }
+    if (mis && mis.k === "heli") { if (mis.st === 1) heliUnlock(); else toast(`LE PILOTE : « Il me manque encore ${3 - mis.got} caisse(s) de pièces ! »`); return; }
+    if (mis) { toast("LE PILOTE : « Finis d'abord ta mission ! » (M : abandonner)"); return; }
+    mis = { k: "heli", n: "LE PILOTE", st: 0, t: 600, cr: partSpots(), got: 0 };
+    toast("LE PILOTE : « J'ai un hélico mais il lui manque 3 caisses de pièces 🔧. Ramène-les-moi et il est à toi ! »"); beep(440, .1, "triangle", .06);
+  }
+  function heliUnlock() {
+    me.hu = 1; mis = null; floats.push({ x: me.x, y: me.y - 26, t: tNow, s: "🚁 HÉLICOPTÈRE DÉBLOQUÉ !", c: "#ffd23f" });
+    toast(me.g ? "LE PILOTE : « Il t'attend sur le toit de ton garage (échelle) ! »" : "LE PILOTE : « Achète le garage ($3500) : l'hélico se range sur son toit ! »");
+    beep(784, .16, "triangle", .06); setTimeout(() => beep(988, .16, "triangle", .06), 160); persist(true);
+  }
   function talkDo() {
+    if (nearPilot()) { pilotTalk(); return true; }
     const g = nearGiver(); if (!g) return false;
     if (mis) { toast(`${g.n} : « Finis d'abord ta mission ! » (M : abandonner)`); return true; }
     startMis(g); return true;
@@ -739,6 +882,10 @@ export function createStaClient(env) {
       if (me.vid === mis.vid) return { x: mis.x, y: mis.y, c: "#5ee1ff" };
       const d = dCars.get(mis.vid); return d ? { x: d.x, y: d.y, c: "#ffd23f" } : null;
     }
+    if (mis.k === "heli") {
+      if (mis.st === 1) return { x: PILOT.x, y: PILOT.y, c: "#ffb703", nm: 1 };                  // nm : jamais pointé sur la minicarte
+      let b = 1e18, r = null; for (const q of mis.cr) if (!q.got) { const d = Math.hypot(q.x - me.x, q.y - me.y); if (d < b) { b = d; r = { x: q.x, y: q.y, c: "#ffb703" }; } } return r;
+    }
     if (mis.k === "hit" && tgt && tgt.hp > 0) return { x: tgt.x, y: tgt.y, c: "#ff3b30" };
     if (mis.k === "truck" && mis.trk.hp > 0) return { x: mis.trk.x, y: mis.trk.y, c: "#ffd23f" };
     return null;
@@ -749,7 +896,7 @@ export function createStaClient(env) {
       tgt.tm -= dt; let sp = 34;
       if (tgt.fl > 0) { tgt.fl -= dt; sp = 100; } else if (tgt.tm <= 0) { tgt.h = rr(0, 6.283); tgt.tm = rr(2, 5); }
       tgt.x += Math.cos(tgt.h) * sp * dt; tgt.y += Math.sin(tgt.h) * sp * dt; if (push(tgt, 6)) tgt.h += rr(1.2, 2.4);
-      if (me.vid && Math.abs(me.v) > 80 && Math.hypot(tgt.x - me.x, tgt.y - me.y) < 22) hitTgt(999);
+      if (me.vid && me.vid !== HELI && Math.abs(me.v) > 80 && Math.hypot(tgt.x - me.x, tgt.y - me.y) < 22) hitTgt(999);
     }
     if (!mis) return;
     mis.t -= dt; if (mis.t <= 0) { missionFail("temps écoulé"); return; }
@@ -772,10 +919,15 @@ export function createStaClient(env) {
       }
     } else if (mis.k === "truck") {
       const q = mis.trk; truckStep(q, dt);
-      if (me.vid && Math.abs(me.v) > 100 && q.hit <= 0 && Math.hypot(q.x - me.x, q.y - me.y) < 34) {   // collision : le camion encaisse, ta voiture aussi
+      if (me.vid && me.vid !== HELI && Math.abs(me.v) > 100 && q.hit <= 0 && Math.hypot(q.x - me.x, q.y - me.y) < 34) {   // collision : le camion encaisse, ta voiture aussi
         const sv = Math.abs(me.v); hitTruck(Math.min(110, sv * .42)); q.hit = .5;
         if (me.vid !== GHOST) { me.v *= .35; dent(Math.atan2(q.y - me.y, q.x - me.x), sv > 170 ? 2 : 1); }
         beep(90, .12, "square", .05, 40); navigator.vibrate && navigator.vibrate(40);
+      }
+    } else if (mis.k === "heli") {
+      if (mis.st === 0) for (const q of mis.cr) if (!q.got && Math.hypot(q.x - me.x, q.y - me.y) < 38) {
+        q.got = 1; mis.got++; floats.push({ x: q.x, y: q.y - 20, t: tNow, s: `🔧 CAISSE ${mis.got}/3`, c: "#ffb703" }); beep(880, .1, "triangle", .06);
+        if (mis.got >= 3) { mis.st = 1; toast("Les 3 caisses sont à bord ! Retourne voir le pilote."); }
       }
     } else if (mis.k === "cop") {
       if (mis.el > 6 && me.wl === 0) missionDone(600 + Math.round(mis.t * 1.5), "🚓 POLICE SEMÉE");
@@ -787,6 +939,7 @@ export function createStaClient(env) {
     if (mis.k === "car") l1 = mis.st === 0 ? `🚗 VOLE UNE VOITURE ${CNAME[mis.tc].toUpperCase()}` : me.vid === mis.vid ? "🚗 LIVRE-LA AU 🏁" : "🚗 RETOURNE DANS LA VOITURE !";
     else if (mis.k === "cop") l1 = `🚓 SÈME LA POLICE (${me.wl}★)`;
     else if (mis.k === "truck") l1 = `🚚 ARRÊTE LE CAMION BLINDÉ (${Math.max(0, Math.round(mis.trk.hp / mis.trk.mx * 100))}%)`;
+    else if (mis.k === "heli") l1 = mis.st === 0 ? `🔧 PIÈCES D'HÉLICO ${mis.got}/3` : "🚁 RAPPORTE-LES AU PILOTE";
     else l1 = "🎯 ÉLIMINE LA CIBLE";
     x.fillStyle = "rgba(0,0,0,.55)"; x.fillRect(10, 120, 276, 68);
     txt(`MISSION · ${mis.n}`, 18, 136, 11, "#ffd23f", "left"); txt(l1, 18, 154, 13, "#fff", "left"); txt(`⏱ ${tt}   ✖ ${TOUCH ? "ABANDONNER" : "M : ABANDONNER"}`, 18, 176, 12, "#ff9f43", "left");
@@ -816,6 +969,7 @@ export function createStaClient(env) {
     let ix = 0, iy = 0;
     if (stick) { const m = Math.hypot(stick.dx, stick.dy); if (m > .18) { const k = Math.min(1, (m - .18) / .7) / m; ix = stick.dx * k; iy = stick.dy * k; } }
     else { ix = (keys.has("R") ? 1 : 0) - (keys.has("L") ? 1 : 0); iy = (keys.has("D") ? 1 : 0) - (keys.has("U") ? 1 : 0); if (ix && iy && !me.vid) { ix *= .7071; iy *= .7071; } }
+    if (me.vid === HELI) { heliFly(dt, ix, iy); return; }
     if (me.vid) {
       // conduite « arcade » : ↑ accélère (et freine si on recule), ↓ freine puis recule, ←→ tourne le nez de la voiture (seulement si elle roule)
       let th = -iy, sr = ix;                                              // clavier : ↑↓ gaz/frein, ←→ volant
@@ -847,37 +1001,40 @@ export function createStaClient(env) {
   }
   function interact(dt) {
     // piétons écrasés
-    if (me.vid && Math.abs(me.v) > 60) for (const [id, d] of dPeds) if (!hitDone.has(id) && Math.hypot(d.x - me.x, d.y - me.y) < 20) {
+    if (me.vid && me.vid !== HELI && Math.abs(me.v) > 60) for (const [id, d] of dPeds) if (!hitDone.has(id) && Math.hypot(d.x - me.x, d.y - me.y) < 20) {
       hitDone.add(id); killQ.push(id); me.cash += 50; me.heat += .8; floats.push({ x: d.x, y: d.y - 10, t: tNow, s: "+$50", c: "#7ae582" }); beep(110, .1, "square", .05, 50); navigator.vibrate && navigator.vibrate(40);
     }
-    for (const [id, d] of dCops) if (me.vid && Math.abs(me.v) > 60 && !hitDone.has(id) && Math.hypot(d.x - me.x, d.y - me.y) < 20) { hitDone.add(id); carQ.push([id, 255]); me.lastCar = id; me.lastCarT = tNow; me.heat = Math.min(5, me.heat + .8); beep(110, .1, "square", .05, 50); }   // policier écrasé
+    for (const [id, d] of dCops) if (me.vid && me.vid !== HELI && Math.abs(me.v) > 60 && !hitDone.has(id) && Math.hypot(d.x - me.x, d.y - me.y) < 20) { hitDone.add(id); carQ.push([id, 255]); me.lastCar = id; me.lastCarT = tNow; me.heat = Math.min(5, me.heat + .8); beep(110, .1, "square", .05, 50); }   // policier écrasé
     if (hitDone.size > 30) for (const id of hitDone) if (!dPeds.has(id) && !dCops.has(id)) hitDone.delete(id);
     me.hurt -= dt;
     const ot = [];                                                         // autres véhicules en mouvement : [x, y, v]
     for (const d of dCars.values()) if (d.m === "d" || d.m === "c") ot.push([d.x, d.y, d.v, d.m]); else if (d.m === "p" || d.m === "s") ot.push([d.x, d.y, 0, "p"]);
-    for (const [u, p] of activeP()) if (u !== myUid && p.vid) ot.push([dP.get(u) ? dP.get(u).x : p.x, dP.get(u) ? dP.get(u).y : p.y, p.v, "u"]);
+    for (const [u, p] of activeP()) if (u !== myUid && p.vid && p.vid !== HELI) ot.push([dP.get(u) ? dP.get(u).x : p.x, dP.get(u) ? dP.get(u).y : p.y, p.v, "u"]);
     for (const [ox, oy, ov, om] of ot) {
       const dx = me.x - ox, dy = me.y - oy, d = Math.hypot(dx, dy);
       if (!me.vid) { if (ov > 50 && d < 19 && me.hurt <= 0) { me.hp -= Math.min(60, ov / 6); me.hurt = .6; me.x += dx / (d || 1) * 18; me.y += dy / (d || 1) * 18; beep(90, .15, "sawtooth", .05, 40); navigator.vibrate && navigator.vibrate(80); } }
-      else if (me.vid !== GHOST && d < 30 && ov !== undefined) { me.x += dx / (d || 1) * (30 - d); me.y += dy / (d || 1) * (30 - d); if (Math.abs(me.v) > 90) { const sv = Math.abs(me.v); me.v *= .5; dent(Math.atan2(-dy, -dx), sv > 170 ? 2 : 1); beep(100, .1, "square", .04, 30); } if (om === "c") me.heat += dt * .5; }
+      else if (me.vid !== GHOST && me.vid !== HELI && d < 30 && ov !== undefined) { me.x += dx / (d || 1) * (30 - d); me.y += dy / (d || 1) * (30 - d); if (Math.abs(me.v) > 90) { const sv = Math.abs(me.v); me.v *= .5; dent(Math.atan2(-dy, -dx), sv > 170 ? 2 : 1); beep(100, .1, "square", .04, 30); } if (om === "c") me.heat += dt * .5; }
     }
     // police : « arrêté » si un flic est collé à toi et que tu ne fonces pas
     let copNear = false, bust = false;
     for (const d of dCars.values()) if (d.m === "c" || d.m === "s") { const dd = Math.hypot(d.x - me.x, d.y - me.y); if (dd < 500) copNear = true; if (d.m === "c" && dd < 46) bust = true; }
     for (const d of dCops.values()) { const dd = Math.hypot(d.x - me.x, d.y - me.y); if (dd < 500) copNear = true; if (dd < 30) bust = true; }
+    for (const d of dHelis.values()) if (Math.hypot(d.x - me.x, d.y - me.y) < 600) copNear = true;   // un hélico de police au-dessus de toi : les étoiles ne descendent presque pas
     me.heat = Math.max(0, me.heat - dt * (copNear ? .02 : .09)); me.wl = Math.min(5, Math.ceil(me.heat - 1e-6));
+    if (me.wl >= 5 && !me.w5) { me.w5 = 1; toast("🚁 5 étoiles : la police envoie des hélicoptères !"); } else if (me.wl < 4) me.w5 = 0;
     if (me.wl > 0 && bust && Math.abs(me.v) < 90) me.bust += dt; else me.bust = Math.max(0, me.bust - dt * 1.5);
-    if (me.vid === GHOST) { me.hp = 100; me.bust = 0; me.hurt = 0; }   // fantôme : ni blessé, ni arrêté
+    if (me.vid === GHOST) { me.hp = 100; me.bust = 0; me.hurt = 0; }
+    if (me.vid === HELI) { me.bust = 0; me.hurt = 0; }   // en l'air : personne ne peut t'arrêter   // fantôme : ni blessé, ni arrêté
     if (me.bust > .9) die("🚓 ARRÊTÉ ! −20 % de ton argent", .2, "police");
     if (me.hp <= 0) die("💀 K.O. : −10 % de ton argent", .1, "hosp");
     // conflit : deux joueurs montent dans la même voiture
-    if (me.vid && me.vid !== GHOST) for (const [u, p] of activeP()) if (u !== myUid && p.vid === me.vid && u < myUid) { me.vid = 0; me.v = 0; job = null; toast("Quelqu'un a pris cette voiture avant toi"); }
+    if (me.vid && me.vid !== GHOST && me.vid !== HELI) for (const [u, p] of activeP()) if (u !== myUid && p.vid === me.vid && u < myUid) { me.vid = 0; me.v = 0; job = null; toast("Quelqu'un a pris cette voiture avant toi"); }
     // courses
-    if (me.vid && !job) newJob();
+    if (me.vid && me.vid !== HELI && !job) newJob();
     if (me.vid && job && Math.hypot(job.x - me.x, job.y - me.y) < 60) { const r = 200 + Math.round(job.d / 6); me.cash += r; floats.push({ x: me.x, y: me.y - 20, t: tNow, s: `+$${r} livraison !`, c: "#ffd23f" }); beep(660, .12, "triangle", .06); newJob(); }
   }
   function sendP(now) {
-    const s = `${Math.round(me.x)},${Math.round(me.y)},${me.a.toFixed(2)},${me.vid},${me.wl},${Math.round(me.cash)},${Math.round(me.hp)},${Math.round(Math.abs(me.v))},${me.hs},${me.hid},${me.vid ? me.dm : 0},${me.wpn},${me.fc},${me.fw},${me.cs},${me.cid},${me.ca},${me.gn},${me.go},${me.gi},${me.gm},${me.hn | 0},${me.pg ? Math.round(me.pg.x) : 0},${me.pg ? Math.round(me.pg.y) : 0},${me.pg ? me.pg.a.toFixed(2) : 0},${inn ? 1 : 0}`;
+    const s = `${Math.round(me.x)},${Math.round(me.y)},${me.a.toFixed(2)},${me.vid},${me.wl},${Math.round(me.cash)},${Math.round(me.hp)},${Math.round(Math.abs(me.v))},${me.hs},${me.hid},${me.vid ? me.dm : 0},${me.wpn},${me.fc},${me.fw},${me.cs},${me.cid},${me.ca},${me.gn},${me.go},${me.gi},${me.gm},${me.hn | 0},${me.pg ? Math.round(me.pg.x) : 0},${me.pg ? Math.round(me.pg.y) : 0},${me.pg ? me.pg.a.toFixed(2) : 0},${inn ? 1 : 0},${me.vid === HELI ? me.hz.toFixed(2) : 0}`;
     if ((s === sentStr && now - sentAt < 700) || now - sentAt < 110) return;
     sentStr = s; sentAt = now; set(RF(`games/${c}/p/${myUid}`), s).catch(() => { });
     if (now - saveAt > 8000) { saveAt = now; persist(false); }
@@ -886,7 +1043,7 @@ export function createStaClient(env) {
   // ================= SON : tout est synthétisé en direct avec la Web Audio (aucun fichier audio, aucune musique existante) =================
   // Moteur à rapports de vitesse, sirène de police, klaxon (entendu par les autres joueurs), crissements, bruits de ville,
   // armes, explosions, tôle froissée, cris, argent, alerte « recherché », et une radio de voiture à 4 stations (touche R).
-  let ac = null, mg = null, nbuf = null, eng = null, sirV = null, scrV = null, trfV = null, rIn = null, rOut = null, hornV = new Map();
+  let ac = null, mg = null, nbuf = null, heliV = null, eng = null, sirV = null, scrV = null, trfV = null, rIn = null, rOut = null, hornV = new Map();
   let sPrevCash = 0, sPrevWl = 0, sAmbT = 0, hornKey = false, hornId = null;
   const radio = { st: 1, next: 0, step: 0, nameT: -1e9 };
   try { const sv = +localStorage.getItem("moda.sta.radio"); if (sv >= 0 && sv <= 4) radio.st = sv; } catch { }
@@ -975,6 +1132,11 @@ export function createStaClient(env) {
     const s = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain();
     s.buffer = nbuf; s.loop = true; fl.type = type; fl.frequency.value = f; fl.Q.value = q || 1; g.gain.value = 0; s.connect(fl); fl.connect(g); g.connect(mg); s.start(); return { s, g, fl };
   }
+  function mkHeli() {                                                     // « pof-pof-pof » des pales : bruit grave modulé à ~16 Hz
+    const s = ac.createBufferSource(), fl = ac.createBiquadFilter(), am = ac.createGain(), g = ac.createGain(), l = ac.createOscillator(), lg = ac.createGain();
+    s.buffer = nbuf; s.loop = true; fl.type = "lowpass"; fl.frequency.value = 260; fl.Q.value = 1.2; am.gain.value = .5; l.type = "sine"; l.frequency.value = 16; lg.gain.value = .5; g.gain.value = 0;
+    l.connect(lg); lg.connect(am.gain); s.connect(fl); fl.connect(am); am.connect(g); g.connect(mg); s.start(); l.start(); return { s, l, g };
+  }
   function mkSiren() {
     const o = ac.createOscillator(), l = ac.createOscillator(), lg = ac.createGain(), fl = ac.createBiquadFilter(), g = ac.createGain();
     o.type = "square"; o.frequency.value = 800; l.type = "sine"; l.frequency.value = .6; lg.gain.value = 260; l.connect(lg); lg.connect(o.frequency);
@@ -991,10 +1153,11 @@ export function createStaClient(env) {
   }
   function sndStop() {
     const stop = v => { try { v && v.stop && v.stop(); } catch { } };
+    if (heliV) { stop(heliV.s); stop(heliV.l); }
     if (eng) { stop(eng.o1); stop(eng.o2); } if (sirV) { stop(sirV.o); stop(sirV.l); } if (scrV) stop(scrV.s); if (trfV) stop(trfV.s);
     hornV.forEach(v => { stop(v.o1); stop(v.o2); }); hornV.clear();
     try { mg && mg.disconnect(); } catch { }
-    eng = sirV = scrV = trfV = rIn = rOut = mg = ac = nbuf = null;
+    heliV = eng = sirV = scrV = trfV = rIn = rOut = mg = ac = nbuf = null;
   }
   const dv = (px, py, r) => Math.pow(clamp(1 - Math.hypot(px - me.x, py - me.y) / (r || 520), 0, 1), 1.2);   // volume selon la distance
   const SND = {
@@ -1031,6 +1194,8 @@ export function createStaClient(env) {
     for (const d of dCars.values()) { const q = Math.hypot(d.x - me.x, d.y - me.y); if ((d.m === "d" || d.m === "c") && q < 320) nc++; if ((d.m === "c" || d.m === "s") && q < dm) dm = q; }
     for (const d of dP.values()) if (d.vid && Math.hypot(d.x - me.x, d.y - me.y) < 320) nc++;
     trfV.g.gain.setTargetAtTime(Math.min(.06, nc * .012), t, .3);
+    { let hm = me.vid === HELI ? 0 : 1e9; for (const d of dHelis.values()) hm = Math.min(hm, Math.hypot(d.x - me.x, d.y - me.y)); for (const d of dP.values()) if (d.vid === HELI) hm = Math.min(hm, Math.hypot(d.x - me.x, d.y - me.y));
+      if (!heliV) heliV = mkHeli(); heliV.g.gain.setTargetAtTime(hm < 900 ? .12 * Math.pow(1 - hm / 900, 1.4) : 0, t, .15); }
     sirV.g.gain.setTargetAtTime(dm < 700 ? .08 * Math.pow(1 - dm / 700, 1.5) : 0, t, .12);
     scrV.g.gain.setTargetAtTime(drv && me.sk ? .05 : 0, t, .04); scrV.fl.frequency.setTargetAtTime(1900 + sp * 3, t, .05);
     // klaxon (H) : les joueurs proches l'entendent aussi
@@ -1129,7 +1294,91 @@ function drawPick(p, now) {                                                     
   else { x.fillStyle = "#5b3a1e"; x.fillRect(-9, -2, 7, 5); x.fillStyle = "#101010"; x.fillRect(-3, -3, 12, 3); x.fillStyle = "#8b8b95"; x.fillRect(-3, -3, 12, 1.5); }
   x.restore();
 }
+
+function drawHeli(px, py, a, o) {                                                                   // hélicoptère vu de dessus (nez vers +x) : joueur ou police
+  const now = o.now === undefined ? tNow : o.now, S = o.s || 1, al = o.alt === undefined ? 1 : o.alt, cop = !!o.cop, dead = !!o.dead, still = !!o.still;
+  const body = o.body || (cop ? "#eef1f5" : "#2c313d"), accent = o.accent || (cop ? "#2a46a8" : "#ffd23f"), tip = o.tip || (cop ? "#e63946" : "#ffd23f");
+  const dk = shade(body, .72), lt = shade(body, 1.18);
+  if (o.beam && al > .5) {                                                                          // projecteur : cône + tache de lumière sur le sol
+    const bx = px + Math.cos(a) * 112, by = py + Math.sin(a) * 112, nx = -Math.sin(a) * 44, ny = Math.cos(a) * 44;
+    x.fillStyle = "rgba(255,255,225,.10)"; x.beginPath(); x.moveTo(px + Math.cos(a) * 20, py + Math.sin(a) * 20); x.lineTo(bx + nx, by + ny); x.lineTo(bx - nx, by - ny); x.closePath(); x.fill();
+    pool(bx, by, 58, "rgba(255,255,230,.55)");
+  }
+  const so = 6 + 16 * al;                                                                           // ombre au sol : plus l'hélico est haut, plus elle s'écarte
+  x.save(); x.translate(px + so * .6, py + so); x.rotate(a); x.scale(S, S); x.fillStyle = "rgba(0,0,0,.28)";
+  x.beginPath(); x.ellipse(4, 0, 23, 10, 0, 0, 7); x.fill(); x.fillRect(-48, -2, 38, 4); x.fillRect(-50, -6, 5, 12); x.restore();
+  if (!still) { x.fillStyle = "rgba(0,0,0,.09)"; x.beginPath(); x.arc(px + so * .6, py + so, 34 * S, 0, 7); x.fill(); }
+  x.save(); x.translate(px, py); x.rotate(a); x.scale(S, S);
+  const poly = (pts, fill) => { x.beginPath(); pts.forEach(([u, v], i) => i ? x.lineTo(u, v) : x.moveTo(u, v)); x.closePath(); x.fillStyle = fill; x.fill(); };
+  x.fillStyle = "#101014"; x.fillRect(-15, -12.5, 33, 2.6); x.fillRect(-15, 9.9, 33, 2.6); x.fillRect(16, -12.5, 4, 2.6); x.fillRect(16, 9.9, 4, 2.6);   // patins
+  x.fillStyle = "#1b1b22"; x.fillRect(-8, -10, 2.2, 20); x.fillRect(7, -10, 2.2, 20);                                                         // traverses
+  poly([[-9, -6], [-48, -3.4], [-48, 3.4], [-9, 6]], "#0c0c10"); poly([[-9, -4.8], [-47, -2.4], [-47, 2.4], [-9, 4.8]], body);                 // poutre de queue
+  poly([[-9, -4.8], [-47, -2.4], [-47, -.6], [-9, -1.4]], "rgba(255,255,255,.22)"); poly([[-9, 1.6], [-47, .8], [-47, 2.4], [-9, 4.8]], "rgba(0,0,0,.22)");
+  x.fillStyle = accent; x.fillRect(-44, -.9, 34, 1.8);
+  x.fillStyle = "#0c0c10"; x.fillRect(-40, -9.2, 10, 18.4); x.fillStyle = dk; x.fillRect(-39, -8.2, 8, 16.4); x.fillStyle = lt; x.fillRect(-39, -8.2, 8, 3);   // stabilisateur
+  poly([[-37, -1.6], [-49.5, -1.6], [-51, 1.6], [-37, 1.6]], dk); x.fillStyle = accent; x.fillRect(-50.5, -1.1, 3, 2.2);                          // dérive
+  { const ta = still || dead ? 1 : now / 22; x.fillStyle = still || dead ? "rgba(0,0,0,0)" : "rgba(210,220,230,.28)"; x.beginPath(); x.ellipse(-48, 4.6, 1.7, 6.4, 0, 0, 7); x.fill();
+    x.fillStyle = "#15151a"; x.fillRect(-49, 4.6 + 5.6 * Math.sin(ta) - 1.2, 2.2, 2.4); x.fillRect(-49, 4.6 - 5.6 * Math.sin(ta) - 1.2, 2.2, 2.4); }   // rotor de queue
+  const fus = () => { x.beginPath(); x.moveTo(24, 0); x.bezierCurveTo(24, -6.5, 15, -10.5, 3, -10.5); x.bezierCurveTo(-6, -10.5, -12, -7, -14, -4.8); x.lineTo(-14, 4.8); x.bezierCurveTo(-12, 7, -6, 10.5, 3, 10.5); x.bezierCurveTo(15, 10.5, 24, 6.5, 24, 0); x.closePath(); };
+  fus(); x.fillStyle = body; x.fill(); x.lineJoin = "round"; x.lineWidth = 2.2; x.strokeStyle = "#0c0c10"; x.stroke();                      // fuselage
+  x.save(); fus(); x.clip();
+  x.fillStyle = "rgba(255,255,255,.22)"; x.fillRect(-16, -11, 42, 6); x.fillStyle = "rgba(0,0,0,.26)"; x.fillRect(-16, 5.5, 42, 6);
+  if (cop) { x.fillStyle = "#2a46a8"; x.fillRect(-10, -11, 5, 22); x.fillRect(-2, -11, 2, 22); } else { x.fillStyle = accent; x.fillRect(-16, -1.3, 18, 2.6); x.fillRect(-10, -11, 2.4, 22); }
+  x.fillStyle = "rgba(0,0,0,.35)"; x.fillRect(-4, -11, 1, 6); x.fillRect(-4, 5, 1, 6);                                                         // joints de portes
+  x.restore();
+  if (o.flash) { fus(); x.globalAlpha = .55; x.fillStyle = "#fff"; x.fill(); x.globalAlpha = 1; }
+  const gp = () => { x.beginPath(); x.moveTo(21.2, 0); x.bezierCurveTo(21.2, -4.6, 15.5, -7.8, 8, -7.8); x.lineTo(8, 7.8); x.bezierCurveTo(15.5, 7.8, 21.2, 4.6, 21.2, 0); x.closePath(); };
+  { const g = x.createLinearGradient(0, -8, 0, 8); g.addColorStop(0, dead ? "#2b2f33" : "#c6ecff"); g.addColorStop(1, dead ? "#15181b" : "#3d7aa8"); gp(); x.fillStyle = g; x.fill(); x.lineWidth = 1.3; x.strokeStyle = "#0c0c10"; x.stroke(); }   // verrière
+  if (!dead) { poly([[10, -6.6], [17, -5.2], [16, -3.6], [9.5, -5]], "rgba(255,255,255,.4)"); poly([[11, 3], [15, 3.8], [14.4, 5], [10.4, 4.4]], "rgba(255,255,255,.22)"); }
+  x.fillStyle = "#0c0c10"; x.fillRect(13.6, -7.8, 1.3, 15.6);
+  rrect(-13, -7.4, 19.5, 14.8, 4); x.fillStyle = dk; x.fill(); x.strokeStyle = "#0c0c10"; x.lineWidth = 1.2; x.stroke();                      // capot moteur
+  rrect(-12, -6.4, 17.5, 4.4, 2); x.fillStyle = lt; x.fill();
+  x.fillStyle = "rgba(0,0,0,.4)"; for (let k = 0; k < 4; k++) x.fillRect(-11 + k * 3.6, -.8, 1.3, 6.4);                                       // grilles d'aération
+  x.fillStyle = "#101014"; x.fillRect(-16, -3.6, 3.4, 2.4); x.fillRect(-16, 1.2, 3.4, 2.4);                                                   // échappements
+  if (!dead) {
+    x.fillStyle = "#ff3030"; x.fillRect(1, -12.2, 2.6, 2.2); x.fillStyle = "#30ff60"; x.fillRect(1, 10, 2.6, 2.2);                              // feux de position
+    if (Math.floor(now / 450) % 2) { x.fillStyle = "#ff2a2a"; x.fillRect(-51.5, -1, 2.4, 2.4); pool(-50, 0, 12, "rgba(255,40,40,.45)"); }       // feu à éclats
+    if (cop) {
+      const f = Math.floor(now / 150) % 2; x.fillStyle = "#16161c"; x.fillRect(2, -7.4, 4, 14.8);
+      x.fillStyle = f ? "#ff2a2a" : "#2a5bff"; x.fillRect(2.4, -7, 3.2, 6.6); x.fillStyle = f ? "#2a5bff" : "#ff2a2a"; x.fillRect(2.4, .4, 3.2, 6.6);
+      pool(4, -4, 24, f ? "rgba(255,40,40,.5)" : "rgba(40,90,255,.5)"); pool(4, 4, 24, f ? "rgba(40,90,255,.5)" : "rgba(255,40,40,.5)");
+      x.fillStyle = "#fffbe0"; x.beginPath(); x.arc(19, 0, 1.9, 0, 7); x.fill();                                                               // projecteur sous le nez
+    } else { x.fillStyle = "#fff4a3"; x.fillRect(22, -3.6, 1.6, 2); x.fillRect(22, 1.6, 1.6, 2); }                                            // phares
+  }
+  x.fillStyle = "#0c0c10"; x.beginPath(); x.arc(0, 0, 5.4, 0, 7); x.fill(); x.fillStyle = "#3a3d49"; x.beginPath(); x.arc(0, 0, 4, 0, 7); x.fill();   // mât
+  const R = 34, rot = o.rot === undefined ? now / 38 : o.rot;                                                                                  // rotor principal : 4 pales, flou de mouvement
+  if (!still) { x.fillStyle = "rgba(190,205,220,.10)"; x.beginPath(); x.arc(0, 0, R, 0, 7); x.fill(); x.strokeStyle = "rgba(225,235,245,.2)"; x.lineWidth = 1; x.stroke(); }
+  for (let g = 0; g < (still ? 1 : 3); g++) {
+    x.save(); x.rotate(rot - g * .42); x.globalAlpha = g === 0 ? 1 : g === 1 ? .34 : .15;
+    for (let b = 0; b < 4; b++) { x.save(); x.rotate(b * Math.PI / 2); x.fillStyle = "#15151a"; x.fillRect(3, -1.5, R - 3, 3); x.fillStyle = tip; x.fillRect(R - 7, -1.5, 7, 3); x.restore(); }
+    x.restore();
+  }
+  x.globalAlpha = 1; x.fillStyle = "#2a2a32"; x.beginPath(); x.arc(0, 0, 3.4, 0, 7); x.fill(); x.fillStyle = "#9aa0b0"; x.beginPath(); x.arc(-.6, -.6, 1.7, 0, 7); x.fill();
+  x.lineJoin = "miter"; x.restore();
+}
+function drawHeliWreck(w, now) {                                                                    // épave d'hélico : carcasse noircie, rotor figé, flammes puis fumée
+  drawHeli(w.x, w.y, w.a, { alt: 0, body: "#2a2a2e", accent: "#444", tip: "#333", still: 1, dead: 1, rot: (w.id % 7) * .5 });
+  if (now - w.t < 12000) for (let k = 0; k < 4; k++) { const f = Math.floor(now / 90 + k * 2) % 2; x.fillStyle = f ? "#ff7a1a" : "#ffd23f"; x.beginPath(); x.arc(w.x + Math.cos(w.a) * (k * 7 - 10) + Math.sin(now / 70 + k) * 1.5, w.y + Math.sin(w.a) * (k * 7 - 10) + Math.cos(now / 80 + k) * 2.5 - 3, 4 + (k % 2) * 2 + f, 0, 7); x.fill(); }
+  for (let k = 0; k < 3; k++) { const u = ((now / 45 + k * 9) % 27); x.fillStyle = `rgba(55,55,55,${Math.max(0, .42 - u / 80).toFixed(2)})`; x.beginPath(); x.arc(w.x + Math.sin(now / 300 + k) * 3, w.y - 6 - u, 5 + u / 5, 0, 7); x.fill(); }
+}
+function drawRoofPad(cx, cy, sc) {                                                                  // héliport sur le toit du garage (+ ton hélico s'il est rangé)
+  const now = tNow;
+  x.fillStyle = "#262933"; x.beginPath(); x.arc(cx, cy, 50 * sc, 0, 7); x.fill();
+  x.strokeStyle = "#ffd23f"; x.lineWidth = 3 * sc; x.beginPath(); x.arc(cx, cy, 45 * sc, 0, 7); x.stroke();
+  for (let k = 0; k < 8; k++) { const an = k * Math.PI / 4 + .39; x.fillStyle = Math.floor(now / 500 + k) % 2 ? "#ff3b30" : "#5a1410"; x.fillRect(cx + Math.cos(an) * 50 * sc - 2, cy + Math.sin(an) * 50 * sc - 2, 4, 4); }
+  if (me.hu && me.vid !== HELI) drawHeli(cx, cy, -Math.PI / 2, { alt: 0, still: 1, rot: .5, s: .92 * sc, accent: (lobbyP()[myUid] || {}).color || "#ffd23f", now });
+  else { x.font = `bold ${Math.round(40 * sc)}px "Courier New",monospace`; x.textAlign = "center"; x.fillStyle = "#ffd23f"; x.fillText("H", cx, cy + 14 * sc); }
+}
+function drawPart(q, now, labels) {                                                                 // caisse de pièces (quête du pilote)
+  const b = Math.sin(now / 260) * 1.5;
+  x.fillStyle = "rgba(255,183,3,.22)"; x.beginPath(); x.arc(q.x, q.y, 26 + Math.sin(now / 200) * 3, 0, 7); x.fill();
+  x.fillStyle = "rgba(0,0,0,.4)"; x.fillRect(q.x - 11, q.y + 8, 24, 5);
+  x.fillStyle = "#101010"; x.fillRect(q.x - 12, q.y - 11 + b, 24, 22); x.fillStyle = "#7a5230"; x.fillRect(q.x - 10.5, q.y - 9.5 + b, 21, 19);
+  x.fillStyle = "#5e3d22"; x.fillRect(q.x - 10.5, q.y - 1 + b, 21, 2); x.fillStyle = "#c0c0c8"; x.fillRect(q.x - 10.5, q.y - 9.5 + b, 3, 3); x.fillRect(q.x + 7.5, q.y + 6.5 + b, 3, 3);
+  labels.push(["🔧", q.x, q.y + 5 + b, "#fff", 14]); labels.push(["PIÈCES", q.x, q.y - 22, "#ffb703", 10]);
+}
 function drawWreck(w, now) {
+  if (w.he) { drawHeliWreck(w, now); return; }
   drawCar(w.x, w.y, w.a, "#262626", false, now, w.id, 255);
   if (now - w.t < 9000) for (let k = 0; k < 3; k++) { x.fillStyle = (Math.floor(now / 90 + k) % 2) ? "#ff7a1a" : "#ffd23f"; x.beginPath(); x.arc(w.x + (k - 1) * 7 + Math.sin(now / 70 + k) * 1.5, w.y + Math.cos(now / 80 + k) * 3 - 4, 4 + (k % 2) * 2, 0, 7); x.fill(); }
 }
@@ -1256,7 +1505,7 @@ function drawWorld(vx0, vy0, vx1, vy1) {
     x.strokeStyle = pal[2]; x.lineWidth = 2; x.strokeRect(rx + 14 * sc, ry + 14 * sc, rw - 28 * sc, rw - 28 * sc);
     if (pol) { x.fillStyle = "#fff"; x.fillRect(rx + 14 * sc, ry + rw / 2 - 26 * sc, rw - 28 * sc, 3); x.fillRect(rx + 14 * sc, ry + rw / 2 + 24 * sc, rw - 28 * sc, 3); x.font = `bold ${Math.round(28 * sc)}px "Courier New",monospace`; x.textAlign = "center"; x.fillText("POLICE", rx + rw / 2, ry + rw / 2 + 9 * sc); }
     else if (hos) { x.strokeStyle = "#d62828"; x.lineWidth = 4; x.beginPath(); x.arc(rx + rw / 2, ry + rw / 2, 46 * sc, 0, 7); x.stroke(); x.fillStyle = "#d62828"; x.fillRect(rx + rw / 2 - 8 * sc, ry + rw / 2 - 26 * sc, 16 * sc, 52 * sc); x.fillRect(rx + rw / 2 - 26 * sc, ry + rw / 2 - 8 * sc, 52 * sc, 16 * sc); }
-    else if (gar) { x.fillStyle = "#ffd23f"; x.fillRect(rx + 14 * sc, ry + rw / 2 - 26 * sc, rw - 28 * sc, 3); x.fillRect(rx + 14 * sc, ry + rw / 2 + 24 * sc, rw - 28 * sc, 3); x.font = `bold ${Math.round(26 * sc)}px "Courier New",monospace`; x.textAlign = "center"; x.fillStyle = "#fff"; x.fillText("GARAGE", rx + rw / 2, ry + rw / 2 + 9 * sc); }
+    else if (gar) { x.fillStyle = "#ffd23f"; x.fillRect(rx + 14 * sc, ry + 22 * sc, rw - 28 * sc, 3); x.fillRect(rx + 14 * sc, ry + rw - 25 * sc, rw - 28 * sc, 3); x.font = `bold ${Math.round(24 * sc)}px "Courier New",monospace`; x.textAlign = "center"; x.fillStyle = "#fff"; x.fillText("GARAGE", rx + rw / 2, ry + 52 * sc); drawRoofPad(rx + rw / 2, ry + rw / 2 + 10 * sc, sc); }
     else if (arm) { x.strokeStyle = "#ffb4a8"; x.lineWidth = 3; const cx2 = rx + rw / 2, cy2 = ry + rw / 2 - 8 * sc; x.beginPath(); x.arc(cx2, cy2, 38 * sc, 0, 7); x.stroke(); x.beginPath(); x.moveTo(cx2 - 52 * sc, cy2); x.lineTo(cx2 + 52 * sc, cy2); x.moveTo(cx2, cy2 - 52 * sc); x.lineTo(cx2, cy2 + 52 * sc); x.stroke(); x.font = `bold ${Math.round(24 * sc)}px "Courier New",monospace`; x.textAlign = "center"; x.fillStyle = "#fff"; x.fillText("ARMURERIE", rx + rw / 2, ry + rw / 2 + 74 * sc); }
     else for (let n = 0; n < 3; n++) { const w = 18 + (h >>> (n * 5)) % 18, hh = 14 + (h >>> (n * 4 + 2)) % 16, px = rx + (22 + (h >>> (n * 6)) % (bw - 70)) * sc, py = ry + (22 + (h >>> (n * 7 + 1)) % (bw - 60)) * sc; x.fillStyle = pal[1]; x.fillRect(px, py, w * sc, hh * sc); x.fillStyle = pal[2]; x.fillRect(px, py + (hh - 3) * sc, w * sc, 3); x.fillRect(px + (w - 3) * sc, py, 3, hh * sc); }
   });
@@ -1283,9 +1532,10 @@ function frame(now) {
   const k = 1 - Math.exp(-13 * dt);
   for (const d of dPeds.values()) { d.x += (d.tx - d.x) * k; d.y += (d.ty - d.y) * k; d.a = angLerp(d.a, d.ta, k); }
   for (const d of dCops.values()) { d.x += (d.tx - d.x) * k; d.y += (d.ty - d.y) * k; d.a = angLerp(d.a, d.ta, k); }
+  for (const d of dHelis.values()) { if (Math.abs(d.tx - d.x) + Math.abs(d.ty - d.y) > 300) { d.x = d.tx; d.y = d.ty; } else { d.x += (d.tx - d.x) * k; d.y += (d.ty - d.y) * k; } d.a = angLerp(d.a, d.ta, k); }
   for (const d of dCars.values()) { if (Math.abs(d.tx - d.x) + Math.abs(d.ty - d.y) > 250) { d.x = d.tx; d.y = d.ty; } else { d.x += (d.tx - d.x) * k; d.y += (d.ty - d.y) * k; } d.a = angLerp(d.a, d.ta, k); }
   const lp = lobbyP();
-  for (const [u, p] of activeP()) { if (u === myUid) continue; let d = dP.get(u); if (!d) dP.set(u, d = { x: p.x, y: p.y, a: p.a }); if (Math.abs(p.x - d.x) + Math.abs(p.y - d.y) > 300) { d.x = p.x; d.y = p.y; } else { d.x += (p.x - d.x) * k; d.y += (p.y - d.y) * k; } d.a = angLerp(d.a, p.a, k); d.vid = p.vid; d.cash = p.cash; d.wl = p.wl; d.v = p.v; d.dm = p.dm; d.wpn = p.wpn; d.hn = p.hn; d.ib = p.ib; }
+  for (const [u, p] of activeP()) { if (u === myUid) continue; let d = dP.get(u); if (!d) dP.set(u, d = { x: p.x, y: p.y, a: p.a }); if (Math.abs(p.x - d.x) + Math.abs(p.y - d.y) > 300) { d.x = p.x; d.y = p.y; } else { d.x += (p.x - d.x) * k; d.y += (p.y - d.y) * k; } d.a = angLerp(d.a, p.a, k); d.vid = p.vid; d.cash = p.cash; d.wl = p.wl; d.v = p.v; d.dm = p.dm; d.wpn = p.wpn; d.hn = p.hn; d.ib = p.ib; d.hz = p.hz; }
   for (const u of dP.keys()) if (!lp[u]) dP.delete(u);
   if (me.dead > 0) { me.dead -= dt; if (me.dead <= 0) spawnAt(SPAWN[me.where || "hosp"]); }
   else { if (useReq) { useReq = 0; useKey(); } if (inn) { innControl(dt); missions(dt); } else { control(dt); interact(dt); weapons(dt, now); missions(dt); } }
@@ -1313,11 +1563,24 @@ function frame(now) {
     const dd = Math.hypot(g.x - me.x, g.y - me.y); drawWalker(g.x, g.y, dd < 170 ? Math.atan2(me.y - g.y, me.x - g.x) : g.a, g.sh, SKIN[g.sk], null, 0, false);
     labels.push([g.n, g.x, g.y - 20, "#fff"]); if (!mis) labels.push(["❗", g.x, g.y - 38 + Math.sin(now / 200) * 3, "#ffd23f", 20]);
   }
+  if (inV(PILOT.x, PILOT.y)) {                                                                      // le pilote (quête de l'hélico) : casquette de cuir + lunettes
+    const dd = Math.hypot(PILOT.x - me.x, PILOT.y - me.y), pa = dd < 170 ? Math.atan2(me.y - PILOT.y, me.x - PILOT.x) : PILOT.a;
+    drawWalker(PILOT.x, PILOT.y, pa, "#6b4a22", SKIN[1], null, 0, false);
+    x.save(); x.translate(PILOT.x, PILOT.y); x.rotate(pa); x.fillStyle = "#3a2812"; x.beginPath(); x.arc(0, 0, 3.5, 0, 7); x.fill(); x.fillStyle = "#8fd3ff"; x.fillRect(1.5, -3, 1.9, 6); x.restore();
+    if (dd < 240) { labels.push([PILOT.n, PILOT.x, PILOT.y - 20, "#fff"]); if (!me.hu && !mis) labels.push(["🚁", PILOT.x, PILOT.y - 38 + Math.sin(now / 200) * 3, "#ffd23f", 20]); }
+  }
   for (const [id, d] of dCars) if (d.m !== "t" && id !== me.vid && inV(d.x, d.y)) drawCar(d.x, d.y, d.a, col(d.c), d.m === "c" || d.m === "s" ? 2 : d.cp ? 1 : false, now, id, dmx(d.dm | 0, wear(id)));
   if (me.pg && inV(me.pg.x, me.pg.y)) drawCar(me.pg.x, me.pg.y, me.pg.a, "#cfeeff", false, now, GHOST, 0);   // fantômes garés (le tien et ceux des autres owners)
   for (const [u, p] of activeP()) if (u !== myUid && p.pgx && inV(p.pgx, p.pgy)) drawCar(p.pgx, p.pgy, p.pga, "#cfeeff", false, now, GHOST, 0);
-  for (const [u, d] of dP) if (!d.ib && inV(d.x, d.y)) { const pl = lp[u] || {}; if (d.vid) { const cc = dCars.get(d.vid); drawCar(d.x, d.y, d.a, col(cc ? cc.c : 0), cc && cc.cp ? 1 : false, now, d.vid, d.dm); } else drawWalker(d.x, d.y, d.a, pl.color || "#fff", "#f1c27d", d.v > 0 ? now / 85 : null, d.wpn, now - (d.flash || -1e9) < 70); labels.push([pl.name || "?", d.x, d.y - (d.vid ? 20 : 12), "#fff"]); }
-  if (me.dead <= 0) { if (me.vid) drawCar(me.x, me.y, me.a, col(myCol), me.cop ? 1 : false, now, me.vid, me.dm); else drawWalker(me.x, me.y, me.a, (lp[myUid] || {}).color || "#fff", "#f1c27d", me.v > 0 ? now / 85 : null, me.wpn, me.flash > 0); x.fillStyle = "#ffe14d"; const ay = me.y - (me.vid ? 24 : 15) + Math.sin(now / 160) * 2; x.beginPath(); x.moveTo(me.x, ay + 6); x.lineTo(me.x - 5, ay - 2); x.lineTo(me.x + 5, ay - 2); x.fill(); }
+  for (const [u, d] of dP) if (!d.ib && inV(d.x, d.y)) { const pl = lp[u] || {}; if (d.vid === HELI) { } else if (d.vid) { const cc = dCars.get(d.vid); drawCar(d.x, d.y, d.a, col(cc ? cc.c : 0), cc && cc.cp ? 1 : false, now, d.vid, d.dm); } else drawWalker(d.x, d.y, d.a, pl.color || "#fff", "#f1c27d", d.v > 0 ? now / 85 : null, d.wpn, now - (d.flash || -1e9) < 70); labels.push([pl.name || "?", d.x, d.y - (d.vid ? 20 : 12), "#fff"]); }
+  if (me.dead <= 0) { if (me.vid === HELI) { } else if (me.vid) drawCar(me.x, me.y, me.a, col(myCol), me.cop ? 1 : false, now, me.vid, me.dm); else drawWalker(me.x, me.y, me.a, (lp[myUid] || {}).color || "#fff", "#f1c27d", me.v > 0 ? now / 85 : null, me.wpn, me.flash > 0); x.fillStyle = "#ffe14d"; const ay = me.y - (me.vid === HELI ? 46 : me.vid ? 24 : 15) + Math.sin(now / 160) * 2; x.beginPath(); x.moveTo(me.x, ay + 6); x.lineTo(me.x - 5, ay - 2); x.lineTo(me.x + 5, ay - 2); x.fill(); }
+  // ----- ciel : hélicoptères (au-dessus de tout, bâtiments compris) -----
+  for (const [u, d] of dP) if (!d.ib && d.vid === HELI && inV(d.x, d.y)) drawHeli(d.x, d.y, d.a, { alt: d.hz, accent: (lp[u] || {}).color || "#ffd23f", rot: now / 38 + u.length * 1.7, now });
+  if (me.dead <= 0 && me.vid === HELI) drawHeli(me.x, me.y, me.a, { alt: me.hz, accent: (lp[myUid] || {}).color || "#ffd23f", now });
+  for (const [id, d] of dHelis) if (inV(d.x, d.y)) {
+    drawHeli(d.x, d.y, d.a, { cop: 1, beam: 1, flash: now - (d.fl || -1e9) < 70, rot: now / 38 + id * 1.3, now });
+    if (d.hp < HEL_HP * .45) for (let k = 0; k < 4; k++) { const u = ((now / 40 + k * 8) % 32); x.fillStyle = `rgba(45,45,45,${Math.max(0, .5 - u / 70).toFixed(2)})`; x.beginPath(); x.arc(d.x - Math.cos(d.a) * (14 + u) + Math.sin(now / 200 + k) * 2, d.y - Math.sin(d.a) * (14 + u), 4 + u / 6, 0, 7); x.fill(); }
+  }
   tracers = tracers.filter(t => now - t.t < 90);
   tracers.forEach(t => { const age = now - t.t; x.globalAlpha = 1 - age / 90; x.strokeStyle = "#fff2a8"; x.lineWidth = 1.6; x.beginPath(); x.moveTo(t.x0, t.y0); x.lineTo(t.x1, t.y1); x.stroke(); if (age < 45) { x.fillStyle = "#ffd23f"; x.beginPath(); x.arc(t.x0, t.y0, 4.5, 0, 7); x.fill(); } });
   x.globalAlpha = 1;
@@ -1325,6 +1588,7 @@ function frame(now) {
   booms = booms.filter(q => now - q.t < 650); booms.forEach(q => { const a2 = (now - q.t) / 650, r = 8 + a2 * 60; x.globalAlpha = 1 - a2; x.fillStyle = "#ff9d1e"; x.beginPath(); x.arc(q.x, q.y, r, 0, 7); x.fill(); x.fillStyle = "#ffe066"; x.beginPath(); x.arc(q.x, q.y, r * .65, 0, 7); x.fill(); x.fillStyle = "#fff"; x.beginPath(); x.arc(q.x, q.y, r * .3, 0, 7); x.fill(); }); x.globalAlpha = 1;
   if (job) { const f = (Math.sin(now / 250) + 1) / 2; x.strokeStyle = "#ffd23f"; x.lineWidth = 4; x.beginPath(); x.arc(job.x, job.y, 50 + f * 8, 0, 7); x.stroke(); x.fillStyle = "rgba(255,210,63,.25)"; x.fill(); labels.push(["📦", job.x, job.y + 8, "#fff", 26]); }
   if (mis && mis.k === "car" && mis.st === 1) { const f = (Math.sin(now / 250) + 1) / 2; x.strokeStyle = "#5ee1ff"; x.lineWidth = 4; x.beginPath(); x.arc(mis.x, mis.y, 50 + f * 8, 0, 7); x.stroke(); x.fillStyle = "rgba(94,225,255,.25)"; x.fill(); labels.push(["🏁", mis.x, mis.y + 8, "#fff", 26]); }
+  if (mis && mis.k === "heli" && mis.st === 0) for (const q of mis.cr) if (!q.got && inV(q.x, q.y)) drawPart(q, now, labels);
   if (tgt && tgt.hp > 0 && inV(tgt.x, tgt.y)) { drawWalker(tgt.x, tgt.y, tgt.h, "#16161d", SKIN[tgt.sk % 6], now / (tgt.fl > 0 ? 55 : 90), 0, false); x.strokeStyle = "#ff3b30"; x.lineWidth = 2; x.beginPath(); x.arc(tgt.x, tgt.y, 15 + Math.sin(now / 150) * 2, 0, 7); x.stroke(); labels.push(["🎯", tgt.x, tgt.y - 20, "#fff", 18]); }
   if (mis && mis.k === "truck" && mis.trk.hp > 0 && inV(mis.trk.x, mis.trk.y)) drawTruck(mis.trk, now, labels);
   x = mx2; x.setTransform(1, 0, 0, 1, 0, 0); x.imageSmoothingEnabled = false; x.drawImage(lc, 0, 0, cv.width, cv.height);   // …puis agrandie sans lissage = look GTA 1
@@ -1354,9 +1618,10 @@ function frame(now) {
   if (!mis) GIVERS.forEach(g => { dot(g.x, g.y, "#ffd23f", 3); });
   for (const d of dCars.values()) if (d.m === "c") { const fl = Math.floor(now / 200) % 2; dot(d.x, d.y, fl ? "#ff2a2a" : "#2a5bff", 2.8); }
   for (const d of dCops.values()) dot(d.x, d.y, "#7da2ff", 1.8);
+  for (const d of dHelis.values()) { const fl = Math.floor(now / 200) % 2; dot(d.x, d.y, fl ? "#ff2a2a" : "#2a5bff", 3.6); }
   for (const d of dP.values()) if (!d.ib) arrow(d.x, d.y, d.a, "#ff3b30");                                         // les autres joueurs : flèches rouges
   if (job) dot(job.x, job.y, "#ffd23f", 3.5);
-  { const mp = misPt(); if (mp) { ping(mp.x, mp.y, mp.c, 4); dot(mp.x, mp.y, mp.c, 4); } }
+  { const mp = misPt(); if (mp && !mp.nm) { ping(mp.x, mp.y, mp.c, 4); dot(mp.x, mp.y, mp.c, 4); } }
   if (me.wl > 0 && Math.floor(now / 250) % 2) { x.strokeStyle = "rgba(255,60,60,.9)"; x.lineWidth = 2; rrect(mx + 1, my + 1, mm - 2, mm - 2, 11); x.stroke(); }   // recherché : le cadre clignote
   ping(me.x, me.y, "#fff", 3);
   arrow(me.x, me.y, me.a, "#fff");   // toi : une flèche blanche dans le sens de la marche
@@ -1364,11 +1629,11 @@ function frame(now) {
   x.strokeStyle = "#0b0c10"; x.lineWidth = 4; rrect(mx, my, mm, mm, 12); x.stroke(); x.strokeStyle = "#e8e8f0"; x.lineWidth = 1.5; rrect(mx, my, mm, mm, 12); x.stroke();   // cadre
   txt("N", mx + mm - 10, my + 14, 11, "#fffc");
   const bx = W - 56, by = H - 62; x.fillStyle = "#1f4fbf"; x.beginPath(); x.arc(bx, by, 38, 0, 7); x.fill(); x.strokeStyle = "#000"; x.lineWidth = 3; x.stroke(); txt(gAct() ? "GARAGE" : !me.vid && (shopAt() || nearGiver()) ? "ACTION" : me.vid ? "SORTIR" : "ENTRER", bx, by + 4, 12);
-  { const ga = gAct(); if (ga || (me.g && inGarage())) txt(ga === "buy" ? `E : ACHETER LE GARAGE ($${GPRICE})` : ga === "store" ? "E : RANGER LA VOITURE" : !me.vid ? (isOwner() ? "E : ENTRER AU GARAGE · G : FANTÔME 👻" : "E : ENTRER AU GARAGE") : ga === "take" ? (me.g && isOwner() ? "E : SORTIR TA VOITURE · G : FANTÔME 👻" : "E : SORTIR TA VOITURE") : ga === "ghost" ? "E : SORTIR LA VOITURE FANTÔME 👻" : ga === "ghostPut" ? "E : RANGER LE FANTÔME" : me.vid ? "GARAGE PLEIN" : "GARAGE VIDE", W / 2, H - 60, 15, ga === "buy" && me.cash < GPRICE ? "#ff9f43" : "#ffe14d"); }
+  { const ga = gAct(); if (ga || (me.g && me.vid !== HELI && inGarage())) txt(ga === "buy" ? `E : ACHETER LE GARAGE ($${GPRICE})` : ga === "store" ? "E : RANGER LA VOITURE" : !me.vid ? (isOwner() ? "E : ENTRER AU GARAGE · G : FANTÔME 👻" : "E : ENTRER AU GARAGE") : ga === "take" ? (me.g && isOwner() ? "E : SORTIR TA VOITURE · G : FANTÔME 👻" : "E : SORTIR TA VOITURE") : ga === "ghost" ? "E : SORTIR LA VOITURE FANTÔME 👻" : ga === "ghostPut" ? "E : RANGER LE FANTÔME" : me.vid ? "GARAGE PLEIN" : "GARAGE VIDE", W / 2, H - 60, 15, ga === "buy" && me.cash < GPRICE ? "#ff9f43" : "#ffe14d"); }
   if (me.dead <= 0 && !shop) {
     let h = "", hc = "#ffe14d"; const sa = shopAt();
     if (sa) { if (me.vid) h = `DESCENDS (E) POUR ${sa === "heal" ? "TE SOIGNER" : "ACHETER DES ARMES"}`; else if (sa === "heal") { const p = healPrice(); h = me.hp >= 99 ? "TU ES EN PLEINE FORME" : `E : TE SOIGNER ($${p})`; if (me.hp < 99 && p > me.cash) hc = "#ff9f43"; } else h = "E : ENTRER DANS L'ARMURERIE"; }
-    else { const g = nearGiver(); if (g) h = mis ? `${g.n} : TU AS DÉJÀ UNE MISSION` : `E : PARLER À ${g.n} (${g.l})`; }
+    else { const g = nearGiver(); if (g) h = mis ? `${g.n} : TU AS DÉJÀ UNE MISSION` : `E : PARLER À ${g.n} (${g.l})`; else if (nearPilot()) h = me.hu ? "E : PARLER AU PILOTE" : mis && mis.k === "heli" ? (mis.st === 1 ? "E : RENDRE LES PIÈCES AU PILOTE" : "E : PARLER AU PILOTE") : mis ? "LE PILOTE : TU AS DÉJÀ UNE MISSION" : "E : PARLER AU PILOTE (QUÊTE SPÉCIALE 🚁)"; }
     if (h) txt(h, W / 2, H - 60, 15, hc);
   }
   drawMis(now);
@@ -1379,9 +1644,14 @@ function frame(now) {
   if (me.vid && me.dead <= 0) {
     { const ro = radio.st > 0, fresh = now - radio.nameT < 2500; txt(`📻 ${ro ? STN[radio.st - 1].n : "RADIO COUPÉE"}${TOUCH ? "" : "  ·  R : CHANGER  ·  H : KLAXON"}`, W / 2, H - 34, fresh ? 15 : 12, ro ? "#9be7ff" : "#9a9aa5"); }
     const kmh = Math.round(Math.abs(me.v) * .5);
-    txt(`${kmh} km/h · ÉTAT ${Math.round(100 - dmSum(me.dm) / 12 * 100)}%${me.v < -3 ? "  ◄ MARCHE ARRIÈRE" : ""}`, W / 2, H - 14, 16, me.v < -3 ? "#ff9f43" : "#fff");
-    if (me.carT < 9) { x.fillStyle = "rgba(0,0,0,.65)"; x.fillRect(W / 2 - 230, H - 96, 460, 54); txt(TOUCH ? "POUSSE LE JOYSTICK VERS OÙ TU VEUX ALLER" : "↑ ACCÉLÉRER · ↓ FREINER / RECULER", W / 2, H - 74, 13, "#fff"); txt(TOUCH ? "LÂCHE = ROULE LIBRE · FREIN = FREINER / RECULER" : "← → TOURNER (SEULEMENT QUAND LA VOITURE ROULE) · E = SORTIR", W / 2, H - 54, 12, "#ffe14d"); }
+    if (me.vid === HELI) txt(`🚁 ${kmh} km/h · COQUE ${Math.round(clamp(me.hp, 0, 100))}%`, W / 2, H - 14, 16, "#fff"); else txt(`${kmh} km/h · ÉTAT ${Math.round(100 - dmSum(me.dm) / 12 * 100)}%${me.v < -3 ? "  ◄ MARCHE ARRIÈRE" : ""}`, W / 2, H - 14, 16, me.v < -3 ? "#ff9f43" : "#fff");
+    if (me.carT < 9) { x.fillStyle = "rgba(0,0,0,.65)"; x.fillRect(W / 2 - 230, H - 96, 460, 54); txt(TOUCH ? "POUSSE LE JOYSTICK VERS OÙ TU VEUX ALLER" : (me.vid === HELI ? "↑ AVANCER · ↓ FREINER / RECULER · F : TIRER" : "↑ ACCÉLÉRER · ↓ FREINER / RECULER"), W / 2, H - 74, 13, "#fff"); txt(TOUCH ? "LÂCHE = ROULE LIBRE · FREIN = FREINER / RECULER" : (me.vid === HELI ? "← → PIVOTER · E = SE POSER SUR L'HÉLIPORT 🅷 DU GARAGE" : "← → TOURNER (SEULEMENT QUAND LA VOITURE ROULE) · E = SORTIR"), W / 2, H - 54, 12, "#ffe14d"); }
     if (job) { const a = Math.atan2(job.y - me.y, job.x - me.x); txt(`📦 ${Math.round(Math.hypot(job.x - me.x, job.y - me.y) / 10)} m`, W / 2, 26, 15, "#ffd23f"); x.save(); x.translate(W / 2, 52); x.rotate(a); x.fillStyle = "#ffd23f"; x.strokeStyle = "#000"; x.lineWidth = 2; x.beginPath(); x.moveTo(15, 0); x.lineTo(-9, -10); x.lineTo(-9, 10); x.closePath(); x.fill(); x.stroke(); x.restore(); }
+  }
+  if (me.vid === HELI && me.dead <= 0 && !me.land) {                                                // guidage vers l'héliport
+    const d = Math.hypot(RP.x - me.x, RP.y - me.y);
+    if (d > 70) { const a = Math.atan2(RP.y - me.y, RP.x - me.x); txt(`🅷 TOIT DU GARAGE ${Math.round(d / 10)} m`, W / 2, 26, 14, "#ffd23f"); x.save(); x.translate(W / 2, 52); x.rotate(a); x.fillStyle = "#ffd23f"; x.strokeStyle = "#000"; x.lineWidth = 2; x.beginPath(); x.moveTo(15, 0); x.lineTo(-9, -10); x.lineTo(-9, 10); x.closePath(); x.fill(); x.stroke(); x.restore(); }
+    else txt(Math.abs(me.v) < 120 ? "E : SE POSER SUR LE TOIT 🅷" : "RALENTIS POUR TE POSER", W / 2, H - 60, 15, "#ffe14d");
   }
   if (me.bust > .1) { x.fillStyle = "#2a5bff"; x.fillRect(W / 2 - 60, H / 2 + 40, 120 * clamp(me.bust / .9, 0, 1), 8); txt("ARRESTATION…", W / 2, H / 2 + 34, 13, "#8fb0ff"); }
   if (me.dead > 0) { x.fillStyle = "rgba(0,0,0,.65)"; x.fillRect(0, 0, W, H); txt(me.msg, W / 2, H / 2, 30, "#fff"); }
@@ -1434,17 +1704,17 @@ function frame(now) {
   return {
     enter(code) {
       active = true; c = code; myUid = getMe().uid; ls = null; lastT = 0; lastH = ""; lastEv = 0; pd = {}; hostOn = false; keys = new Set(); stick = null; brakeId = null; useReq = 0;
-      dPeds.clear(); dCars.clear(); dCops.clear(); dP.clear(); ejected = []; sPrevCash = 0; sPrevWl = 0; sAmbT = performance.now() + 8000; hornKey = false; hornId = null; me.pg = null; splats = []; floats = []; hitDone = new Set(); lastHs = {}; sentStr = ""; sentAt = 0; savedCash = -1; saveAt = performance.now(); gLoaded = false; savedG = ""; lastGn = {};
-      Object.assign(me, { vid: 0, hp: 100, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, bust: 0, hurt: 0, v: 0, a: 0, cash: 0, cop: 0, wpn: 0, ammo: [0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, gcar: null, gn: 0, go: 0, gi: 0, gm: 0 });
+      dPeds.clear(); dCars.clear(); dCops.clear(); dHelis.clear(); helis = []; dP.clear(); ejected = []; sPrevCash = 0; sPrevWl = 0; sAmbT = performance.now() + 8000; hornKey = false; hornId = null; me.pg = null; splats = []; floats = []; hitDone = new Set(); lastHs = {}; sentStr = ""; sentAt = 0; savedCash = -1; saveAt = performance.now(); gLoaded = false; savedG = ""; lastGn = {};
+      Object.assign(me, { vid: 0, hp: 100, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, bust: 0, hurt: 0, v: 0, a: 0, cash: 0, cop: 0, wpn: 0, ammo: [0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, gcar: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0 });
       inn = null; mis = null; tgt = null; shop = ""; killQ = []; carQ = []; tracers = []; sparks = []; booms = []; wrecks = []; pickT = new Map(); lastFc = {}; lastCs = {}; fireKey = false; fireId = null;
       const ix = 2 + Math.floor(Math.random() * 5), iy = 2 + Math.floor(Math.random() * 5); spawnAt([ix * CELL, iy * CELL]);
-      $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : monter / descendre d'une voiture · en voiture ↑ accélère, ↓ freine, ←→ tourne · livre les colis 📦, écrase des piétons, évite la police ! · Ramasse les armes au sol : F tirer, X changer d'arme (1-2-3) · les voitures se cabossent ! · garage ($3500) : va sur la zone jaune et appuie sur E (owners : voiture fantôme 👻 invincible qui traverse les bâtiments, tu peux en descendre : elle reste garée et seuls les owners peuvent y remonter (E) ; au garage : ranger le fantôme (E), G pour en sortir un) · R : changer de radio (4 stations), H : klaxon · missions : parle au BOSS ❗ au bord ouest de la carte (E) : missions aléatoires (voitures, cavale, contrat, camion blindé 🚚), M pour abandonner · armurerie et distributeur de soins (hôpital) : va sur leur zone et appuie sur E";
+      $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : monter / descendre d'une voiture · en voiture ↑ accélère, ↓ freine, ←→ tourne · livre les colis 📦, écrase des piétons, évite la police ! · Ramasse les armes au sol : F tirer, X changer d'arme (1-2-3) · les voitures se cabossent ! · garage ($3500) : va sur la zone jaune et appuie sur E (owners : voiture fantôme 👻 invincible qui traverse les bâtiments, tu peux en descendre : elle reste garée et seuls les owners peuvent y remonter (E) ; au garage : ranger le fantôme (E), G pour en sortir un) · R : changer de radio (4 stations), H : klaxon · missions : parle au BOSS ❗ au bord ouest de la carte (E) : missions aléatoires (voitures, cavale, contrat, camion blindé 🚚), M pour abandonner · armurerie et distributeur de soins (hôpital) : va sur leur zone et appuie sur E · 🚁 hélicoptère : un pilote mystérieux traîne quelque part en ville (il n'est PAS sur la carte) : trouve-le et réussis sa quête pour débloquer un hélico, rangé sur le toit de ton garage (échelle dans le garage) ; E pour te poser sur la zone 🅷 du toit · à 5★ la police envoie des hélicos : abats-les !";
       get(RF(`users/${myUid}/sta`)).then(s => { const v = +s.val(); if (v > 0 && me.cash === 0) { me.cash = v; savedCash = v; sPrevCash = v; } }).catch(() => { });
       get(RF(`users/${myUid}/sta2`)).then(s => {                           // garage, voiture rangée, armes et munitions
         try {
           const v = JSON.parse(String(s.val() || "null"));
           if (v && typeof v === "object") {
-            me.g = v.g ? 1 : 0; const gc = v.c; me.gcar = gc && Number.isFinite(+gc.t) ? { c: (+gc.c | 0) & 7, t: ((+gc.t | 0) % 3 + 3) % 3, d: (+gc.d | 0) & 255, p: gc.p ? 1 : 0 } : null;
+            me.g = v.g ? 1 : 0; me.hu = v.h ? 1 : 0; const gc = v.c; me.gcar = gc && Number.isFinite(+gc.t) ? { c: (+gc.c | 0) & 7, t: ((+gc.t | 0) % 3 + 3) % 3, d: (+gc.d | 0) & 255, p: gc.p ? 1 : 0 } : null;
             if (!hasGun() && Array.isArray(v.a)) { for (let n = 1; n <= 3; n++) me.ammo[n] = clamp(Math.floor(+v.a[n - 1]) || 0, 0, WPN[n].max); const w = +v.w | 0; me.wpn = w >= 1 && w <= 3 && me.ammo[w] > 0 ? w : 0; if (!me.wpn) cycleWpn(); }
           }
         } catch { }

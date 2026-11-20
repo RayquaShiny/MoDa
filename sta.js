@@ -35,12 +35,13 @@ const GIVERS = [["any", "LE BOSS", "MISSIONS", [0, 4], "#2b2b3a", 3]]   // un se
 const PILOT = (() => { const [i, j] = gcell(8, 7); return { n: "LE PILOTE", x: lo(i) + SW / 2, y: lo(j) + BL / 2, a: Math.PI }; })();
 const RP = { x: lo(GARAGE[0]) + BL / 2, y: lo(GARAGE[1]) + BL / 2 + 10 };   // héliport sur le toit du garage
 const CNAME = ["rouge", "orange", "turquoise", "bleue", "jaune", "violette", "grise", "blanche"];   // même ordre que CCOL
-const SHOP_ARMS = [{ n: 1, p: 120 }, { n: 2, p: 400 }, { n: 3, p: 360 }];
+const SHOP_ARMS = [{ n: 1, p: 120 }, { n: 2, p: 400 }, { n: 3, p: 360 }, { n: 4, p: 650 }];
 const angLerp = (a, b, k) => { let d = (b - a) % 6.283185; if (d > 3.141593) d -= 6.283185; if (d < -3.141593) d += 6.283185; return a + d * k; };
 const WPN = [null,
   { n: "PISTOLET", rate: .34, rng: 340, pel: 1, spr: .02, car: 12, pvp: 14, heat: .05, max: 99, ammo: 30, snd: [330, .07, "square", .05, 140] },
   { n: "MITRAILLETTE", rate: .09, rng: 300, pel: 1, spr: .07, car: 6, pvp: 6, heat: .03, max: 300, ammo: 100, snd: [240, .05, "square", .04, 100] },
-  { n: "FUSIL À POMPE", rate: .85, rng: 210, pel: 5, spr: .22, car: 9, pvp: 11, heat: .15, max: 50, ammo: 16, snd: [110, .16, "sawtooth", .08, 40] }];
+  { n: "FUSIL À POMPE", rate: .85, rng: 210, pel: 5, spr: .22, car: 9, pvp: 11, heat: .15, max: 50, ammo: 16, snd: [110, .16, "sawtooth", .08, 40] },
+   { n: "RPG", rate: 1.1, rng: 430, pel: 1, spr: .01, car: 45, pvp: 28, heat: .2, max: 12, ammo: 3, snd: [75, .22, "sawtooth", .1, 35] }];
 // dégâts de carrosserie : 2 bits par zone (0 = avant, 1 = droite, 2 = arrière, 3 = gauche), niveau 0 à 3
 const carTy = id => { const k = (id | 0) % 12; return k < 10 ? k % 3 : k - 7; };   // modèle d'une voiture d'après son id : 0 berline · 1 coupé · 2 fourgon · 3 SUPERCAR 🏎️ · 4 ROADSTER 🏎️ (les voitures de sport : 1 id sur 6)
 const SPORTV = [1, 1, 1, 1.3, 1.2];                                                     // bonus de vitesse max des modèles
@@ -94,7 +95,7 @@ export function createStaClient(env) {
   // --- simulation de l'hôte ---
   let cops = [], helis = [], heliCd = 0, hostOn = false, peds = [], cars = [], nid = 1, evs = [], evId = 0, lastHs = {}, spawnCd = 0, streamCd = 0, pubAt = 0, hostT = 0, cleanCd = 0, lastGn = {};
   // --- moi ---
-  const me = { x: 0, y: 0, a: 0, v: 0, vid: 0, hp: 100, cash: 0, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, msg: "", hurt: 0, bust: 0, carT: 99, wpn: 0, ammo: [0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100 };
+  const me = { x: 0, y: 0, a: 0, v: 0, vid: 0, hp: 100, cash: 0, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, msg: "", hurt: 0, bust: 0, carT: 99, wpn: 0, ammo: [0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100, rpgParts: [], rpgQuest: 0, ammoTags: [], ammoQuest: 0, rpgAmmoUnlocked: 0 };
   let keys = new Set(), stick = null, useReq = 0, job = null, myCol = 0, cam = { x: 0, y: 0, z: 1.2 }, sentAt = 0, sentStr = "", savedCash = -1, saveAt = 0, tNow = 0, hitDone = new Set(), gLoaded = false, savedG = "";
   let inn = null, mis = null, tgt = null, lastMk = "", shop = "", mmBase = null;   // mission en cours, cible à éliminer, boutique ouverte
   let ejected = [], splats = [], floats = [], brakeId = null, fireKey = false, fireId = null, killQ = [], carQ = [], killAt = 0, tracers = [], sparks = [], booms = [], wrecks = [], pickT = new Map(), lastFc = {}, lastCs = {};
@@ -374,7 +375,7 @@ export function createStaClient(env) {
   const col = i => CCOL[(i | 0) % 8];
   function spawnAt(p) { me.hz = 0; me.land = 0; me.x = p[0] + rr(-30, 30); me.y = p[1]; me.vid = 0; me.v = 0; me.hp = 100; me.dead = 0; me.heat = 0; me.bust = 0; job = null; cam.x = me.x; cam.y = me.y; }
   function die(why, loss, where) { me.hz = 0; me.land = 0; shop = ""; if (mis) missionFail("tu es tombé"); me.dead = 2.2; me.msg = why; me.wpn = 0; me.ammo = [0, 0, 0, 0]; me.vid = 0; me.v = 0; me.heat = 0; me.cash = Math.floor(me.cash * (1 - loss)); me.where = where; SND.wasted(); }
-  const gStr = () => JSON.stringify({ g: me.g, c: me.gcar, g2: me.g2 ? 1 : 0, c2: me.gcar2, a: me.ammo.slice(1), w: me.wpn, h: me.hu ? 1 : 0, hh: Math.round(clamp(me.hh, 0, 100)) });
+  const gStr = () => JSON.stringify({ g: me.g, c: me.gcar, g2: me.g2 ? 1 : 0, c2: me.gcar2, a: me.ammo.slice(1), w: me.wpn, h: me.hu ? 1 : 0, hh: Math.round(clamp(me.hh, 0, 100)), rp: me.rpgParts, rq: me.rpgQuest, at: me.ammoTags, aq: me.ammoQuest, rau: me.rpgAmmoUnlocked });
   function persist(force) {                                               // argent (users/<uid>/sta) + garage, voiture rangée, armes et munitions (users/<uid>/sta2)
     const cash = Math.round(me.cash);
     if (force || cash !== savedCash) { savedCash = cash; set(RF(`users/${myUid}/sta`), cash).catch(() => { }); }
@@ -601,6 +602,7 @@ export function createStaClient(env) {
     me.cash -= p; me.hp = 100; me.hurt = 0; floats.push({ x: me.x, y: me.y - 22, t: tNow, s: `❤️ SOIGNÉ −$${p}`, c: "#7ae582" }); beep(660, .12, "triangle", .06); persist(true);
   }
   function buyArm(a) {
+    if (a.n === 4 && (!me.rpgAmmoUnlocked || me.rpgParts.length < 3)) { toast("Les munitions RPG sont verrouillées : termine les deux quêtes."); return; }
     const WP = WPN[a.n];
     if (me.ammo[a.n] >= WP.max) { toast("Munitions déjà au maximum"); return; }
     if (me.cash < a.p) { toast(`Il te faut $${a.p}`); return; }
@@ -608,7 +610,7 @@ export function createStaClient(env) {
     floats.push({ x: me.x, y: me.y - 22, t: tNow, s: `🔫 ${WP.n} +${WP.ammo} −$${a.p}`, c: "#ffe14d" }); beep(880, .1, "triangle", .06); persist(true);
   }
   const shopItems = () => {
-    if (shop === "arms") return SHOP_ARMS.map(a => { const WP = WPN[a.n], full = me.ammo[a.n] >= WP.max; return { l: `${a.n} · ${WP.n} +${WP.ammo}`, r: full ? "PLEIN" : `$${a.p}`, ok: !full && me.cash >= a.p, f: () => buyArm(a) }; });
+    if (shop === "arms") return SHOP_ARMS.map(a => { const WP = WPN[a.n], full = me.ammo[a.n] >= WP.max, locked = a.n === 4 && (!me.rpgAmmoUnlocked || me.rpgParts.length < 3); return { l: `${a.n} · ${WP.n} +${WP.ammo}`, r: locked ? "VERROUILLÉ" : full ? "PLEIN" : `${a.p}`, ok: !locked && !full && me.cash >= a.p, f: () => buyArm(a) }; });
     if (shop === "garage") {
       const hp2 = Math.ceil((100 - clamp(me.hh, 0, 100)) * 10), out = [];
       [[1, me.gcar], [2, me.gcar2]].forEach(([sl, g]) => {

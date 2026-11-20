@@ -1703,6 +1703,13 @@ function frame(now) {
   const arrow = (wx, wy, a, cl) => { x.save(); x.translate(mpx(wx), mpy(wy)); x.rotate(a); x.fillStyle = cl; x.strokeStyle = "#000"; x.lineWidth = 1.5; x.beginPath(); x.moveTo(6.5, 0); x.lineTo(-4.5, -4.5); x.lineTo(-2, 0); x.lineTo(-4.5, 4.5); x.closePath(); x.fill(); x.stroke(); x.restore(); };
   const ping = (wx, wy, cl, r) => { const f = pul(1100); x.globalAlpha = .7 * (1 - f); x.strokeStyle = cl; x.lineWidth = 1.5; x.beginPath(); x.arc(mpx(wx), mpy(wy), r + f * 9, 0, 7); x.stroke(); x.globalAlpha = 1; };
   dot(ZONES.arms.x, ZONES.arms.y, "#ff5a4d", 2.6); dot(ZONES.heal.x, ZONES.heal.y, "#7ae582", 2.6);
+  // Objets des quêtes RPG : visibles sur la mini-carte dès que la quête est active.
+  if (me.rpgQuest && me.rpgParts.length < 3) RPG_PART_SPOTS.forEach((q,i) => {
+    if (!me.rpgParts.includes(i)) { ping(q.x,q.y,"#ffd23f",4); dot(q.x,q.y,"#ffd23f",4); }
+  });
+  if (me.ammoQuest && !me.rpgAmmoUnlocked) AMMO_TAG_SPOTS.forEach((q,i) => {
+    if (!me.ammoTags.includes(i)) { ping(q.x,q.y,"#45d9ff",4); dot(q.x,q.y,"#45d9ff",4); }
+  });
   if (!mis) GIVERS.forEach(g => { dot(g.x, g.y, "#ffd23f", 3); });
   for (const d of dCars.values()) if (d.m === "c") { const fl = Math.floor(now / 200) % 2; dot(d.x, d.y, fl ? "#ff2a2a" : "#2a5bff", 2.8); }
   for (const d of dCops.values()) dot(d.x, d.y, "#7da2ff", 1.8);

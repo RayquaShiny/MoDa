@@ -1700,11 +1700,23 @@ function frame(now) {
      const age = now - q.t, f = clamp(age / q.dur, 0, 1), hx = q.x0 + (q.x1 - q.x0) * f, hy = q.y0 + (q.y1 - q.y0) * f;
      if (f >= 1 && !q.impact) { q.impact = 1; booms.push({ x: q.x1, y: q.y1, t: now, rpg: 1 }); SND.boom(dv(q.x1, q.y1, 900)); }
      if (f < 1) {
-       const ang = Math.atan2(q.y1-q.y0,q.x1-q.x0);
-       x.save(); x.globalAlpha = .78; x.strokeStyle = "#ff8a24"; x.lineWidth = 4; x.beginPath(); x.moveTo(q.x0, q.y0); x.lineTo(hx, hy); x.stroke();
-       x.globalAlpha = 1; x.fillStyle = "#ff6b24"; x.beginPath(); x.arc(hx, hy, 7, 0, 7); x.fill();
-       x.fillStyle = "#fff2a8"; x.beginPath(); x.arc(hx, hy, 3.5, 0, 7); x.fill();
-       x.fillStyle = "rgba(255,125,35,.65)"; x.beginPath(); x.arc(hx - Math.cos(ang)*10, hy - Math.sin(ang)*10, 5, 0, 7); x.fill(); x.restore();
+       const ang = Math.atan2(q.y1-q.y0,q.x1-q.x0), dx = Math.cos(ang), dy = Math.sin(ang);
+       // Sillage court qui suit la roquette : plus de ligne persistante sur tout le trajet.
+       const tail = Math.min(34, Math.hypot(q.x1-q.x0,q.y1-q.y0) * f);
+       x.save(); x.lineCap = "round";
+       x.globalAlpha = .24; x.strokeStyle = "#ffb34d"; x.lineWidth = 11;
+       x.beginPath(); x.moveTo(hx-dx*tail,hy-dy*tail); x.lineTo(hx-dx*7,hy-dy*7); x.stroke();
+       x.globalAlpha = .78; x.strokeStyle = "#ff7626"; x.lineWidth = 4;
+       x.beginPath(); x.moveTo(hx-dx*tail,hy-dy*tail); x.lineTo(hx-dx*8,hy-dy*8); x.stroke();
+       // Flamme animée et corps orienté dans la trajectoire.
+       const flick = 8 + Math.sin(now/24 + q.t)*3;
+       x.fillStyle = "#ff6b24"; x.beginPath(); x.moveTo(hx-dx*9,hy-dy*9); x.lineTo(hx-dx*(15+flick),hy-dy*(15+flick)); x.lineTo(hx-dx*5-dy*3,hy-dy*5+dx*3); x.closePath(); x.fill();
+       x.translate(hx,hy); x.rotate(ang);
+       x.fillStyle = "#ff8a24"; x.beginPath(); x.moveTo(-10,-2); x.lineTo(-15,-6); x.lineTo(-4,-4); x.closePath(); x.fill();
+       x.beginPath(); x.moveTo(-10,2); x.lineTo(-15,6); x.lineTo(-4,4); x.closePath(); x.fill();
+       x.fillStyle = "#dce8ef"; x.fillRect(-9,-3,14,6);
+       x.fillStyle = "#fff2a8"; x.beginPath(); x.moveTo(5,-3); x.lineTo(11,0); x.lineTo(5,3); x.closePath(); x.fill();
+       x.restore();
      }
    });
    tracers = tracers.filter(t => now - t.t < 90);

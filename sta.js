@@ -95,7 +95,7 @@ export function createStaClient(env) {
   // --- simulation de l'hôte ---
   let cops = [], helis = [], heliCd = 0, hostOn = false, peds = [], cars = [], nid = 1, evs = [], evId = 0, lastHs = {}, spawnCd = 0, streamCd = 0, pubAt = 0, hostT = 0, cleanCd = 0, lastGn = {};
   // --- moi ---
-  const me = { x: 0, y: 0, a: 0, v: 0, vid: 0, hp: 100, cash: 0, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, msg: "", hurt: 0, bust: 0, carT: 99, wpn: 0, ammo: [0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100, rpgParts: [], rpgQuest: 0, ammoTags: [], ammoQuest: 0, rpgAmmoUnlocked: 0 };
+  const me = { x: 0, y: 0, a: 0, v: 0, vid: 0, hp: 100, cash: 0, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, msg: "", hurt: 0, bust: 0, carT: 99, wpn: 0, ammo: [0, 0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100, rpgParts: [], rpgQuest: 0, ammoTags: [], ammoQuest: 0, rpgAmmoUnlocked: 0 };
   let keys = new Set(), stick = null, useReq = 0, job = null, myCol = 0, cam = { x: 0, y: 0, z: 1.2 }, sentAt = 0, sentStr = "", savedCash = -1, saveAt = 0, tNow = 0, hitDone = new Set(), gLoaded = false, savedG = "";
   let inn = null, mis = null, tgt = null, lastMk = "", shop = "", mmBase = null;   // mission en cours, cible à éliminer, boutique ouverte
   let ejected = [], splats = [], floats = [], brakeId = null, fireKey = false, fireId = null, killQ = [], carQ = [], killAt = 0, tracers = [], sparks = [], booms = [], wrecks = [], pickT = new Map(), lastFc = {}, lastCs = {};
@@ -374,7 +374,7 @@ export function createStaClient(env) {
   // ================= MOI =================
   const col = i => CCOL[(i | 0) % 8];
   function spawnAt(p) { me.hz = 0; me.land = 0; me.x = p[0] + rr(-30, 30); me.y = p[1]; me.vid = 0; me.v = 0; me.hp = 100; me.dead = 0; me.heat = 0; me.bust = 0; job = null; cam.x = me.x; cam.y = me.y; }
-  function die(why, loss, where) { me.hz = 0; me.land = 0; shop = ""; if (mis) missionFail("tu es tombé"); me.dead = 2.2; me.msg = why; me.wpn = 0; me.ammo = [0, 0, 0, 0]; me.vid = 0; me.v = 0; me.heat = 0; me.cash = Math.floor(me.cash * (1 - loss)); me.where = where; SND.wasted(); }
+  function die(why, loss, where) { me.hz = 0; me.land = 0; shop = ""; if (mis) missionFail("tu es tombé"); me.dead = 2.2; me.msg = why; me.wpn = 0; me.ammo = [0, 0, 0, 0, 0]; me.vid = 0; me.v = 0; me.heat = 0; me.cash = Math.floor(me.cash * (1 - loss)); me.where = where; SND.wasted(); }
   const gStr = () => JSON.stringify({ g: me.g, c: me.gcar, g2: me.g2 ? 1 : 0, c2: me.gcar2, a: me.ammo.slice(1), w: me.wpn, h: me.hu ? 1 : 0, hh: Math.round(clamp(me.hh, 0, 100)), rp: me.rpgParts, rq: me.rpgQuest, at: me.ammoTags, aq: me.ammoQuest, rau: me.rpgAmmoUnlocked });
   function persist(force) {                                               // argent (users/<uid>/sta) + garage, voiture rangée, armes et munitions (users/<uid>/sta2)
     const cash = Math.round(me.cash);
@@ -1628,7 +1628,8 @@ function frame(now) {
   cam.z += (tz - cam.z) * Math.min(1, 3 * dt);
   cam.x += (me.x + (me.vid ? Math.cos(me.a) * me.v * .12 : 0) - cam.x) * Math.min(1, 9 * dt); cam.y += (me.y + (me.vid ? Math.sin(me.a) * me.v * .12 : 0) - cam.y) * Math.min(1, 9 * dt);
   const S = cv.width / W, z = cam.z, vw = W / z, vh = H / z, vx0 = cam.x - vw / 2, vy0 = cam.y - vh / 2, vx1 = vx0 + vw, vy1 = vy0 + vh;
-  const tx = Math.round((W / 2 - cam.x * z) / LR), ty = Math.round((H / 2 - cam.y * z) / LR), sxy = (wx, wy) => [wx * z + tx * LR, wy * z + ty * LR];
+  const boomPower = booms.reduce((v,b)=>{const age=now-b.t,dist=Math.hypot(b.x-me.x,b.y-me.y);return age>=0&&age<420?Math.max(v,(1-age/420)*Math.max(0,1-dist/1000)):v;},0), shake=boomPower*7;
+   const tx = Math.round((W / 2 - cam.x * z) / LR + (shake?Math.sin(now*.12)*shake:0)), ty = Math.round((H / 2 - cam.y * z) / LR + (shake?Math.cos(now*.15)*shake*.7:0)), sxy = (wx, wy) => [wx * z + tx * LR, wy * z + ty * LR];
   const labels = [];
   x = lx; x.setTransform(z / LR, 0, 0, z / LR, tx, ty);                              // le monde est dessiné en basse résolution…
   drawWorld(vx0, vy0, vx1, vy1);
@@ -1636,6 +1637,8 @@ function frame(now) {
   splats.forEach(s => { const a = 1 - (now - s.t) / 30000; if (a > 0 && inV(s.x, s.y)) drawSplat(s, a); });
   splats = splats.filter(s => now - s.t < 30000);
   for (const p of PICKS) if (inV(p.x, p.y) && !(pickT.has(p.id) && now - pickT.get(p.id) < 45000)) drawPick(p, now);
+   RPG_PART_SPOTS.forEach((q,i)=>{if(me.rpgQuest&&!me.rpgParts.includes(i)&&Math.hypot(q.x-me.x,q.y-me.y)<75){x.fillStyle="rgba(255,210,63,.25)";x.beginPath();x.arc(q.x,q.y,9+Math.sin(now/120)*2,0,7);x.fill();labels.push(["✦",q.x,q.y-8,"#ffd23f",13]);}});
+   AMMO_TAG_SPOTS.forEach((q,i)=>{if(me.ammoQuest&&!me.ammoTags.includes(i)&&Math.hypot(q.x-me.x,q.y-me.y)<75){x.fillStyle="rgba(62,230,196,.22)";x.beginPath();x.arc(q.x,q.y,8+Math.sin(now/140)*2,0,7);x.fill();labels.push(["✦",q.x,q.y-8,"#3ee6c4",12]);}});
   wrecks = wrecks.filter(w => now - w.t < 25000); wrecks.forEach(w => { if (inV(w.x, w.y)) drawWreck(w, now); });
   for (const [cid, d] of dCops) if (!hitDone.has(cid) && inV(d.x, d.y)) drawWalker(d.x, d.y, d.a, "#2a46a8", "#f1c27d", Math.hypot(d.tx - d.x, d.ty - d.y) > 1.2 ? now / 85 : null, 1, now - (d.flash || -1e9) < 70, true);
   ejected = ejected.filter(q => now - q.t < 6300); ejected.forEach(q => { if (inV(q.x, q.y)) drawEjected(q, now); });
@@ -1752,7 +1755,7 @@ function frame(now) {
     if ((e.key === "g" || e.key === "G") && !shop && !inn) { if (!e.repeat && me.g && isOwner() && inGarage() && !me.vid && me.dead <= 0) ghostTake(); e.preventDefault(); return; }
     if (shop) { const d2 = /^(Digit|Numpad)([1-9])$/.exec(e.code || ""); if (d2) { shopPick(+d2[2] - 1); e.preventDefault(); return; } if (e.key === "Escape") { shop = ""; return; } }
     if ((e.key === "m" || e.key === "M") && mis) { if (!e.repeat) missionFail("", true); e.preventDefault(); return; }
-    const dg = /^(Digit|Numpad)([0-3])$/.exec(e.code || ""); if (dg) { selWpn(+dg[2]); return; }
+    const dg = /^(Digit|Numpad)([0-4])$/.exec(e.code || ""); if (dg) { selWpn(+dg[2]); return; }
     if (e.key === " " || e.key === "e" || e.key === "E") { e.preventDefault(); if (!e.repeat) useReq = 1; return; }
     const k = KEYS[e.key.length > 1 ? e.key : e.key.toLowerCase()]; if (k) { e.preventDefault(); keys.add(k); }
   });
@@ -1788,7 +1791,7 @@ function frame(now) {
     enter(code) {
       active = true; c = code; myUid = getMe().uid; ls = null; lastT = 0; lastH = ""; lastEv = 0; pd = {}; hostOn = false; keys = new Set(); stick = null; brakeId = null; useReq = 0;
       dPeds.clear(); dCars.clear(); dCops.clear(); dHelis.clear(); helis = []; dP.clear(); ejected = []; sPrevCash = 0; sPrevWl = 0; sAmbT = performance.now() + 8000; hornKey = false; hornId = null; me.pg = null; splats = []; floats = []; hitDone = new Set(); lastHs = {}; sentStr = ""; sentAt = 0; savedCash = -1; saveAt = performance.now(); gLoaded = false; savedG = ""; lastGn = {};
-      Object.assign(me, { vid: 0, hp: 100, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, bust: 0, hurt: 0, v: 0, a: 0, cash: 0, cop: 0, wpn: 0, ammo: [0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100 });
+      Object.assign(me, { vid: 0, hp: 100, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, bust: 0, hurt: 0, v: 0, a: 0, cash: 0, cop: 0, wpn: 0, ammo: [0, 0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100 });
       inn = null; mis = null; tgt = null; shop = ""; killQ = []; carQ = []; tracers = []; sparks = []; booms = []; wrecks = []; pickT = new Map(); lastFc = {}; lastCs = {}; fireKey = false; fireId = null;
       const ix = 2 + Math.floor(Math.random() * 5), iy = 2 + Math.floor(Math.random() * 5); spawnAt([ix * CELL, iy * CELL]);
       $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : monter / descendre d'une voiture · en voiture ↑ accélère, ↓ freine, ←→ tourne · livre les colis 📦, écrase des piétons, évite la police ! · Sans arme tu frappes avec tes poings 👊 (F : 3 coups pour un piéton) ; ramasse les armes au sol : F tirer, X changer d'arme (0 = poings, 1-2-3) · en hélico : mitraillette à munitions infinies (F) · les voitures se cabossent ! · garage ($3500 ; à l'intérieur, un 2e emplacement pour une voiture de plus : $2500) : va sur la zone jaune et appuie sur E (owners : voiture fantôme 👻 invincible qui traverse les bâtiments, tu peux en descendre : elle reste garée et seuls les owners peuvent y remonter (E) ; au garage : ranger le fantôme (E), G pour en sortir un) · R : changer de radio (4 stations), H : klaxon · missions : parle au BOSS ❗ au bord ouest de la carte (E) : missions aléatoires (voitures, cavale, contrat, camion blindé 🚚), M pour abandonner · armurerie et distributeur de soins (hôpital) : va sur leur zone et appuie sur E · 🏎️ des voitures de sport (Supercar, Roadster) roulent en ville : bien plus rapides, vole-les et range-les au garage ! · 🚁 hélicoptère : un pilote mystérieux traîne quelque part en ville (il n'est PAS sur la carte) : trouve-le et réussis sa quête pour débloquer un hélico, rangé sur le toit de ton garage (échelle dans le garage) ; E pour te poser sur la zone 🅷 du toit · à 5★ la police envoie des hélicos : abats-les !";
@@ -1798,7 +1801,7 @@ function frame(now) {
           const v = JSON.parse(String(s.val() || "null"));
           if (v && typeof v === "object") {
             me.g = v.g ? 1 : 0; me.hu = v.h ? 1 : 0; me.hh = v.hh === undefined ? 100 : clamp(Math.round(+v.hh) || 0, 0, 100); const gc = v.c; const rdCar = q => q && Number.isFinite(+q.t) ? { c: (+q.c | 0) & 7, t: clamp(+q.t | 0, 0, 4), d: (+q.d | 0) & 255, p: q.p ? 1 : 0 } : null; me.gcar = rdCar(gc); me.g2 = v.g2 ? 1 : 0; me.gcar2 = me.g2 ? rdCar(v.c2) : null;
-            if (!hasGun() && Array.isArray(v.a)) { for (let n = 1; n <= 3; n++) me.ammo[n] = clamp(Math.floor(+v.a[n - 1]) || 0, 0, WPN[n].max); const w = +v.w | 0; me.wpn = w >= 1 && w <= 3 && me.ammo[w] > 0 ? w : 0; if (!me.wpn) cycleWpn(); }
+            if (!hasGun() && Array.isArray(v.a)) { for (let n = 1; n <= 4; n++) me.ammo[n] = clamp(Math.floor(+v.a[n - 1]) || 0, 0, WPN[n].max); me.rpgParts = Array.isArray(v.rp) ? v.rp.filter(n=>Number.isInteger(n)&&n>=0&&n<3) : []; me.rpgQuest = v.rq ? 1 : 0; me.ammoTags = Array.isArray(v.at) ? v.at.filter(n=>Number.isInteger(n)&&n>=0&&n<3) : []; me.ammoQuest = v.aq ? 1 : 0; me.rpgAmmoUnlocked = v.rau ? 1 : 0; const w = +v.w | 0; me.wpn = w >= 1 && w <= 4 && me.ammo[w] > 0 ? w : 0; if (!me.wpn) cycleWpn(); }
           }
         } catch { }
         gLoaded = true; savedG = gStr();

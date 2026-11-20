@@ -33,6 +33,7 @@ const GIVERS = [["any", "LE BOSS", "MISSIONS", [0, 4], "#2b2b3a", 3]]   // un se
   .map(([k, n, l, c, sh, sk]) => { const [i, j] = gcell(c[0], c[1]); return { k, n, l, x: lo(i) + SW / 2, y: lo(j) + BL / 2, a: Math.PI, sh, sk }; });
 // le PILOTE : donneur de la quête de l'hélico. Caché : jamais sur la minicarte, étiquette visible seulement de près
 const PILOT = (() => { const [i, j] = gcell(8, 7); return { n: "LE PILOTE", x: lo(i) + SW / 2, y: lo(j) + BL / 2, a: Math.PI }; })();
+const RPG_CONTACT = (() => { const [i,j] = gcell(6,8); return { n:"MÉCANO", x:lo(i)+SW/2, y:lo(j)+BL/2, a:Math.PI, sh:"#d18a35", sk:5 }; })();
 const RP = { x: lo(GARAGE[0]) + BL / 2, y: lo(GARAGE[1]) + BL / 2 + 10 };   // héliport sur le toit du garage
 const CNAME = ["rouge", "orange", "turquoise", "bleue", "jaune", "violette", "grise", "blanche"];   // même ordre que CCOL
 const SHOP_ARMS = [{ n: 1, p: 120 }, { n: 2, p: 400 }, { n: 3, p: 360 }, { n: 4, p: 650 }];
@@ -497,7 +498,7 @@ export function createStaClient(env) {
   function useKey() {
     if (me.dead > 0) return;
     if (shop) { shop = ""; return; }
-    if (inn) { if (inn.k === "arms" && me.rpgParts.length >= 3 && !me.rpgAmmoUnlocked) { if(!me.ammoQuest){me.ammoQuest=1;persist(true);toast("ARMURIER : « Retrouve mes 3 badges de livraison cachés en ville. Après ça, tu pourras acheter les munitions de RPG. »");beep(520,.12,"triangle",.06);}else if(me.ammoTags.length>=3){me.rpgAmmoUnlocked=1;persist(true);floats.push({x:me.x,y:me.y-25,t:tNow,s:"MUNITIONS RPG DÉBLOQUÉES",c:"#ffd23f"});toast("Quête réussie ! Les munitions de RPG sont maintenant achetables.");beep(880,.16,"triangle",.06);}else toast(`ARMURIER : « Il manque ${3-me.ammoTags.length} badge(s) ! »`);return;} innUse(); return; }
+    if (inn) { if (inn.k === "arms" && me.rpgParts.length >= 3 && me.ammoQuest && !me.rpgAmmoUnlocked) { if(me.ammoTags.length>=3){me.rpgAmmoUnlocked=1;persist(true);floats.push({x:me.x,y:me.y-25,t:tNow,s:"MUNITIONS RPG DÉBLOQUÉES",c:"#ffd23f"});toast("Quête réussie ! Les munitions de RPG sont maintenant achetables.");beep(880,.16,"triangle",.06);}else toast(`ARMURIER : « Il manque ${3-me.ammoTags.length} badge(s) ! »`);return;} innUse(); return; }
     if (me.vid === HELI) { heliLand(); return; }
     if (!me.vid) {
       const z = shopAt(); if (z) { if (z === "heal") healDo(); else enterInn(z); return; }
@@ -860,9 +861,15 @@ export function createStaClient(env) {
   }
   function talkDo() {
     if (nearPilot()) { pilotTalk(); return true; }
+    if (!me.vid && !inn && Math.hypot(RPG_CONTACT.x-me.x,RPG_CONTACT.y-me.y)<58) {
+      if (!me.rpgQuest) { me.rpgQuest=1; persist(true); toast("MÉCANO : « Retrouve les 3 pièces du lance-roquettes que j’ai cachées en ville. »"); }
+      else if (me.rpgParts.length<3) toast(`MÉCANO : « Il te manque encore ${3-me.rpgParts.length} pièce(s) RPG. »`);
+      else if (!me.ammoQuest) { me.ammoQuest=1; persist(true); toast("MÉCANO : « Parfait ! Maintenant retrouve mes 3 badges cachés pour débloquer les munitions. »"); }
+      else if (me.ammoTags.length<3) toast(`MÉCANO : « Il te manque encore ${3-me.ammoTags.length} badge(s). »`);
+      else toast("MÉCANO : « Tout est prêt ! Va à l’armurerie pour récupérer l’accès aux munitions RPG. »");
+      beep(620,.12,"triangle",.06); return true;
+    }
     const g = nearGiver(); if (!g) return false;
-    if (!me.rpgQuest) { me.rpgQuest=1; persist(true); toast("LE BOSS : « J’ai caché 3 pièces de RPG dans la ville. Retrouve-les, elles sont extrêmement bien dissimulées ! »"); beep(520,.12,"triangle",.06); return true; }
-    // Les missions classiques restent accessibles pendant la quête RPG.
     if (mis) { toast(`${g.n} : « Termine d’abord ta mission ! » (M : abandonner)`); return true; }
     startMis(g); return true;
   }
@@ -1644,10 +1651,27 @@ function frame(now) {
   wrecks = wrecks.filter(w => now - w.t < 25000); wrecks.forEach(w => { if (inV(w.x, w.y)) drawWreck(w, now); });
   for (const [cid, d] of dCops) if (!hitDone.has(cid) && inV(d.x, d.y)) drawWalker(d.x, d.y, d.a, "#2a46a8", "#f1c27d", Math.hypot(d.tx - d.x, d.ty - d.y) > 1.2 ? now / 85 : null, 1, now - (d.flash || -1e9) < 70, true);
   ejected = ejected.filter(q => now - q.t < 6300); ejected.forEach(q => { if (inV(q.x, q.y)) drawEjected(q, now); });
+  // Objets de quête : halo animé et icônes contrastées directement dans la ville.
+  if (me.rpgQuest && me.rpgParts.length<3) RPG_PART_SPOTS.forEach((q,i)=>{ if(!me.rpgParts.includes(i)&&inV(q.x,q.y)){
+    const pulse=.7+.3*Math.sin(now/150); x.save(); x.globalAlpha=pulse; x.fillStyle="rgba(255,205,45,.3)"; x.beginPath(); x.arc(q.x,q.y,19,0,7); x.fill();
+    x.fillStyle="#ffd23f"; x.strokeStyle="#4b3100"; x.lineWidth=2.5; x.beginPath(); x.arc(q.x,q.y,10,0,7); x.fill(); x.stroke();
+    x.fillStyle="#fff6bd"; x.fillRect(q.x-2,q.y-6,4,12); x.fillRect(q.x-6,q.y-2,12,4); x.restore();
+  }});
+  if (me.ammoQuest && !me.rpgAmmoUnlocked) AMMO_TAG_SPOTS.forEach((q,i)=>{ if(!me.ammoTags.includes(i)&&inV(q.x,q.y)){
+    const pulse=.7+.3*Math.sin(now/150); x.save(); x.globalAlpha=pulse; x.fillStyle="rgba(60,220,255,.3)"; x.beginPath(); x.arc(q.x,q.y,19,0,7); x.fill();
+    x.fillStyle="#42dcff"; x.strokeStyle="#063d54"; x.lineWidth=2.5; x.beginPath(); x.arc(q.x,q.y,10,0,7); x.fill(); x.stroke();
+    x.fillStyle="#fff"; x.fillRect(q.x-5,q.y-2,10,4); x.restore();
+  }});
   for (const [pid, d] of dPeds) if (!hitDone.has(pid) && inV(d.x, d.y)) drawWalker(d.x, d.y, d.a, SHIRT[d.sk % 6], SKIN[d.sk % 6], now / 85 + d.tx);
   for (const g of GIVERS) if (inV(g.x, g.y)) {
     const dd = Math.hypot(g.x - me.x, g.y - me.y); drawWalker(g.x, g.y, dd < 170 ? Math.atan2(me.y - g.y, me.x - g.x) : g.a, g.sh, SKIN[g.sk], null, 0, false);
     labels.push([g.n, g.x, g.y - 20, "#fff"]); if (!mis) labels.push(["❗", g.x, g.y - 38 + Math.sin(now / 200) * 3, "#ffd23f", 20]);
+  }
+  if (inV(RPG_CONTACT.x,RPG_CONTACT.y)) {
+    const dd=Math.hypot(RPG_CONTACT.x-me.x,RPG_CONTACT.y-me.y), pa=dd<170?Math.atan2(me.y-RPG_CONTACT.y,me.x-RPG_CONTACT.x):RPG_CONTACT.a;
+    drawWalker(RPG_CONTACT.x,RPG_CONTACT.y,pa,RPG_CONTACT.sh,SKIN[RPG_CONTACT.sk],null,0,false);
+    x.save(); x.translate(RPG_CONTACT.x,RPG_CONTACT.y); x.fillStyle="#30343b"; x.fillRect(-5,-10,10,4); x.fillStyle="#ffd23f"; x.fillRect(-3,-12,6,2); x.restore();
+    if(dd<245){ labels.push([RPG_CONTACT.n,RPG_CONTACT.x,RPG_CONTACT.y-20,"#fff"]); labels.push(["🧩",RPG_CONTACT.x,RPG_CONTACT.y-38+Math.sin(now/200)*3,"#ffd23f",19]); }
   }
   if (inV(PILOT.x, PILOT.y)) {                                                                      // le pilote (quête de l'hélico) : casquette de cuir + lunettes
     const dd = Math.hypot(PILOT.x - me.x, PILOT.y - me.y), pa = dd < 170 ? Math.atan2(me.y - PILOT.y, me.x - PILOT.x) : PILOT.a;
@@ -1703,13 +1727,6 @@ function frame(now) {
   const arrow = (wx, wy, a, cl) => { x.save(); x.translate(mpx(wx), mpy(wy)); x.rotate(a); x.fillStyle = cl; x.strokeStyle = "#000"; x.lineWidth = 1.5; x.beginPath(); x.moveTo(6.5, 0); x.lineTo(-4.5, -4.5); x.lineTo(-2, 0); x.lineTo(-4.5, 4.5); x.closePath(); x.fill(); x.stroke(); x.restore(); };
   const ping = (wx, wy, cl, r) => { const f = pul(1100); x.globalAlpha = .7 * (1 - f); x.strokeStyle = cl; x.lineWidth = 1.5; x.beginPath(); x.arc(mpx(wx), mpy(wy), r + f * 9, 0, 7); x.stroke(); x.globalAlpha = 1; };
   dot(ZONES.arms.x, ZONES.arms.y, "#ff5a4d", 2.6); dot(ZONES.heal.x, ZONES.heal.y, "#7ae582", 2.6);
-  // Objets des quêtes RPG : visibles sur la mini-carte dès que la quête est active.
-  if (me.rpgQuest && me.rpgParts.length < 3) RPG_PART_SPOTS.forEach((q,i) => {
-    if (!me.rpgParts.includes(i)) { ping(q.x,q.y,"#ffd23f",4); dot(q.x,q.y,"#ffd23f",4); }
-  });
-  if (me.ammoQuest && !me.rpgAmmoUnlocked) AMMO_TAG_SPOTS.forEach((q,i) => {
-    if (!me.ammoTags.includes(i)) { ping(q.x,q.y,"#45d9ff",4); dot(q.x,q.y,"#45d9ff",4); }
-  });
   if (!mis) GIVERS.forEach(g => { dot(g.x, g.y, "#ffd23f", 3); });
   for (const d of dCars.values()) if (d.m === "c") { const fl = Math.floor(now / 200) % 2; dot(d.x, d.y, fl ? "#ff2a2a" : "#2a5bff", 2.8); }
   for (const d of dCops.values()) dot(d.x, d.y, "#7da2ff", 1.8);

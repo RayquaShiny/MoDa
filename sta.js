@@ -803,25 +803,26 @@ export function createStaClient(env) {
   // Chaque mission est personnelle (calculée chez toi, rien n'est écrit sur Firebase) : voiture volée à livrer, police à semer, cible à éliminer.
   const nearGiver = () => (me.vid || me.dead > 0) ? null : GIVERS.find(g => Math.hypot(g.x - me.x, g.y - me.y) < 52) || null;
 
-  // --- quête spéciale du PILOTE (hélicoptère) : 3 caisses de pièces à ramasser en ville, puis retour chez lui.
+  // --- quête spéciale du PILOTE (hélicoptère) : 5 caisses de pièces à ramasser en ville (chaque caisse attire la police), puis retour chez lui SANS étoile, en 8 min.
   //     Comme les autres missions elle est personnelle (chez toi) ; seule la réussite est sauvegardée (me.hu).
   const nearPilot = () => (me.vid || me.dead > 0 || inn) ? null : (Math.hypot(PILOT.x - me.x, PILOT.y - me.y) < 52 ? PILOT : null);
+  const PARTS = 5, PART_TIME = 480;                                      // difficulté de la quête : nombre de caisses · temps (s)
   function partSpots() {
     const out = [];
-    for (let t = 0; t < 80 && out.length < 3; t++) {
+    for (let t = 0; t < 400 && out.length < PARTS; t++) {
       const jx = (1 + Math.floor(Math.random() * (N - 1))) * CELL, jy = (1 + Math.floor(Math.random() * (N - 1))) * CELL;
-      if (Math.hypot(jx - me.x, jy - me.y) < 500 || out.some(q => Math.hypot(q.x - jx, q.y - jy) < 700)) continue;
+      if (Math.hypot(jx - me.x, jy - me.y) < 800 || out.some(q => Math.hypot(q.x - jx, q.y - jy) < 1000)) continue;
       out.push({ x: jx, y: jy, got: 0 });
     }
-    while (out.length < 3) out.push({ x: ((out.length * 3 + 1) % (N - 1) + 1) * CELL, y: ((out.length * 5 + 2) % (N - 1) + 1) * CELL, got: 0 });
+    while (out.length < PARTS) out.push({ x: ((out.length * 3 + 1) % (N - 1) + 1) * CELL, y: ((out.length * 5 + 2) % (N - 1) + 1) * CELL, got: 0 });
     return out;
   }
   function pilotTalk() {
     if (me.hu) { toast(me.g ? "LE PILOTE : « Ton hélico est sur le toit de ton garage. Bon vol ! »" : "LE PILOTE : « Il te faut le garage ($3500) : l'hélico se range sur son toit ! »"); return; }
-    if (mis && mis.k === "heli") { if (mis.st === 1) heliUnlock(); else toast(`LE PILOTE : « Il me manque encore ${3 - mis.got} caisse(s) de pièces ! »`); return; }
+    if (mis && mis.k === "heli") { if (mis.st === 1) { if (me.wl > 0) toast("LE PILOTE : « La police est sur tes talons ! Sème-la d'abord, je ne veux pas d'ennuis. »"); else heliUnlock(); } else toast(`LE PILOTE : « Il me manque encore ${PARTS - mis.got} caisse(s) de pièces ! »`); return; }
     if (mis) { toast("LE PILOTE : « Finis d'abord ta mission ! » (M : abandonner)"); return; }
-    mis = { k: "heli", n: "LE PILOTE", st: 0, t: 600, cr: partSpots(), got: 0 };
-    toast("LE PILOTE : « J'ai un hélico mais il lui manque 3 caisses de pièces 🔧. Ramène-les-moi et il est à toi ! »"); beep(440, .1, "triangle", .06);
+    mis = { k: "heli", n: "LE PILOTE", st: 0, t: PART_TIME, cr: partSpots(), got: 0 };
+    toast("LE PILOTE : « J'ai un hélico mais il lui manque 5 caisses de pièces 🔧, très loin les unes des autres. Chaque caisse attire la police, tu as 8 min, et ramène-les-moi sans étoile ! »"); beep(440, .1, "triangle", .06);
   }
   function heliUnlock() {
     me.hu = 1; mis = null; floats.push({ x: me.x, y: me.y - 26, t: tNow, s: "🚁 HÉLICOPTÈRE DÉBLOQUÉ !", c: "#ffd23f" });
@@ -957,8 +958,9 @@ export function createStaClient(env) {
       }
     } else if (mis.k === "heli") {
       if (mis.st === 0) for (const q of mis.cr) if (!q.got && Math.hypot(q.x - me.x, q.y - me.y) < 38) {
-        q.got = 1; mis.got++; floats.push({ x: q.x, y: q.y - 20, t: tNow, s: `🔧 CAISSE ${mis.got}/3`, c: "#ffb703" }); beep(880, .1, "triangle", .06);
-        if (mis.got >= 3) { mis.st = 1; toast("Les 3 caisses sont à bord ! Retourne voir le pilote."); }
+        q.got = 1; mis.got++; floats.push({ x: q.x, y: q.y - 20, t: tNow, s: `🔧 CAISSE ${mis.got}/${PARTS}`, c: "#ffb703" }); beep(880, .1, "triangle", .06);
+        me.heat = Math.min(5, Math.max(me.heat, 1.6 + mis.got * .5)); toast("🚨 La police est alertée !");   // chaque caisse ramassée fait monter les étoiles
+        if (mis.got >= PARTS) { mis.st = 1; toast("Les 5 caisses sont à bord ! Sème la police et retourne voir le pilote."); }
       }
     } else if (mis.k === "cop") {
       if (mis.el > 6 && me.wl === 0) missionDone(600 + Math.round(mis.t * 1.5), "🚓 POLICE SEMÉE");
@@ -970,7 +972,7 @@ export function createStaClient(env) {
     if (mis.k === "car") l1 = mis.st === 0 ? `🚗 VOLE UNE VOITURE ${CNAME[mis.tc].toUpperCase()}` : me.vid === mis.vid ? "🚗 LIVRE-LA AU 🏁" : "🚗 RETOURNE DANS LA VOITURE !";
     else if (mis.k === "cop") l1 = `🚓 SÈME LA POLICE (${me.wl}★)`;
     else if (mis.k === "truck") l1 = `🚚 ARRÊTE LE CAMION BLINDÉ (${Math.max(0, Math.round(mis.trk.hp / mis.trk.mx * 100))}%)`;
-    else if (mis.k === "heli") l1 = mis.st === 0 ? `🔧 PIÈCES D'HÉLICO ${mis.got}/3` : "🚁 RAPPORTE-LES AU PILOTE";
+    else if (mis.k === "heli") l1 = mis.st === 0 ? `🔧 PIÈCES D'HÉLICO ${mis.got}/${PARTS}` : me.wl > 0 ? "🚓 SÈME LA POLICE AVANT DE LIVRER" : "🚁 RAPPORTE-LES AU PILOTE";
     else l1 = "🎯 ÉLIMINE LA CIBLE";
     x.fillStyle = "rgba(0,0,0,.55)"; x.fillRect(10, 120, 276, 68);
     txt(`MISSION · ${mis.n}`, 18, 136, 11, "#ffd23f", "left"); txt(l1, 18, 154, 13, "#fff", "left"); txt(`⏱ ${tt}   ✖ ${TOUCH ? "ABANDONNER" : "M : ABANDONNER"}`, 18, 176, 12, "#ff9f43", "left");

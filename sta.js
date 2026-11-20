@@ -99,7 +99,7 @@ export function createStaClient(env) {
   const me = { x: 0, y: 0, a: 0, v: 0, vid: 0, hp: 100, cash: 0, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, msg: "", hurt: 0, bust: 0, carT: 99, wpn: 0, ammo: [0, 0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100, rpgParts: [], rpgQuest: 0, ammoTags: [], ammoQuest: 0, rpgAmmoUnlocked: 0 };
   let keys = new Set(), stick = null, useReq = 0, job = null, myCol = 0, cam = { x: 0, y: 0, z: 1.2 }, sentAt = 0, sentStr = "", savedCash = -1, saveAt = 0, tNow = 0, hitDone = new Set(), gLoaded = false, savedG = "";
   let inn = null, mis = null, tgt = null, lastMk = "", shop = "", mmBase = null;   // mission en cours, cible à éliminer, boutique ouverte
-  let ejected = [], splats = [], floats = [], brakeId = null, fireKey = false, fireId = null, killQ = [], carQ = [], killAt = 0, tracers = [], rockets = [], sparks = [], booms = [], wrecks = [], pickT = new Map(), lastFc = {}, lastCs = {};
+  let ejected = [], splats = [], floats = [], pendingPedHits = new Map(), brakeId = null, fireKey = false, fireId = null, killQ = [], carQ = [], killAt = 0, tracers = [], rockets = [], sparks = [], booms = [], wrecks = [], pickT = new Map(), lastFc = {}, lastCs = {};
 
   const lobbyP = () => (getLobby() || {}).players || {};
   const activeP = () => { const lp = lobbyP(); return Object.entries(pd).filter(([u]) => lp[u]); };
@@ -530,7 +530,7 @@ export function createStaClient(env) {
   const hasGun = () => me.ammo.some(v => v > 0);
   function selWpn(n) { if (n === 0 || me.ammo[n] > 0) me.wpn = n; }                // 0 = les poings 👊
   function cycleWpn() { for (let k = 1; k <= 4; k++) { const n = (me.wpn + k) % 5; if (n === 0 || me.ammo[n] > 0) { me.wpn = n; return; } } me.wpn = 0; }   // poings → armes possédées → poings
-  function trace(ox, oy, ang, W) {                                        // un tir « hitscan » : s'arrête au mur, au piéton ou à la voiture touchée
+  function trace(ox, oy, ang, W, deferPedHit = false) {                                        // un tir « hitscan » : s'arrête au mur, au piéton ou à la voiture touchée
     const dx = Math.cos(ang), dy = Math.sin(ang); let bf = me.vid === HELI ? W.rng : wallEnd(ox, oy, ang, W.rng), best = null;
     for (const [id, d] of dPeds) { if (hitDone.has(id)) continue; const rx = d.x - ox, ry = d.y - oy, f = rx * dx + ry * dy; if (f > 0 && f < bf && Math.abs(-rx * dy + ry * dx) < 8) { bf = f; best = ["p", id, d]; } }
     for (const [id, d] of dCars) { if (d.m === "t" || id === me.vid) continue; const rx = d.x - ox, ry = d.y - oy, f = rx * dx + ry * dy; if (f > 0 && f - 14 < bf && Math.abs(-rx * dy + ry * dx) < 17) { bf = Math.max(6, f - 14); best = ["c", id, d]; } }
@@ -542,7 +542,7 @@ export function createStaClient(env) {
       if (best[0] === "k") { me.lastCar = best[1]; me.lastCarT = tNow; me.heat = Math.min(5, me.heat + .1); const l = carQ[carQ.length - 1]; if (l && l[0] === best[1]) l[1] += W.pvp; else carQ.push([best[1], W.pvp]); if (carQ.length > 8) carQ.shift(); }
       else if (best[0] === "t") { hitTgt(W.pvp * 1.3); }
       else if (best[0] === "u") { hitTruck(W.car * 1.6); }
-      else if (best[0] === "p") { const d = best[2]; hitDone.add(best[1]); killQ.push(best[1]); me.cash += 30; me.heat = Math.min(5, me.heat + .5); floats.push({ x: d.x, y: d.y - 10, t: tNow, s: "+$30", c: "#7ae582" }); splats.push({ x: d.x, y: d.y, t: tNow }); }
+      else if (best[0] === "p") { const d = best[2]; if (deferPedHit) { pendingPedHits.set(best[1], { due: tNow + Math.max(260, bf / 620 * 1000), x: d.x, y: d.y }); } else { hitDone.add(best[1]); killQ.push(best[1]); me.cash += 30; me.heat = Math.min(5, me.heat + .5); floats.push({ x: d.x, y: d.y - 10, t: tNow, s: "+$30", c: "#7ae582" }); splats.push({ x: d.x, y: d.y, t: tNow }); } }
       else { me.lastCar = best[1]; me.lastCarT = tNow; const l = carQ[carQ.length - 1]; if (l && l[0] === best[1]) l[1] += W.car; else carQ.push([best[1], W.car]); if (carQ.length > 8) carQ.shift(); }
     }
     if (best || bf < W.rng) sparks.push({ x: ox + dx * bf, y: oy + dy * bf, t: tNow });
@@ -568,6 +568,7 @@ export function createStaClient(env) {
     else hitTgt(FIST.dm);
   }
   function weapons(dt, now) {
+    for (const [id, hit] of pendingPedHits) if (now >= hit.due) { pendingPedHits.delete(id); if (!hitDone.has(id) && dPeds.has(id)) { hitDone.add(id); killQ.push(id); me.cash += 30; me.heat = Math.min(5, me.heat + .5); floats.push({ x: hit.x, y: hit.y - 10, t: now, s: "+$30", c: "#7ae582" }); splats.push({ x: hit.x, y: hit.y, t: now }); } }
     me.cd -= dt; me.flash -= dt; me.dmCd -= dt;
     for (const p of PICKS) {                                              // ramassage des armes
       if (Math.abs(p.x - me.x) > 24 || Math.abs(p.y - me.y) > 24 || Math.hypot(p.x - me.x, p.y - me.y) > 24) continue;
@@ -583,7 +584,7 @@ export function createStaClient(env) {
         if (!heli) me.ammo[wi]--;
         me.cd = wi === 4 ? .92 : W.rate; me.fc = (me.fc + 1) % 1000; me.fw = wi; me.flash = wi === 4 ? .18 : .07; me.heat = Math.min(5, me.heat + W.heat);
         for (let q = 0; q < W.pel; q++) {
-           const ang = me.a + rr(-W.spr, W.spr), e = trace(ox, oy, ang, W), ex = ox + Math.cos(ang) * e, ey = oy + Math.sin(ang) * e;
+           const ang = me.a + rr(-W.spr, W.spr), e = trace(ox, oy, ang, W, wi === 4), ex = ox + Math.cos(ang) * e, ey = oy + Math.sin(ang) * e;
            if (wi === 4) rockets.push({ x0: ox, y0: oy, x1: ex, y1: ey, t: now, dur: Math.max(260, e / 620 * 1000), impact: 0 });
            else tracers.push({ x0: ox, y0: oy, x1: ex, y1: ey, t: now });
          }
@@ -1859,7 +1860,7 @@ function frame(now) {
       active = true; c = code; myUid = getMe().uid; ls = null; lastT = 0; lastH = ""; lastEv = 0; pd = {}; hostOn = false; keys = new Set(); stick = null; brakeId = null; useReq = 0;
       dPeds.clear(); dCars.clear(); dCops.clear(); dHelis.clear(); helis = []; dP.clear(); ejected = []; sPrevCash = 0; sPrevWl = 0; sAmbT = performance.now() + 8000; hornKey = false; hornId = null; me.pg = null; splats = []; floats = []; hitDone = new Set(); lastHs = {}; sentStr = ""; sentAt = 0; savedCash = -1; saveAt = performance.now(); gLoaded = false; savedG = ""; lastGn = {};
       Object.assign(me, { vid: 0, hp: 100, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, bust: 0, hurt: 0, v: 0, a: 0, cash: 0, cop: 0, wpn: 0, ammo: [0, 0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100, rpgParts: [], rpgQuest: 0, ammoTags: [], ammoQuest: 0, rpgAmmoUnlocked: 0 });
-      inn = null; mis = null; tgt = null; shop = ""; killQ = []; carQ = []; tracers = []; rockets = []; sparks = []; booms = []; wrecks = []; pickT = new Map(); lastFc = {}; lastCs = {}; fireKey = false; fireId = null;
+      inn = null; mis = null; tgt = null; shop = ""; killQ = []; carQ = []; pendingPedHits = new Map(); tracers = []; rockets = []; sparks = []; booms = []; wrecks = []; pickT = new Map(); lastFc = {}; lastCs = {}; fireKey = false; fireId = null;
       const ix = 2 + Math.floor(Math.random() * 5), iy = 2 + Math.floor(Math.random() * 5); spawnAt([ix * CELL, iy * CELL]);
       $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : monter / descendre d'une voiture · en voiture ↑ accélère, ↓ freine, ←→ tourne · livre les colis 📦, écrase des piétons, évite la police ! · Sans arme tu frappes avec tes poings 👊 (F : 3 coups pour un piéton) ; ramasse les armes au sol : F tirer, X changer d'arme (0 = poings, 1-2-3) · en hélico : mitraillette à munitions infinies (F) · les voitures se cabossent ! · garage ($3500 ; à l'intérieur, un 2e emplacement pour une voiture de plus : $2500) : va sur la zone jaune et appuie sur E (owners : voiture fantôme 👻 invincible qui traverse les bâtiments, tu peux en descendre : elle reste garée et seuls les owners peuvent y remonter (E) ; au garage : ranger le fantôme (E), G pour en sortir un) · R : changer de radio (4 stations), H : klaxon · missions : parle au BOSS ❗ au bord ouest de la carte (E) : missions aléatoires (voitures, cavale, contrat, camion blindé 🚚), M pour abandonner · armurerie et distributeur de soins (hôpital) : va sur leur zone et appuie sur E · 🏎️ des voitures de sport (Supercar, Roadster) roulent en ville : bien plus rapides, vole-les et range-les au garage ! · 🚁 hélicoptère : un pilote mystérieux traîne quelque part en ville (il n'est PAS sur la carte) : trouve-le et réussis sa quête pour débloquer un hélico, rangé sur le toit de ton garage (échelle dans le garage) ; E pour te poser sur la zone 🅷 du toit · à 5★ la police envoie des hélicos : abats-les !";
       get(RF(`users/${myUid}/sta`)).then(s => { const v = +s.val(); if (v > 0 && me.cash === 0) { me.cash = v; savedCash = v; sPrevCash = v; } }).catch(() => { });

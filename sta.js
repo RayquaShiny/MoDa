@@ -862,7 +862,7 @@ export function createStaClient(env) {
     if (nearPilot()) { pilotTalk(); return true; }
     const g = nearGiver(); if (!g) return false;
     if (!me.rpgQuest) { me.rpgQuest=1; persist(true); toast("LE BOSS : « J’ai caché 3 pièces de RPG dans la ville. Retrouve-les, elles sont extrêmement bien dissimulées ! »"); beep(520,.12,"triangle",.06); return true; }
-    if (me.rpgParts.length < 3) { toast(`LE BOSS : « Il te manque encore ${3-me.rpgParts.length} pièce(s) de RPG. Fouille la ville ! »`); return true; }
+    // Les missions classiques restent accessibles pendant la quête RPG.
     if (mis) { toast(`${g.n} : « Termine d’abord ta mission ! » (M : abandonner)`); return true; }
     startMis(g); return true;
   }

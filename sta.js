@@ -497,7 +497,7 @@ export function createStaClient(env) {
   function useKey() {
     if (me.dead > 0) return;
     if (shop) { shop = ""; return; }
-    if (inn) { innUse(); return; }
+    if (inn) { if (inn.k === "arms" && me.rpgParts.length >= 3 && !me.rpgAmmoUnlocked) { if(!me.ammoQuest){me.ammoQuest=1;persist(true);toast("ARMURIER : « Retrouve mes 3 badges de livraison cachés en ville. Après ça, tu pourras acheter les munitions de RPG. »");beep(520,.12,"triangle",.06);}else if(me.ammoTags.length>=3){me.rpgAmmoUnlocked=1;persist(true);floats.push({x:me.x,y:me.y-25,t:tNow,s:"MUNITIONS RPG DÉBLOQUÉES",c:"#ffd23f"});toast("Quête réussie ! Les munitions de RPG sont maintenant achetables.");beep(880,.16,"triangle",.06);}else toast(`ARMURIER : « Il manque ${3-me.ammoTags.length} badge(s) ! »`);return;} innUse(); return; }
     if (me.vid === HELI) { heliLand(); return; }
     if (!me.vid) {
       const z = shopAt(); if (z) { if (z === "heal") healDo(); else enterInn(z); return; }
@@ -832,6 +832,9 @@ export function createStaClient(env) {
   // --- quête spéciale du PILOTE (hélicoptère) : 5 caisses de pièces à ramasser en ville (chaque caisse attire la police), puis retour chez lui SANS étoile, en 8 min.
   //     Comme les autres missions elle est personnelle (chez toi) ; seule la réussite est sauvegardée (me.hu).
   const nearPilot = () => (me.vid || me.dead > 0 || inn) ? null : (Math.hypot(PILOT.x - me.x, PILOT.y - me.y) < 52 ? PILOT : null);
+  // Objets de quête cachés sur des trottoirs éloignés, sans marqueur sur la carte.
+  const RPG_PART_SPOTS = (() => { const out=[]; for(let i=1;i<N-1&&out.length<3;i++) for(let j=1;j<N-1&&out.length<3;j++){if(isPark(i,j)||isSpecial(i,j))continue;const q={x:lo(i)+SW/2,y:lo(j)+BL/2};if(Math.hypot(q.x-GIVERS[0].x,q.y-GIVERS[0].y)<900||Math.hypot(q.x-PILOT.x,q.y-PILOT.y)<700)continue;if(out.every(p=>Math.hypot(p.x-q.x,p.y-q.y)>850))out.push(q);}return out;})();
+  const AMMO_TAG_SPOTS = (() => { const out=[]; for(let j=N-2;j>0&&out.length<3;j--) for(let i=N-2;i>0&&out.length<3;i--){if(isPark(i,j)||isSpecial(i,j))continue;const q={x:lo(i)+SW/2,y:lo(j)+BL/2};if(Math.hypot(q.x-ZONES.arms.x,q.y-ZONES.arms.y)<800)continue;if(out.every(p=>Math.hypot(p.x-q.x,p.y-q.y)>650))out.push(q);}return out;})();
   const PARTS = 5, PART_TIME = 480;                                      // difficulté de la quête : nombre de caisses · temps (s)
   function partSpots() {
     const out = [];
@@ -858,7 +861,9 @@ export function createStaClient(env) {
   function talkDo() {
     if (nearPilot()) { pilotTalk(); return true; }
     const g = nearGiver(); if (!g) return false;
-    if (mis) { toast(`${g.n} : « Finis d'abord ta mission ! » (M : abandonner)`); return true; }
+    if (!me.rpgQuest) { me.rpgQuest=1; persist(true); toast("LE BOSS : « J’ai caché 3 pièces de RPG dans la ville. Retrouve-les, elles sont extrêmement bien dissimulées ! »"); beep(520,.12,"triangle",.06); return true; }
+    if (me.rpgParts.length < 3) { toast(`LE BOSS : « Il te manque encore ${3-me.rpgParts.length} pièce(s) de RPG. Fouille la ville ! »`); return true; }
+    if (mis) { toast(`${g.n} : « Termine d’abord ta mission ! » (M : abandonner)`); return true; }
     startMis(g); return true;
   }
   function spawnTgt() {
@@ -956,6 +961,8 @@ export function createStaClient(env) {
       tgt.x += Math.cos(tgt.h) * sp * dt; tgt.y += Math.sin(tgt.h) * sp * dt; if (push(tgt, 6)) tgt.h += rr(1.2, 2.4);
       if (me.vid && me.vid !== HELI && Math.abs(me.v) > 80 && Math.hypot(tgt.x - me.x, tgt.y - me.y) < 22) hitTgt(999);
     }
+    if (me.rpgQuest && me.rpgParts.length < 3) RPG_PART_SPOTS.forEach((q,i)=>{if(!me.rpgParts.includes(i)&&Math.hypot(q.x-me.x,q.y-me.y)<22){me.rpgParts.push(i);persist(true);floats.push({x:q.x,y:q.y-18,t:tNow,s:`PIÈCE RPG ${me.rpgParts.length}/3`,c:"#ffd23f"});beep(880,.12,"triangle",.06);if(me.rpgParts.length===3)toast("Les 3 pièces sont réunies ! Le RPG est débloqué. Va à l’armurerie.");}});
+    if (me.ammoQuest && !me.rpgAmmoUnlocked) AMMO_TAG_SPOTS.forEach((q,i)=>{if(!me.ammoTags.includes(i)&&Math.hypot(q.x-me.x,q.y-me.y)<22){me.ammoTags.push(i);persist(true);floats.push({x:q.x,y:q.y-18,t:tNow,s:`BADGE ${me.ammoTags.length}/3`,c:"#7ae582"});beep(760,.1,"triangle",.06);if(me.ammoTags.length===3)toast("Tu as les 3 badges ! Retourne à l’armurerie.");}});
     if (!mis) return;
     mis.t -= dt; if (mis.t <= 0) { missionFail("temps écoulé"); return; }
     mis.el = (mis.el || 0) + dt;

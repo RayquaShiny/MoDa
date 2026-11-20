@@ -522,8 +522,8 @@ export function createStaClient(env) {
     SND.crash(sev); navigator.vibrate && navigator.vibrate(30);
   }
   const hasGun = () => me.ammo.some(v => v > 0);
-  function selWpn(n) { if (me.ammo[n] > 0) me.wpn = n; }
-  function cycleWpn() { for (let k = 1; k <= 3; k++) { const n = (me.wpn - 1 + k + 3) % 3 + 1; if (me.ammo[n] > 0) { me.wpn = n; return; } } me.wpn = 0; }
+  function selWpn(n) { if (n === 0 || me.ammo[n] > 0) me.wpn = n; }                // 0 = les poings 👊
+  function cycleWpn() { for (let k = 1; k <= 4; k++) { const n = (me.wpn + k) % 4; if (n === 0 || me.ammo[n] > 0) { me.wpn = n; return; } } me.wpn = 0; }   // poings → armes possédées → poings
   function trace(ox, oy, ang, W) {                                        // un tir « hitscan » : s'arrête au mur, au piéton ou à la voiture touchée
     const dx = Math.cos(ang), dy = Math.sin(ang); let bf = me.vid === HELI ? W.rng : wallEnd(ox, oy, ang, W.rng), best = null;
     for (const [id, d] of dPeds) { if (hitDone.has(id)) continue; const rx = d.x - ox, ry = d.y - oy, f = rx * dx + ry * dy; if (f > 0 && f < bf && Math.abs(-rx * dy + ry * dx) < 8) { bf = f; best = ["p", id, d]; } }
@@ -542,6 +542,25 @@ export function createStaClient(env) {
     if (best || bf < W.rng) sparks.push({ x: ox + dx * bf, y: oy + dy * bf, t: tNow });
     return bf;
   }
+  // --- poings 👊 : portée courte, dans un cône devant toi. Piéton = 3 coups, policier = 10 dégâts/coup, cible de mission aussi.
+  const FIST = { rate: .38, rng: 30, arc: .95, dm: 10, heat: .1 }, pedPunch = new Map();
+  function punch(now) {
+    me.cd = FIST.rate; me.flash = .16; me.fc = (me.fc + 1) % 1000; me.fw = 0; me.heat = Math.min(5, me.heat + .02);
+    const dx = Math.cos(me.a), dy = Math.sin(me.a); let best = null, bd = FIST.rng;
+    const cand = (k, id, d, rad) => { const rx = d.x - me.x, ry = d.y - me.y, dist = Math.hypot(rx, ry) - (rad || 0); if (dist > bd || dist < -rad - 4) return; const an = Math.atan2(ry, rx), df = Math.abs(Math.atan2(Math.sin(an - me.a), Math.cos(an - me.a))); if (df < FIST.arc || dist < 8) { bd = dist; best = [k, id, d]; } };
+    for (const [id, d] of dPeds) if (!hitDone.has(id)) cand("p", id, d, 6);
+    for (const [id, d] of dCops) if (!hitDone.has(id)) cand("k", id, d, 6);
+    if (tgt && tgt.hp > 0) cand("t", 0, tgt, 6);
+    sparks.push({ x: me.x + dx * 18, y: me.y + dy * 18, t: tNow });
+    if (!best) { beep(180, .04, "sine", .03, 120); return; }
+    const [k, id, d] = best; beep(110, .07, "square", .06, 40); navigator.vibrate && navigator.vibrate(25);
+    if (k === "p") {
+      const n = (pedPunch.get(id) || 0) + 1; pedPunch.set(id, n); if (pedPunch.size > 200) pedPunch.clear();
+      floats.push({ x: d.x, y: d.y - 10, t: tNow, s: n < 3 ? "👊" : "+$15", c: n < 3 ? "#fff" : "#7ae582" });
+      if (n >= 3) { pedPunch.delete(id); hitDone.add(id); killQ.push(id); me.cash += 15; me.heat = Math.min(5, me.heat + .3); splats.push({ x: d.x, y: d.y, t: tNow }); }
+    } else if (k === "k") { me.lastCar = id; me.lastCarT = tNow; me.heat = Math.min(5, me.heat + FIST.heat); const l = carQ[carQ.length - 1]; if (l && l[0] === id) l[1] += FIST.dm; else carQ.push([id, FIST.dm]); if (carQ.length > 8) carQ.shift(); }
+    else hitTgt(FIST.dm);
+  }
   function weapons(dt, now) {
     me.cd -= dt; me.flash -= dt; me.dmCd -= dt;
     for (const p of PICKS) {                                              // ramassage des armes
@@ -551,11 +570,15 @@ export function createStaClient(env) {
       floats.push({ x: me.x, y: me.y - 22, t: now, s: `🔫 ${W.n} +${W.ammo}`, c: "#ffe14d" }); beep(880, .1, "triangle", .06);
     }
     if (me.wpn && me.ammo[me.wpn] <= 0) cycleWpn();
-    if ((fireKey || fireId !== null) && me.wpn && me.cd <= 0 && me.ammo[me.wpn] > 0) {
-      const W = WPN[me.wpn], dx = Math.cos(me.a), dy = Math.sin(me.a), ox = me.x + dx * (me.vid ? 24 : 11), oy = me.y + dy * (me.vid ? 24 : 11);
-      me.ammo[me.wpn]--; me.cd = W.rate; me.fc = (me.fc + 1) % 1000; me.fw = me.wpn; me.flash = .07; me.heat = Math.min(5, me.heat + W.heat);
-      for (let q = 0; q < W.pel; q++) { const ang = me.a + rr(-W.spr, W.spr), e = trace(ox, oy, ang, W); tracers.push({ x0: ox, y0: oy, x1: ox + Math.cos(ang) * e, y1: oy + Math.sin(ang) * e, t: now }); }
-      SND.shot(me.wpn, 1); navigator.vibrate && navigator.vibrate(12);
+    const heli = me.vid === HELI;
+    if ((fireKey || fireId !== null) && me.cd <= 0) {
+      if (heli || (me.wpn && me.ammo[me.wpn] > 0)) {                       // en hélico : mitraillette à munitions INFINIES (uniquement là) ; à pied / en voiture : munitions normales
+        const wi = heli ? 2 : me.wpn, W = WPN[wi], dx = Math.cos(me.a), dy = Math.sin(me.a), ox = me.x + dx * (me.vid ? 24 : 11), oy = me.y + dy * (me.vid ? 24 : 11);
+        if (!heli) me.ammo[wi]--;
+        me.cd = W.rate; me.fc = (me.fc + 1) % 1000; me.fw = wi; me.flash = .07; me.heat = Math.min(5, me.heat + W.heat);
+        for (let q = 0; q < W.pel; q++) { const ang = me.a + rr(-W.spr, W.spr), e = trace(ox, oy, ang, W); tracers.push({ x0: ox, y0: oy, x1: ox + Math.cos(ang) * e, y1: oy + Math.sin(ang) * e, t: now }); }
+        SND.shot(wi, 1); navigator.vibrate && navigator.vibrate(12);
+      } else if (!me.wpn && !me.vid) punch(now);                           // pas d'arme en main : coup de poing 👊
     }
     if (now - killAt > 150) {                                             // on annonce à l'hôte un coup à la fois (piéton abattu / voiture touchée)
       killAt = now;
@@ -1404,6 +1427,8 @@ function drawWalker(px, py, a, body, skin, ph, wpn, flash, hat) {
     x.fillStyle = sk; x.fillRect(1, -3.8, 6, 2.2); x.fillRect(1, 1.6, 6, 2.2);
     if (wpn === 1) { x.fillStyle = "#111"; x.fillRect(6, -1, 6, 2); } else if (wpn === 2) { x.fillStyle = "#111"; x.fillRect(5, -1.3, 10, 2.6); x.fillRect(8, 1.2, 2, 3); } else { x.fillStyle = "#5b3a1e"; x.fillRect(4, -1.3, 4, 2.6); x.fillStyle = "#8b8b95"; x.fillRect(8, -1, 9, 2); }
     if (flash) { const tx = wpn === 1 ? 12 : wpn === 2 ? 15 : 17; x.fillStyle = "#fff2a8"; x.fillRect(tx, -2.5, 4, 5); x.fillStyle = "#ff9d1e"; x.fillRect(tx + 1, -1, 6, 2); }
+  } else if (flash) {                                                                                                                // coup de poing : un bras part vers l'avant (gauche / droite en alternance)
+    const pr = me.fc & 1 ? 1 : -1; x.fillStyle = sk; x.fillRect(1, pr * 3.2 - 1.1, 9, 2.2); x.beginPath(); x.arc(10.5, pr * 3.2, 2.4, 0, 7); x.fill(); x.fillRect(-1, -pr * 3.2 - 1.1, 3.2, 2.4);
   } else { x.fillStyle = sk; x.fillRect(sw * 2.4 - 1.5, -7.6, 3.2, 2.4); x.fillRect(-sw * 2.4 - 1.5, 5.2, 3.2, 2.4); }              // bras qui balancent
   x.fillStyle = "#101010"; x.beginPath(); x.arc(0, 0, 3.3, 0, 7); x.fill(); x.fillStyle = sk; x.beginPath(); x.arc(0, 0, 2.6, 0, 7); x.fill();
   if (hat) { x.fillStyle = "#0f1c4d"; x.beginPath(); x.arc(0, 0, 3.2, 0, 7); x.fill(); x.fillStyle = "#ffd23f"; x.fillRect(1.4, -.7, 1.4, 1.4); }   // casquette de policier
@@ -1611,9 +1636,11 @@ function frame(now) {
   txt(`$${Math.round(me.cash)}`, 14, 32, 28, "#ffe14d", "left");
   for (let i = 0; i < 5; i++) drawStar(24 + i * 26, 46, 11.5, i < me.wl, Math.floor(now / 250) % 2, now, i);
   x.fillStyle = "#000"; x.fillRect(13, 62, 112, 11); x.fillStyle = me.hp > 40 ? "#3ee62f" : "#ff3b30"; x.fillRect(15, 64, 108 * clamp(me.hp, 0, 100) / 100, 7);
-  if (me.wpn) { const W = WPN[me.wpn]; txt(`${W.n} ×${me.ammo[me.wpn]}`, 14, 94, 14, "#fff", "left"); txt(me.ammo.slice(1).map((v, i) => v ? `${i + 1}:${v}` : "").filter(Boolean).join("  "), 14, 110, 11, "#ffe14d", "left"); }
-  if (!TOUCH && hasGun() && now - me.gunT < 9000) txt("F : TIRER · X ou 1-2-3 : CHANGER D'ARME", W / 2, H - 40, 13, "#ffe14d");
-  if (TOUCH && hasGun()) { const fb = fireId !== null; x.fillStyle = fb ? "#ff5a4d" : "#b3261e"; x.beginPath(); x.arc(W - 56, H - 142, 34, 0, 7); x.fill(); x.strokeStyle = "#000"; x.lineWidth = 3; x.stroke(); txt("FEU", W - 56, H - 138, 14); x.fillStyle = "#555a66"; x.beginPath(); x.arc(W - 136, H - 136, 26, 0, 7); x.fill(); x.stroke(); txt("ARME", W - 136, H - 132, 11); }
+  if (me.vid === HELI) txt("🚁 MITRAILLETTE ×∞", 14, 94, 14, "#3ee6c4", "left");
+  else if (!me.vid && !me.wpn) txt("👊 POINGS", 14, 94, 14, "#fff", "left");
+  if (me.wpn && me.vid !== HELI) { const W = WPN[me.wpn]; txt(`${W.n} ×${me.ammo[me.wpn]}`, 14, 94, 14, "#fff", "left"); txt(me.ammo.slice(1).map((v, i) => v ? `${i + 1}:${v}` : "").filter(Boolean).join("  "), 14, 110, 11, "#ffe14d", "left"); }
+  if (!TOUCH && hasGun() && me.vid !== HELI && now - me.gunT < 9000) txt("F : TIRER · X ou 0-1-2-3 : CHANGER D'ARME (0 = POINGS 👊)", W / 2, H - 40, 13, "#ffe14d");
+  if (TOUCH && (hasGun() || me.vid === HELI || !me.vid)) { const fb = fireId !== null; x.fillStyle = fb ? "#ff5a4d" : "#b3261e"; x.beginPath(); x.arc(W - 56, H - 142, 34, 0, 7); x.fill(); x.strokeStyle = "#000"; x.lineWidth = 3; x.stroke(); txt(me.vid === HELI || me.wpn ? "FEU" : "👊", W - 56, H - 138, 14); if (hasGun() && me.vid !== HELI) { x.fillStyle = "#555a66"; x.beginPath(); x.arc(W - 136, H - 136, 26, 0, 7); x.fill(); x.stroke(); txt("ARME", W - 136, H - 132, 11); } }
   const rank = [[myUid, me.cash]].concat(activeP().filter(([u]) => u !== myUid).map(([u, p]) => [u, p.cash])).sort((a, b) => b[1] - a[1]);
   txt(`SERVEUR ${c} · ${rank.length} JOUEUR${rank.length > 1 ? "S" : ""}${hostOn ? " · HÔTE" : ""}`, W - 12, 18, 12, "#fffa", "right");
   rank.slice(0, 6).forEach(([u, cs], i) => { const pl = lp[u] || {}; x.fillStyle = pl.color || "#fff"; x.fillRect(W - 170, 28 + i * 18, 9, 9); txt(`${(pl.name || "?").slice(0, 10)}${u === myUid ? "*" : ""}`, W - 156, 37 + i * 18, 12, "#fff", "left"); txt(`$${Math.round(cs)}`, W - 12, 37 + i * 18, 12, "#ffe14d", "right"); });
@@ -1657,7 +1684,7 @@ function frame(now) {
     { const ro = radio.st > 0, fresh = now - radio.nameT < 2500; txt(`📻 ${ro ? STN[radio.st - 1].n : "RADIO COUPÉE"}${TOUCH ? "" : "  ·  R : CHANGER  ·  H : KLAXON"}`, W / 2, H - 34, fresh ? 15 : 12, ro ? "#9be7ff" : "#9a9aa5"); }
     const kmh = Math.round(Math.abs(me.v) * .5);
     if (me.vid === HELI) txt(`🚁 ${kmh} km/h · COQUE ${Math.round(clamp(me.hh, 0, 100))}%`, W / 2, H - 14, 16, me.hh < 35 ? "#ff5a4d" : "#fff"); else txt(`${kmh} km/h · ÉTAT ${Math.round(100 - dmSum(me.dm) / 12 * 100)}%${me.v < -3 ? "  ◄ MARCHE ARRIÈRE" : ""}`, W / 2, H - 14, 16, me.v < -3 ? "#ff9f43" : "#fff");
-    if (me.carT < 9) { x.fillStyle = "rgba(0,0,0,.65)"; x.fillRect(W / 2 - 230, H - 96, 460, 54); txt(TOUCH ? "POUSSE LE JOYSTICK VERS OÙ TU VEUX ALLER" : (me.vid === HELI ? "↑ AVANCER · ↓ FREINER / RECULER · F : TIRER" : "↑ ACCÉLÉRER · ↓ FREINER / RECULER"), W / 2, H - 74, 13, "#fff"); txt(TOUCH ? "LÂCHE = ROULE LIBRE · FREIN = FREINER / RECULER" : (me.vid === HELI ? "← → PIVOTER · E = SE POSER SUR L'HÉLIPORT 🅷 DU GARAGE" : "← → TOURNER (SEULEMENT QUAND LA VOITURE ROULE) · E = SORTIR"), W / 2, H - 54, 12, "#ffe14d"); }
+    if (me.carT < 9) { x.fillStyle = "rgba(0,0,0,.65)"; x.fillRect(W / 2 - 230, H - 96, 460, 54); txt(TOUCH ? "POUSSE LE JOYSTICK VERS OÙ TU VEUX ALLER" : (me.vid === HELI ? "↑ AVANCER · ↓ FREINER / RECULER · F : MITRAILLETTE ∞" : "↑ ACCÉLÉRER · ↓ FREINER / RECULER"), W / 2, H - 74, 13, "#fff"); txt(TOUCH ? "LÂCHE = ROULE LIBRE · FREIN = FREINER / RECULER" : (me.vid === HELI ? "← → PIVOTER · E = SE POSER SUR L'HÉLIPORT 🅷 DU GARAGE" : "← → TOURNER (SEULEMENT QUAND LA VOITURE ROULE) · E = SORTIR"), W / 2, H - 54, 12, "#ffe14d"); }
     if (job) { const a = Math.atan2(job.y - me.y, job.x - me.x); txt(`📦 ${Math.round(Math.hypot(job.x - me.x, job.y - me.y) / 10)} m`, W / 2, 26, 15, "#ffd23f"); x.save(); x.translate(W / 2, 52); x.rotate(a); x.fillStyle = "#ffd23f"; x.strokeStyle = "#000"; x.lineWidth = 2; x.beginPath(); x.moveTo(15, 0); x.lineTo(-9, -10); x.lineTo(-9, 10); x.closePath(); x.fill(); x.stroke(); x.restore(); }
   }
   if (me.vid === HELI && me.dead <= 0 && !me.land) {                                                // guidage vers l'héliport
@@ -1681,7 +1708,7 @@ function frame(now) {
     if ((e.key === "g" || e.key === "G") && !shop && !inn) { if (!e.repeat && me.g && isOwner() && inGarage() && !me.vid && me.dead <= 0) ghostTake(); e.preventDefault(); return; }
     if (shop) { const d2 = /^(Digit|Numpad)([1-9])$/.exec(e.code || ""); if (d2) { shopPick(+d2[2] - 1); e.preventDefault(); return; } if (e.key === "Escape") { shop = ""; return; } }
     if ((e.key === "m" || e.key === "M") && mis) { if (!e.repeat) missionFail("", true); e.preventDefault(); return; }
-    const dg = /^(Digit|Numpad)([1-3])$/.exec(e.code || ""); if (dg) { selWpn(+dg[2]); return; }
+    const dg = /^(Digit|Numpad)([0-3])$/.exec(e.code || ""); if (dg) { selWpn(+dg[2]); return; }
     if (e.key === " " || e.key === "e" || e.key === "E") { e.preventDefault(); if (!e.repeat) useReq = 1; return; }
     const k = KEYS[e.key.length > 1 ? e.key : e.key.toLowerCase()]; if (k) { e.preventDefault(); keys.add(k); }
   });
@@ -1693,8 +1720,8 @@ function frame(now) {
     if (!active) return; e.preventDefault(); const p = rel(e);
     if (shop) { const r = shopHit(p); if (r !== -1) { if (r === -2) shop = ""; else if (r >= 0) shopPick(r); return; } }
     if (mis && p.x > 10 && p.x < 286 && p.y > 160 && p.y < 188) { missionFail("", true); return; }
-    if (hasGun() && Math.hypot(p.x - (W - 56), p.y - (H - 142)) < 38) { fireId = e.pointerId; try { cv.setPointerCapture(e.pointerId); } catch { } return; }
-    if (hasGun() && Math.hypot(p.x - (W - 136), p.y - (H - 136)) < 30) { cycleWpn(); return; }
+    if ((hasGun() || me.vid === HELI || !me.vid) && Math.hypot(p.x - (W - 56), p.y - (H - 142)) < 38) { fireId = e.pointerId; try { cv.setPointerCapture(e.pointerId); } catch { } return; }
+    if (hasGun() && me.vid !== HELI && Math.hypot(p.x - (W - 136), p.y - (H - 136)) < 30) { cycleWpn(); return; }
     if (e.button === 2 || Math.hypot(p.x - (W - 56), p.y - (H - 62)) < 40) { useReq = 1; return; }
     if (me.vid && Math.hypot(p.x - (W - 140), p.y - (H - 48)) < 38) { brakeId = e.pointerId; try { cv.setPointerCapture(e.pointerId); } catch { } return; }
     if (me.vid && Math.hypot(p.x - (W - 224), p.y - (H - 48)) < 32) { nextStation(); return; }
@@ -1720,7 +1747,7 @@ function frame(now) {
       Object.assign(me, { vid: 0, hp: 100, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, bust: 0, hurt: 0, v: 0, a: 0, cash: 0, cop: 0, wpn: 0, ammo: [0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, gcar: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100 });
       inn = null; mis = null; tgt = null; shop = ""; killQ = []; carQ = []; tracers = []; sparks = []; booms = []; wrecks = []; pickT = new Map(); lastFc = {}; lastCs = {}; fireKey = false; fireId = null;
       const ix = 2 + Math.floor(Math.random() * 5), iy = 2 + Math.floor(Math.random() * 5); spawnAt([ix * CELL, iy * CELL]);
-      $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : monter / descendre d'une voiture · en voiture ↑ accélère, ↓ freine, ←→ tourne · livre les colis 📦, écrase des piétons, évite la police ! · Ramasse les armes au sol : F tirer, X changer d'arme (1-2-3) · les voitures se cabossent ! · garage ($3500) : va sur la zone jaune et appuie sur E (owners : voiture fantôme 👻 invincible qui traverse les bâtiments, tu peux en descendre : elle reste garée et seuls les owners peuvent y remonter (E) ; au garage : ranger le fantôme (E), G pour en sortir un) · R : changer de radio (4 stations), H : klaxon · missions : parle au BOSS ❗ au bord ouest de la carte (E) : missions aléatoires (voitures, cavale, contrat, camion blindé 🚚), M pour abandonner · armurerie et distributeur de soins (hôpital) : va sur leur zone et appuie sur E · 🚁 hélicoptère : un pilote mystérieux traîne quelque part en ville (il n'est PAS sur la carte) : trouve-le et réussis sa quête pour débloquer un hélico, rangé sur le toit de ton garage (échelle dans le garage) ; E pour te poser sur la zone 🅷 du toit · à 5★ la police envoie des hélicos : abats-les !";
+      $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : monter / descendre d'une voiture · en voiture ↑ accélère, ↓ freine, ←→ tourne · livre les colis 📦, écrase des piétons, évite la police ! · Sans arme tu frappes avec tes poings 👊 (F : 3 coups pour un piéton) ; ramasse les armes au sol : F tirer, X changer d'arme (0 = poings, 1-2-3) · en hélico : mitraillette à munitions infinies (F) · les voitures se cabossent ! · garage ($3500) : va sur la zone jaune et appuie sur E (owners : voiture fantôme 👻 invincible qui traverse les bâtiments, tu peux en descendre : elle reste garée et seuls les owners peuvent y remonter (E) ; au garage : ranger le fantôme (E), G pour en sortir un) · R : changer de radio (4 stations), H : klaxon · missions : parle au BOSS ❗ au bord ouest de la carte (E) : missions aléatoires (voitures, cavale, contrat, camion blindé 🚚), M pour abandonner · armurerie et distributeur de soins (hôpital) : va sur leur zone et appuie sur E · 🚁 hélicoptère : un pilote mystérieux traîne quelque part en ville (il n'est PAS sur la carte) : trouve-le et réussis sa quête pour débloquer un hélico, rangé sur le toit de ton garage (échelle dans le garage) ; E pour te poser sur la zone 🅷 du toit · à 5★ la police envoie des hélicos : abats-les !";
       get(RF(`users/${myUid}/sta`)).then(s => { const v = +s.val(); if (v > 0 && me.cash === 0) { me.cash = v; savedCash = v; sPrevCash = v; } }).catch(() => { });
       get(RF(`users/${myUid}/sta2`)).then(s => {                           // garage, voiture rangée, armes et munitions
         try {

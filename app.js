@@ -155,6 +155,8 @@ async function ensureOwner(u,n){
 }
 let seq=0;
 let visitorIP=null,visitorIPHash=null,ipDenied=false;
+const DEVICE_KEY="moda.deviceId";let deviceId="";
+try{deviceId=localStorage.getItem(DEVICE_KEY)||"";if(!/^[a-f0-9-]{20,40}$/i.test(deviceId))deviceId="";if(!deviceId){deviceId=crypto.randomUUID?crypto.randomUUID():Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,"0")).join("");localStorage.setItem(DEVICE_KEY,deviceId)}}catch{deviceId=""}
 const visitorIPPromise=(async()=>{try{
  const r=await fetch('https://api.ipify.org?format=json',{cache:'no-store'});if(!r.ok)throw Error('IP service');
  const ip=String((await r.json()).ip||'').trim();if(!ip||!crypto.subtle)throw Error('IP unavailable');
@@ -165,12 +167,14 @@ function showIPDenied(){if(ipDenied)return;ipDenied=true;document.querySelector(
  let p=document.getElementById('ipDeniedPage');if(!p){p=document.createElement('div');p.id='ipDeniedPage';p.style.cssText='position:fixed;inset:0;z-index:99999;display:grid;place-items:center;background:#090914;color:white;padding:24px;text-align:center;font:700 22px system-ui';p.textContent='Désolé, mais vous n’avez pas réussi à atteindre ce site';document.body.append(p)}
  if(auth.currentUser)signOut(auth).catch(()=>{});}
 async function checkVisitorIP(){const x=await visitorIPPromise;if(!x)return false;try{return (await get(R('ipBanHashes/'+x.hash))).exists()}catch(e){console.warn(e);return false}}
+async function checkDeviceBan(){if(!deviceId)return false;try{return (await get(R('deviceBans/'+deviceId))).exists()}catch(e){console.warn('Device ban check',e);return false}}
 const unboot=()=>$('boot').classList.add('off');
 setTimeout(()=>{if(!auth.currentUser)unboot()},5000);
 const transient=e=>!navigator.onLine||/offline|network|timeout|unavailable/i.test((e&&(e.message||e.code))||"");
 async function run(u){
   const my=++seq;let hold=false;
   presUn.forEach(f=>f());presUn=[];
+  if(await checkDeviceBan()){showIPDenied();return}
   if(await checkVisitorIP()){showIPDenied();return}
   if(ipDenied)return;
   if(!u){me=null;stopStats();stopMaintenance();applyNeon();$("adm").hidden=true;$("who").textContent="";$("out").hidden=true;$("net").hidden=true;setBusy(false);show("auth");return unboot()}
@@ -184,6 +188,8 @@ async function run(u){
     if(own){await ensureOwner(u,own).catch(()=>{});isOwner=(await get(R(`owners/${u.uid}`))).exists();if(my!==seq)return}
     me={uid:u.uid,name,owner:isOwner};
     set(R("clientIps/"+u.uid+"/lastConnectedAt"),serverTimestamp()).catch(()=>{});
+    if(deviceId)set(R("clientDevices/"+u.uid+"/"+deviceId),{updatedAt:serverTimestamp()}).catch(()=>{});
+    if(deviceId)presUn.push(onValue(R("deviceBans/"+deviceId),snap=>{if(snap.exists())showIPDenied()}));
     if(visitorIP){if(visitorIPHash)set(R("clientIps/"+u.uid+"/"+visitorIPHash),{ip:visitorIP,updatedAt:serverTimestamp()}).catch(()=>{});if(visitorIPHash)presUn.push(onValue(R("ipBanHashes/"+visitorIPHash),s=>{if(s.exists())showIPDenied()}));}
     $("adm").hidden=!isOwner;$("sw").setAttribute("aria-checked",String(adm&&isOwner));
     $("who").textContent=name+(isOwner?" ★":"");$("out").hidden=false;$("net").hidden=true;resetAuthForm();showHome();
@@ -1699,7 +1705,7 @@ function startStats(){
   [["presence","presence"],["users","users"],["lobbies","lobbies"],["friends","friends"],["stats/gamesPlayed","games"],["stats/byGame","byGame"],["stats/hours","hours"]]
     .forEach(([p,k])=>unStats.push(onValue(R(p),s=>{D[k]=s.val();renderStats(D);renderAdmin(D)},()=>toast("Statistiques : accès refusé, vérifie les règles"))));
   if(auth.currentUser?.email==="rayqua@moda.owner"){
-    [["clientIps","clientIps"],["ipBanDetails","ipBanDetails"]].forEach(([p,k])=>unStats.push(onValue(R(p),s=>{D[k]=s.val();renderStats(D);renderIPAdmin(D)},()=>toast("Gestion IP : accès refusé, vérifie les règles"))));
+    [["clientIps","clientIps"],["ipBanDetails","ipBanDetails"],["clientDevices","clientDevices"],["deviceBans","deviceBans"]].forEach(([p,k])=>unStats.push(onValue(R(p),s=>{D[k]=s.val();renderStats(D);renderIPAdmin(D);renderDeviceAdmin(D)},()=>toast("Gestion IP/appareils : accès refusé, vérifie les règles"))));
   }
 }
 function renderStats(D){
@@ -2018,6 +2024,26 @@ const admErr=()=>toast("Action refusée : les règles Firebase doivent autoriser
 function setStTab(i){$("stView").hidden=!!i;$("admView").hidden=!i;
   [["tbStats",!i],["tbAdm",!!i]].forEach(([id,on])=>{$(id).classList.toggle("on",on);$(id).setAttribute("aria-selected",String(on))})}
 $("tbStats").onclick=()=>setStTab(0);$("tbAdm").onclick=()=>{setStTab(1);renderThemes()};
+$("ipDeviceBanAdd")?.addEventListener("click",async()=>{
+ if(auth.currentUser?.email!=="rayqua@moda.owner")return toast("Accès réservé à rayqua");
+ const id=$("ipDeviceBanInput").value.trim().toLowerCase();
+ if(!/^[a-f0-9-]{20,40}$/.test(id))return toast("ID d’appareil invalide");
+ try{await set(R("deviceBans/"+id),true);await set(R("deviceBanDetails/"+id),{createdAt:serverTimestamp()});$("ipDeviceBanInput").value="";toast("Appareil banni");}catch(e){err(e)}
+});
+function renderDeviceAdmin(D){
+ const box=$("deviceAdminList");if(!box)return;box.replaceChildren();
+ const users=D.users||{},devices=D.clientDevices||{},bans=D.deviceBans||{},rows=[];
+ Object.entries(devices).forEach(([uid,list])=>Object.entries(list||{}).forEach(([id,data])=>rows.push({uid,id,data:data||{},name:users[uid]?.name||"Compte inconnu",banned:!!bans[id]})));
+ rows.sort((x,y)=>(y.data.updatedAt||0)-(x.data.updatedAt||0));
+ if(!rows.length)box.append(h("span","Aucun appareil enregistré pour le moment."));
+ rows.forEach(d=>{
+  const row=h("div");row.className="lrow";row.style.cssText="align-items:center;gap:8px;flex-wrap:wrap";
+  const info=h("span",d.name+" · "+d.id);info.style.cssText="font-size:12px;overflow-wrap:anywhere;flex:1";
+  const btn=h("button",d.banned?"Débannir":"Bannir");btn.className=d.banned?"mini alt":"mini danger";
+  btn.onclick=async()=>{try{if(d.banned){await remove(R("deviceBans/"+d.id));await remove(R("deviceBanDetails/"+d.id));toast("Appareil débanni")}else{await set(R("deviceBans/"+d.id),true);await set(R("deviceBanDetails/"+d.id),{uid:d.uid,name:d.name,createdAt:serverTimestamp()});toast("Appareil banni")}}catch(e){err(e)}};
+  row.append(info,btn);box.append(row);
+ });
+}
 $("ipBanAdd").onclick=async()=>{
  if(auth.currentUser?.email!=="rayqua@moda.owner")return toast("Accès réservé à rayqua");
  const ip=$("ipBanInput").value.trim();if(!ip||ip.length>45||!/^[0-9a-fA-F:.]+$/.test(ip))return toast("Adresse IP invalide");

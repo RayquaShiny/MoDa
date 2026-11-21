@@ -297,12 +297,35 @@ async function joinLobby(c){
   await set(R(`lobbies/${c}/players/${me.uid}`),{name:me.name,color:firstColor(pl),ready:false,...ownTag()});
   onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();enter(c);
 }
+// STA I : fermeture différée d'un serveur qui n'a plus aucun joueur.
+const staCloseTimers=new Map();
+function scheduleEmptyStaClose(c){
+  clearTimeout(staCloseTimers.get(c));
+  const timer=setTimeout(async()=>{
+    staCloseTimers.delete(c);
+    try{
+      const l=(await get(R(`lobbies/${c}`))).val();
+      if(l&&l.game==="sta"&&!Object.keys(l.players||{}).length){
+        await remove(R(`games/${c}`));
+        await remove(R(`lobbies/${c}`));
+      }
+    }catch(e){console.warn("Fermeture STA I vide",e)}
+  },1800);
+  staCloseTimers.set(c,timer);
+}
+function clearEmptyStaClose(c){
+  clearTimeout(staCloseTimers.get(c));staCloseTimers.delete(c);
+}
 function enter(c){
   code=c;stopStats();show("lobby");$("lcode").textContent=c;
   unLobby=onValue(R(`lobbies/${c}`),s=>{
     const l=s.val();if(!l){if(code){local();toast("Le lobby a été fermé")}return}
     if(l.kick&&l.kick[me.uid]){if(code){local();toast("Un admin t'a retiré du lobby")}return}
     lobby=l;
+    if(l.game==="sta"){
+      if(Object.keys(l.players||{}).length)scheduleEmptyStaClose(c)===undefined&&clearEmptyStaClose(c);
+      else scheduleEmptyStaClose(c);
+    }
     if(spec&&l.status==="lobby")spec=false;   // la partie est finie / pas lancée : l'admin redevient un joueur du lobby
     if(isMaintained(l.game)){toast(maintMsg(l.game));leaveLobby();return}
     if(((l.status==="lobby"||l.game==="sim"||l.game==="fruit")&&l.host!==me.uid||l.game==="sta")&&!(l.players&&l.players[me.uid])&&!spec){ // coupure puis retour : on se réinscrit
@@ -385,7 +408,13 @@ async function admJoin(c){
 async function leaveLobby(){
   if(!code)return;const c=code,sta=!!lobby&&lobby.game==="sta",host=lobby&&lobby.host===me.uid&&!sta;local();
   onDisconnect(R(`lobbies/${c}`)).cancel();onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).cancel();
-  try{if(host){await remove(R(`games/${c}`));await remove(R(`lobbies/${c}`))}else{await remove(R(`lobbies/${c}/players/${me.uid}`));if(sta&&!(await get(R(`lobbies/${c}/players`))).val())await remove(R(`games/${c}`))}}catch{}
+  try{
+    if(host){await remove(R(`games/${c}`));await remove(R(`lobbies/${c}`))}
+    else{
+      await remove(R(`lobbies/${c}/players/${me.uid}`));
+      if(sta)scheduleEmptyStaClose(c);
+    }
+  }catch{}
 }
 // ---------- Mine Simulator (sim.js + simcore.js) : monde partagé, progression sauvegardée dans users/<uid>/sim ----------
 let sc=null;

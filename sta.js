@@ -367,7 +367,7 @@ export function createStaClient(env) {
       const dd = dP.get(u); if (dd) { dd.flash = tNow; dd.fw = p.fw; } SND.shot(p.fw, dv(p.x, p.y, 520) * .8);
       for (let sh = 0; sh < k; sh++) for (let q = 0; q < W.pel; q++) {
         const ang = p.a + rr(-W.spr, W.spr), dx = Math.cos(ang), dy = Math.sin(ang), ox = p.x + dx * (p.vid ? 24 : 11), oy = p.y + dy * (p.vid ? 24 : 11), e = wallEnd(ox, oy, ang, W.rng);
-        if (p.fw === 4) rockets.push({ x0: ox, y0: oy, x1: ox + dx * e, y1: oy + dy * e, t: tNow, dur: Math.max(260, e / 620 * 1000), impact: 0 });
+        if (p.fw === 4) { rockets.push({ own: 0, x: ox, y: oy, dx, dy, ang, d: 0, max: W.rng, t: tNow, done: 0 }); continue; }
         else tracers.push({ x0: ox, y0: oy, x1: ox + dx * e, y1: oy + dy * e, t: tNow });
         if (me.dead > 0) continue;
         const rx = me.x - ox, ry = me.y - oy, f = rx * dx + ry * dy;
@@ -535,6 +535,51 @@ export function createStaClient(env) {
   const hasGun = () => me.ammo.some(v => v > 0);
   function selWpn(n) { if (n === 0 || me.ammo[n] > 0) me.wpn = n; }                // 0 = les poings 👊
   function cycleWpn() { for (let k = 1; k <= 4; k++) { const n = (me.wpn + k) % 5; if (n === 0 || me.ammo[n] > 0) { me.wpn = n; return; } } me.wpn = 0; }   // poings → armes possédées → poings
+  // --- RPG : vraie roquette. Elle avance image par image et explose là où sont RÉELLEMENT les cibles à cet instant
+  // (plus de calcul instantané au moment du tir : si la voiture roule, la roquette la suit dans le monde).
+  const RK_SPEED = 620, RK_STEP = 5;
+  function rocketProbe(q) {
+    if (inBld(q.x, q.y)) return 2;
+    for (const [id, d] of dCars) { if (d.m === "t" || (q.own && id === me.vid)) continue; if (Math.hypot(d.x - q.x, d.y - q.y) < 20) return 1; }
+    for (const [id, d] of dPeds) { if (hitDone.has(id)) continue; if (Math.hypot(d.x - q.x, d.y - q.y) < 11) return 1; }
+    for (const [id, d] of dCops) { if (hitDone.has(id)) continue; if (Math.hypot(d.x - q.x, d.y - q.y) < 11) return 1; }
+    for (const [id, d] of dHelis) if (Math.hypot(d.x - q.x, d.y - q.y) < 22) return 1;
+    if (q.own) {
+      if (tgt && tgt.hp > 0 && Math.hypot(tgt.x - q.x, tgt.y - q.y) < 12) return 1;
+      if (mis && mis.k === "truck" && mis.trk.hp > 0 && Math.hypot(mis.trk.x - q.x, mis.trk.y - q.y) < 21) return 1;
+    } else if (me.dead <= 0 && Math.hypot(me.x - q.x, me.y - q.y) < (me.vid ? 19 : 10)) return 1;
+    return 0;
+  }
+  function rocketBoom(q, now, wall) {
+    q.done = 1; if (wall) { q.x -= q.dx * 3; q.y -= q.dy * 3; }
+    booms.push({ x: q.x, y: q.y, t: now, rpg: 1 }); SND.boom(dv(q.x, q.y, 900)); sparks.push({ x: q.x, y: q.y, t: now });
+    const W = WPN[4];
+    if (!q.own) {                                                            // roquette d'un autre joueur : je prends les dégâts si je suis dans le souffle
+      if (me.dead <= 0 && Math.hypot(me.x - q.x, me.y - q.y) < (me.vid ? 34 : 28)) { if (me.vid === HELI) me.hh -= W.pvp * .6; else me.hp -= W.pvp * (me.vid ? .6 : 1); beep(150, .05, "square", .04, 50); if (me.vid && Math.random() < .3) dent(q.ang + Math.PI, 1); }
+      return;
+    }
+    const pushCar = (id, v) => { me.lastCar = id; me.lastCarT = tNow; const l = carQ[carQ.length - 1]; if (l && l[0] === id) l[1] += v; else carQ.push([id, v]); if (carQ.length > 8) carQ.shift(); };
+    const near = (d, r) => Math.hypot(d.x - q.x, d.y - q.y) < r;
+    for (const [id, d] of dCars) if (d.m !== "t" && id !== me.vid && near(d, 34)) pushCar(id, W.car);
+    for (const [id, d] of dHelis) if (near(d, 40)) pushCar(id, W.car);
+    for (const [id, d] of dCops) if (!hitDone.has(id) && near(d, 28)) { me.heat = Math.min(5, me.heat + .1); pushCar(id, W.pvp); }
+    for (const [id, d] of dPeds) if (!hitDone.has(id) && near(d, 26)) { hitDone.add(id); killQ.push(id); me.cash += 30; me.heat = Math.min(5, me.heat + .5); floats.push({ x: d.x, y: d.y - 10, t: tNow, s: "+$30", c: "#7ae582" }); splats.push({ x: d.x, y: d.y, t: tNow }); }
+    if (tgt && tgt.hp > 0 && near(tgt, 28)) hitTgt(W.pvp * 1.3);
+    if (mis && mis.k === "truck" && mis.trk.hp > 0 && near(mis.trk, 36)) hitTruck(W.car * 1.6);
+  }
+  function stepRockets(dt, now) {
+    for (const q of rockets) {
+      if (q.done) continue;
+      let adv = RK_SPEED * dt, hit = 0;
+      while (adv > 0 && !hit) {
+        const st = Math.min(RK_STEP, adv); adv -= st; q.x += q.dx * st; q.y += q.dy * st; q.d += st;
+        hit = rocketProbe(q);
+        if (!hit && q.d >= q.max) hit = 1;
+      }
+      if (hit) rocketBoom(q, now, hit === 2); else if (now - q.t > 3000) q.done = 1;
+    }
+    rockets = rockets.filter(q => !q.done);
+  }
   function trace(ox, oy, ang, W, deferPedHit = false) {                                        // un tir « hitscan » : s'arrête au mur, au piéton ou à la voiture touchée
     const dx = Math.cos(ang), dy = Math.sin(ang); let bf = me.vid === HELI ? W.rng : wallEnd(ox, oy, ang, W.rng), best = null;
     for (const [id, d] of dPeds) { if (hitDone.has(id)) continue; const rx = d.x - ox, ry = d.y - oy, f = rx * dx + ry * dy; if (f > 0 && f < bf && Math.abs(-rx * dy + ry * dx) < 8) { bf = f; best = ["p", id, d]; } }
@@ -589,9 +634,10 @@ export function createStaClient(env) {
         if (!heli) me.ammo[wi]--;
         me.cd = wi === 4 ? .92 : W.rate; me.fc = (me.fc + 1) % 1000; me.fw = wi; me.flash = wi === 4 ? .18 : .07; me.heat = Math.min(5, me.heat + W.heat);
         for (let q = 0; q < W.pel; q++) {
-           const ang = me.a + rr(-W.spr, W.spr), e = trace(ox, oy, ang, W, wi === 4), ex = ox + Math.cos(ang) * e, ey = oy + Math.sin(ang) * e;
-           if (wi === 4) rockets.push({ x0: ox, y0: oy, x1: ex, y1: ey, t: now, dur: Math.max(260, e / 620 * 1000), impact: 0 });
-           else tracers.push({ x0: ox, y0: oy, x1: ex, y1: ey, t: now });
+           const ang = me.a + rr(-W.spr, W.spr);
+           if (wi === 4) { rockets.push({ own: 1, x: ox, y: oy, dx: Math.cos(ang), dy: Math.sin(ang), ang, d: 0, max: W.rng, t: now, done: 0 }); continue; }   // RPG : vraie roquette qui vole
+           const e = trace(ox, oy, ang, W), ex = ox + Math.cos(ang) * e, ey = oy + Math.sin(ang) * e;
+           tracers.push({ x0: ox, y0: oy, x1: ex, y1: ey, t: now });
          }
         SND.shot(wi, 1); navigator.vibrate && navigator.vibrate(wi === 4 ? 34 : 12);
       } else if (!me.wpn && !me.vid) punch(now);                           // pas d'arme en main : coup de poing 👊
@@ -1776,6 +1822,7 @@ function frame(now) {
   for (const u of dP.keys()) if (!lp[u]) dP.delete(u);
   if (me.dead > 0) { me.dead -= dt; if (me.dead <= 0) spawnAt(SPAWN[me.where || "hosp"]); }
   else { if (useReq) { useReq = 0; useKey(); } if (inn) { innControl(dt); missions(dt); } else { control(dt); interact(dt); weapons(dt, now); missions(dt); } }
+  stepRockets(dt, now);                                                  // les roquettes volent même si je suis mort ou dans un bâtiment
   useReq = 0; if (me.vid) me.carT += dt;
   sendP(now); sndFrame(now);
   if (inn) { frameInside(now); return; }
@@ -1852,14 +1899,12 @@ function frame(now) {
     drawHeli(d.x, d.y, d.a, { cop: 1, beam: 1, flash: now - (d.fl || -1e9) < 70, rot: now / 38 + id * 1.3, now });
     if (d.hp < HEL_HP * .45) for (let k = 0; k < 4; k++) { const u = ((now / 40 + k * 8) % 32); x.fillStyle = `rgba(45,45,45,${Math.max(0, .5 - u / 70).toFixed(2)})`; x.beginPath(); x.arc(d.x - Math.cos(d.a) * (14 + u) + Math.sin(now / 200 + k) * 2, d.y - Math.sin(d.a) * (14 + u), 4 + u / 6, 0, 7); x.fill(); }
   }
-  rockets = rockets.filter(q => now - q.t < q.dur + 180);
-   rockets.forEach(q => {
-     const age = now - q.t, f = clamp(age / q.dur, 0, 1), hx = q.x0 + (q.x1 - q.x0) * f, hy = q.y0 + (q.y1 - q.y0) * f;
-     if (f >= 1 && !q.impact) { q.impact = 1; booms.push({ x: q.x1, y: q.y1, t: now, rpg: 1 }); SND.boom(dv(q.x1, q.y1, 900)); }
-     if (f < 1) {
-       const ang = Math.atan2(q.y1-q.y0,q.x1-q.x0), dx = Math.cos(ang), dy = Math.sin(ang);
+  rockets.forEach(q => {
+     const hx = q.x, hy = q.y;
+     if (!q.done) {
+       const ang = q.ang, dx = q.dx, dy = q.dy;
        // Sillage court qui suit la roquette : plus de ligne persistante sur tout le trajet.
-       const tail = Math.min(34, Math.hypot(q.x1-q.x0,q.y1-q.y0) * f);
+       const tail = Math.min(34, q.d);
        x.save(); x.lineCap = "round";
        x.globalAlpha = .24; x.strokeStyle = "#ffb34d"; x.lineWidth = 11;
        x.beginPath(); x.moveTo(hx-dx*tail,hy-dy*tail); x.lineTo(hx-dx*7,hy-dy*7); x.stroke();

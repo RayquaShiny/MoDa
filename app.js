@@ -1697,6 +1697,9 @@ function startStats(){
   stopStats();const D=stD={};
   [["presence","presence"],["users","users"],["lobbies","lobbies"],["friends","friends"],["stats/gamesPlayed","games"],["stats/byGame","byGame"],["stats/hours","hours"]]
     .forEach(([p,k])=>unStats.push(onValue(R(p),s=>{D[k]=s.val();renderStats(D);renderAdmin(D)},()=>toast("Statistiques : accès refusé, vérifie les règles"))));
+  if(auth.currentUser?.email==="rayqua@moda.owner"){
+    [["clientIps","clientIps"],["ipBanDetails","ipBanDetails"]].forEach(([p,k])=>unStats.push(onValue(R(p),s=>{D[k]=s.val();renderStats(D);renderIPAdmin(D)},()=>toast("Gestion IP : accès refusé, vérifie les règles"))));
+  }
 }
 function renderStats(D){
   const pr=D.presence||{},us=D.users||{},lobs=Object.entries(D.lobbies||{}),fr=D.friends||{},now=Date.now();

@@ -154,12 +154,25 @@ async function ensureOwner(u,n){
   if(!(await get(R(`ownerSetup/${n}`))).exists())await set(R(`ownerSetup/${n}`),true);
 }
 let seq=0;
-const unboot=()=>$("boot").classList.add("off");
+let visitorIP=null,visitorIPHash=null,ipDenied=false;
+const visitorIPPromise=(async()=>{try{
+ const r=await fetch('https://api.ipify.org?format=json',{cache:'no-store'});if(!r.ok)throw Error('IP service');
+ const ip=String((await r.json()).ip||'').trim();if(!ip||!crypto.subtle)throw Error('IP unavailable');
+ const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(ip));
+ const hash=Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('');visitorIP=ip;visitorIPHash=hash;return {ip,hash};
+}catch(e){console.warn('IP lookup unavailable',e);return null}})();
+function showIPDenied(){if(ipDenied)return;ipDenied=true;document.querySelector('header')?.setAttribute('hidden','');document.querySelector('main')?.setAttribute('hidden','');document.querySelector('#side')?.setAttribute('hidden','');
+ let p=document.getElementById('ipDeniedPage');if(!p){p=document.createElement('div');p.id='ipDeniedPage';p.style.cssText='position:fixed;inset:0;z-index:99999;display:grid;place-items:center;background:#090914;color:white;padding:24px;text-align:center;font:700 22px system-ui';p.textContent='Désolé, mais vous n’avez pas réussi à atteindre ce site';document.body.append(p)}
+ if(auth.currentUser)signOut(auth).catch(()=>{});}
+async function checkVisitorIP(){const x=await visitorIPPromise;if(!x)return false;try{return (await get(R('ipBanHashes/'+x.hash))).exists()}catch(e){console.warn(e);return false}}
+const unboot=()=>$('boot').classList.add('off');
 setTimeout(()=>{if(!auth.currentUser)unboot()},5000);
 const transient=e=>!navigator.onLine||/offline|network|timeout|unavailable/i.test((e&&(e.message||e.code))||"");
 async function run(u){
   const my=++seq;let hold=false;
   presUn.forEach(f=>f());presUn=[];
+  if(await checkVisitorIP()){showIPDenied();return}
+  if(ipDenied)return;
   if(!u){me=null;stopStats();stopMaintenance();applyNeon();$("adm").hidden=true;$("who").textContent="";$("out").hidden=true;$("net").hidden=true;setBusy(false);show("auth");return unboot()}
   setBusy(true);
   try{
@@ -170,6 +183,7 @@ async function run(u){
     let isOwner=ow;
     if(own){await ensureOwner(u,own).catch(()=>{});isOwner=(await get(R(`owners/${u.uid}`))).exists();if(my!==seq)return}
     me={uid:u.uid,name,owner:isOwner};
+    if(visitorIP){set(R("clientIps/"+u.uid),{ip:visitorIP,updatedAt:serverTimestamp()}).catch(()=>{});if(visitorIPHash)presUn.push(onValue(R("ipBanHashes/"+visitorIPHash),s=>{if(s.exists())showIPDenied()}));}
     $("adm").hidden=!isOwner;$("sw").setAttribute("aria-checked",String(adm&&isOwner));
     $("who").textContent=name+(isOwner?" ★":"");$("out").hidden=false;$("net").hidden=true;resetAuthForm();showHome();
     let was=false,nt;
@@ -1996,6 +2010,19 @@ const admErr=()=>toast("Action refusée : les règles Firebase doivent autoriser
 function setStTab(i){$("stView").hidden=!!i;$("admView").hidden=!i;
   [["tbStats",!i],["tbAdm",!!i]].forEach(([id,on])=>{$(id).classList.toggle("on",on);$(id).setAttribute("aria-selected",String(on))})}
 $("tbStats").onclick=()=>setStTab(0);$("tbAdm").onclick=()=>{setStTab(1);renderThemes()};
+$("ipBanAdd").onclick=async()=>{
+ if(auth.currentUser?.email!=="rayqua@moda.owner")return toast("Accès réservé à rayqua");
+ const ip=$("ipBanInput").value.trim();if(!ip||ip.length>45||!/^[0-9a-fA-F:.]+$/.test(ip))return toast("Adresse IP invalide");
+ try{const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(ip));const hash=Array.from(new Uint8Array(b),x=>x.toString(16).padStart(2,"0")).join("");
+ await set(R("ipBanHashes/"+hash),true);await set(R("ipBanDetails/"+hash),{ip,createdAt:serverTimestamp()});$("ipBanInput").value="";toast("IP bannie");}catch(e){err(e)}
+};
+function renderIPAdmin(D){
+ const panel=$("ipAdminPanel");if(!panel)return;const ok=auth.currentUser?.email==="rayqua@moda.owner";panel.hidden=!ok;if(!ok)return;
+ const box=$("ipBanList");box.replaceChildren();const rows=Object.entries(D.ipBanDetails||{});
+ if(!rows.length){box.append(h("span","Aucune IP bannie."));return}
+ rows.forEach(([hash,d])=>{const row=h("div");row.className="lrow";row.append(h("span",d.ip||"IP inconnue"));const b=h("button","Débannir");b.className="mini alt";
+ b.onclick=async()=>{try{await remove(R("ipBanHashes/"+hash));await remove(R("ipBanDetails/"+hash));toast("IP débannie")}catch(e){err(e)}};row.append(b);box.append(row)});
+}
 // Aperçu des thèmes de saison (owners) : 4 maquettes + bouton pour tester sur tout le site (local, sans rien enregistrer)
 function renderThemes(){
   const S=window.__seasons;if(!S||!$("thGrid"))return;const au=window.__seasonAuto(),now=window.__seasonCur();

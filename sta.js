@@ -238,11 +238,13 @@ export function createStaClient(env) {
     if (streamCd <= 0 && ps.length) {                                     // le monde « vit » autour des joueurs : on recycle ce qui est loin
       streamCd = 1; const np = ps.length;
       for (const q of peds) if (far(q.x, q.y, 1100)) { const pt = nearPt(520, 900); if (pt) sidewalk(q, pt[0], pt[1]); }
-      const wp = Math.min(70, 34 + 4 * np);
+      const dkn = darkness(cycT()), wp = Math.max(8, Math.round(Math.min(70, 34 + 4 * np) * (1 - .65 * dkn)));   // moins de monde dehors la nuit
+      if (peds.length > wp) { let ex = peds.length - wp; peds = peds.filter(q => { if (ex > 0 && far(q.x, q.y, 600)) { ex--; return false; } return true; }); }
       while (peds.length < wp) { const q = { id: nid++, x: 0, y: 0, h: rr(0, 6.283), sk: Math.floor(Math.random() * 6), st: 0, tm: rr(1, 4) }, pt = nearPt(520, 900); if (!pt) break; sidewalk(q, pt[0], pt[1]); peds.push(q); }
       cars = cars.filter(q => !q.rm);
       for (const cr of cars) if (cr.m === "d" && far(cr.x, cr.y, 1500)) roadSpawn(cr);
-      const nd = cars.filter(q => q.m === "d").length, wc = Math.min(26, 14 + 2 * np);
+      const nd = cars.filter(q => q.m === "d").length, wc = Math.max(5, Math.round(Math.min(26, 14 + 2 * np) * (1 - .55 * dkn)));
+      if (nd > wc) { let ex = nd - wc; for (const cr of cars) if (ex > 0 && cr.m === "d" && far(cr.x, cr.y, 700)) { cr.rm = 1; ex--; } }
       for (let i = nd; i < wc; i++) { const cr = mkCar(); if (roadSpawn(cr)) cars.push(cr); }
       if ((cleanCd -= 1) <= 0) { cleanCd = 5; Object.keys(pd).forEach(u => { if (!lp[u]) remove(RF(`games/${c}/p/${u}`)).catch(() => { }); }); }
     }
@@ -309,6 +311,7 @@ export function createStaClient(env) {
     const v = snap.val(); if (!v) return; let s; try { s = JSON.parse(v); } catch { return; }
     if (s.k !== "sta" || !s.pd) return;
     if (s.h !== lastH) { lastH = s.h; lastT = 0; }
+    if (s.h !== myUid && +s.t > 1e12) { const off = s.t - Date.now(); clockOff = clockOff === null ? off : clockOff * .9 + off * .1; }   // horloge commune : alignée sur celle de l'hôte
     if (s.t < lastT) return; lastT = s.t; const firstSnap = !ls; ls = s;
     const seen = new Set();
     s.pd.forEach(a => { seen.add(a[0]); let d = dPeds.get(a[0]); if (!d) dPeds.set(a[0], d = { x: a[1], y: a[2], a: a[3] }); d.tx = a[1]; d.ty = a[2]; d.ta = a[3]; d.sk = a[4]; d.st = a[5]; });
@@ -848,6 +851,10 @@ export function createStaClient(env) {
   let pw = 0, pwT = 0;                                                    // 0 = rien · 1 = aller chercher la poudre · 2 = livrer (chrono)
   const nearMech = () => (!me.vid && !me.dead && !inn && Math.hypot(RPG_CONTACT.x - me.x, RPG_CONTACT.y - me.y) < 58);
   const pwFail = (why) => { if (pw === 2) { pw = 1; toast(`🧨 Livraison ratée (${why}) : retourne chercher la poudre.`); } };
+  // Cycle jour/nuit commun à tous : 180 s de jour, 165 s de nuit (345 s), fondu de 12 s. L'horloge est celle de l'hôte (sinon l'horloge locale si on est l'hôte).
+  const DAY_S = 180, NIGHT_S = 165, CYC_S = DAY_S + NIGHT_S, FADE_S = 12; let clockOff = null;
+  const cycT = () => (((Date.now() + (clockOff || 0)) / 1000) % CYC_S + CYC_S) % CYC_S;
+  const darkness = (t) => t < DAY_S - FADE_S ? 0 : t < DAY_S ? (t - (DAY_S - FADE_S)) / FADE_S : t < CYC_S - FADE_S ? 1 : (CYC_S - t) / FADE_S;
   const PARTS = 5, PART_TIME = 480;                                      // difficulté de la quête : nombre de caisses · temps (s)
   function partSpots() {
     const out = [];
@@ -1756,9 +1763,13 @@ function frame(now) {
   if (mis && mis.k === "heli" && mis.st === 0) for (const q of mis.cr) if (!q.got && inV(q.x, q.y)) drawPart(q, now, labels);
   if (tgt && tgt.hp > 0 && inV(tgt.x, tgt.y)) { drawWalker(tgt.x, tgt.y, tgt.h, "#16161d", SKIN[tgt.sk % 6], now / (tgt.fl > 0 ? 55 : 90), 0, false); x.strokeStyle = "#ff3b30"; x.lineWidth = 2; x.beginPath(); x.arc(tgt.x, tgt.y, 15 + Math.sin(now / 150) * 2, 0, 7); x.stroke(); labels.push(["🎯", tgt.x, tgt.y - 20, "#fff", 18]); }
   if (mis && mis.k === "truck" && mis.trk.hp > 0 && inV(mis.trk.x, mis.trk.y)) drawTruck(mis.trk, now, labels);
+  { const dk = darkness(cycT()); if (dk > .01) {                           // nuit : voile bleu sombre, avec un halo de lumière autour de toi
+    x.setTransform(1, 0, 0, 1, 0, 0); const [lx0, ly0] = sxy(me.x, me.y), gx = lx0 / LR, gy = ly0 / LR, gr = x.createRadialGradient(gx, gy, 20, gx, gy, 230 / LR * 2.2);
+    gr.addColorStop(0, `rgba(8,12,40,${(.28 * dk).toFixed(3)})`); gr.addColorStop(1, `rgba(4,6,28,${(.74 * dk).toFixed(3)})`); x.fillStyle = gr; x.fillRect(0, 0, lc.width, lc.height); } }
   x = mx2; x.setTransform(1, 0, 0, 1, 0, 0); x.imageSmoothingEnabled = false; x.drawImage(lc, 0, 0, cv.width, cv.height);   // …puis agrandie sans lissage = look GTA 1
   x.setTransform(S, 0, 0, S, 0, 0);
   labels.forEach(([s, wx, wy, c2, sz]) => { const [px, py] = sxy(wx, wy); if (px > -50 && px < W + 50 && py > -30 && py < H + 30) txt(s, px, py, sz || 12, c2); });
+  { const t = cycT(), isDay = t < DAY_S, left = Math.ceil(isDay ? DAY_S - t : CYC_S - t); txt(`${isDay ? "☀️ JOUR" : "🌙 NUIT"} ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`, W - 14, H - 12, 12, isDay ? "#ffe14d" : "#9db8ff", "right"); }
   floats = floats.filter(f => now - f.t < 1400); floats.forEach(f => { const [px, py] = sxy(f.x, f.y); x.globalAlpha = 1 - (now - f.t) / 1400; txt(f.s, px, py - (now - f.t) / 25, 15, f.c); }); x.globalAlpha = 1;
   // ----- HUD -----
   txt(`$${Math.round(me.cash)}`, 14, 32, 28, "#ffe14d", "left");

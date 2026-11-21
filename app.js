@@ -1725,7 +1725,8 @@ function renderStats(D){
   const ax=h("div");ax.style.cssText="display:flex;justify-content:space-between;color:var(--mute);font-size:12px;margin-top:4px";["0 h","6 h","12 h","18 h","24 h"].forEach(t=>ax.append(h("span",t)));
   $("sthours").replaceChildren(box,ax);
   $("onlh").textContent=`En ligne maintenant (${online.length})`;
-  $("onl").replaceChildren(...(online.length?online.map(u=>{const c=h("span");c.className="chip";const p=h("i");p.className="on";c.append(p,us[u]?.name||"?");return c}):[h("span","Personne pour l'instant")]));
+   const ips=D.clientIps||{};
+   $("onl").replaceChildren(...(online.length?online.map(u=>{const c=h("span");c.className="chip";const p=h("i");p.className="on";c.append(p,(us[u]?.name||"?")+" ("+(ips[u]?.ip||"IP inconnue")+")");return c}):[h("span","Personne en ligne")]));
   const rows=[...playing,...open].map(([c,l])=>{const g=GN[l.game]||["🎲",l.game||"Jeu"],n=Object.keys(l.players||{}).length,r=h("div");r.className="lrow";
     const t=h("span",`${g[0]} ${g[1]}`);t.className="g";const cd=h("code",c);const b=h("span",l.status==="playing"?"En partie":"Lobby");b.className="badge"+(l.status==="playing"?" pl2":"");
     r.append(t,cd,h("small",`${n} joueur${n>1?"s":""}`),b);return r});

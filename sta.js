@@ -668,7 +668,7 @@ export function createStaClient(env) {
   // Dedans, tu es à l'abri : pas de police, pas de tirs, tes PV sont figés. Impossible d'entrer quand on est recherché.
   const ROOMS = {
     arms: { w: 400, h: 290, name: "ARMURERIE", c: "#ff5a4d", door: { x: 200, hw: 26 },
-      obs: [[14, 112, 372, 24], [14, 158, 36, 84], [350, 158, 36, 84], [156, 196, 88, 24]] },
+      obs: [[14, 112, 372, 24], [14, 158, 36, 84], [350, 158, 36, 84], [156, 196, 88, 24], [18, 246, 34, 28], [352, 248, 28, 28]] },
     garage: { w: 580, h: 300, name: "GARAGE", c: "#ffd23f", door: { x: 220, hw: 50 },
       obs: [[18, 56, 160, 26], [86, 92, 20, 14], [136, 166, 28, 48], [436, 166, 28, 48], [516, 60, 42, 36], [18, 236, 26, 26], [48, 246, 22, 22], [526, 206, 32, 44]] }
   };
@@ -754,26 +754,73 @@ export function createStaClient(env) {
     x.restore();
   }
   function drawArmsRoom(now, labels) {
-    const R = ROOMS.arms, w = R.w, h = R.h, dx = R.door.x, hw = R.door.hw, sp = innSpot();
-    for (let ty = 56; ty < h; ty += 20) for (let tx = 0; tx < w; tx += 20) fr(tx, ty, 20, 20, ((tx + ty) / 20) & 1 ? "#2d2b36" : "#26242e");
-    fr(dx - 28, 136, 56, h - 136, "#6e2222"); fr(dx - 28, 136, 2, h - 136, "#9a3636"); fr(dx + 26, 136, 2, h - 136, "#9a3636");   // tapis rouge
-    fr(0, 0, w, 58, "#4a1d1d"); for (let y = 11; y < 54; y += 11) { fr(0, y, w, 1, "rgba(0,0,0,.28)"); for (let c = (y / 11 & 1) * 14; c < w; c += 28) fr(c, y - 10, 1, 10, "rgba(0,0,0,.2)"); }
-    fr(0, 0, w, 4, "#2a0e0e"); fr(0, 54, w, 4, "#2a0e0e");
-    fr(0, 56, 14, h - 56, "#3a1616"); fr(w - 14, 56, 14, h - 56, "#3a1616"); fr(14, 56, 2, h - 56, "rgba(0,0,0,.4)"); fr(w - 16, 56, 2, h - 56, "rgba(0,0,0,.4)");
-    fr(0, h - 14, dx - hw, 14, "#3a1616"); fr(dx + hw, h - 14, w - dx - hw, 14, "#3a1616"); fr(dx - hw, h - 14, hw * 2, 14, "#9fd0f0"); fr(dx - hw, h - 14, 3, 14, "#2a0e0e"); fr(dx + hw - 3, h - 14, 3, 14, "#2a0e0e");
-    fr(30, 12, 22, 30, "#d9c89a"); fr(36, 18, 10, 10, "#8d5524"); fr(32, 33, 18, 2, "#6b1a1a");   // affiche « WANTED »
-    SHOP_ARMS.forEach((a, i) => { const px = 100 + i * 100; fr(px - 32, 10, 64, 36, "#1d0a0a"); x.strokeStyle = "#8a3a3a"; x.lineWidth = 1; x.strokeRect(px - 32.5, 10.5, 64, 36); wIcon(a.n, px, 24, 1.4); labels.push([WPN[a.n].n, px, 41, "#fff", 10]); labels.push([`$${a.p}`, px, 52, "#ffe14d", 11]); });
-    fr(150, 3, 100, 10, "rgba(255,60,60,.28)"); labels.push(["ARMES", 200, 12, Math.sin(now / 90) > .93 ? "#8a4a4a" : "#ff5a4d", 13]);   // néon
+    const R = ROOMS.arms, w = R.w, h = R.h, dx = R.door.x, hw = R.door.hw, sp = innSpot(), near = !!(sp && sp.k === "counter"), pulse = .5 + .5 * Math.sin(now / 240);
+    // --- sol de la boutique : carrelage clair/foncé, usure, bande jaune/noire devant le comptoir
+    for (let ty = 56; ty < h; ty += 20) for (let tx = 0; tx < w; tx += 20) fr(tx, ty, 20, 20, ((tx + ty) / 20) & 1 ? "#413c4a" : "#37333f");
+    for (let k = 0; k < 46; k++) fr(18 + (k * 97) % 360, 146 + (k * 53) % 98, 2 + k % 3, 1, "rgba(255,255,255,.06)");
+    // --- derrière le comptoir : parquet en lattes + tapis du vendeur
+    for (let y = 58, n = 0; y < 112; y += 6, n++) { fr(16, y, w - 32, 6, n & 1 ? "#573a24" : "#4e3420"); fr(16, y + 5, w - 32, 1, "rgba(0,0,0,.35)"); for (let k = 0; k < 3; k++) fr(16 + ((n * 71 + k * 131) % (w - 40)), y, 1, 5, "rgba(0,0,0,.28)"); }
+    fr(138, 66, 124, 44, "#5a1f1f"); fr(138, 66, 124, 2, "#c9a227"); fr(138, 108, 124, 2, "#c9a227"); fr(138, 66, 2, 44, "#c9a227"); fr(260, 66, 2, 44, "#c9a227"); fr(143, 71, 114, 34, "#6a2828"); for (let k = 0; k < 5; k++) fr(150 + k * 24, 86, 6, 2, "#c9a227");
+    for (let tx = 16; tx < w - 16; tx += 8) fr(tx, 140, 8, 3, (tx / 8) & 1 ? "#e0b81f" : "#1a1a1a");
+    // --- tapis d'entrée rouge à liseré doré et croix dorées
+    fr(dx - 28, 143, 56, h - 143, "#7a2626"); fr(dx - 26, 143, 2, h - 143, "#c9a227"); fr(dx + 24, 143, 2, h - 143, "#c9a227"); fr(dx - 22, 143, 1, h - 143, "rgba(0,0,0,.25)"); fr(dx + 21, 143, 1, h - 143, "rgba(0,0,0,.25)");
+    for (let y = 154; y < h - 50; y += 22) if (y < 186 || y > 226) { fr(dx - 1, y, 2, 8, "#c9a227"); fr(dx - 4, y + 3, 8, 2, "#c9a227"); }
+    // --- mur du fond : briques, lambris en bois, ombre en haut
+    fr(0, 0, w, 58, "#512121"); for (let y = 11; y < 44; y += 11) { fr(0, y, w, 1, "rgba(0,0,0,.28)"); for (let c = (y / 11 & 1) * 14; c < w; c += 28) fr(c, y - 10, 1, 10, "rgba(0,0,0,.2)"); }
+    for (let k = 0; k < 30; k++) fr((k * 53) % w, 3 + (k * 29) % 38, 6 + k % 5, 3, k & 1 ? "rgba(255,255,255,.035)" : "rgba(0,0,0,.07)");   // briques de teintes différentes
+    fr(0, 0, w, 8, "rgba(0,0,0,.28)"); fr(0, 8, w, 6, "rgba(0,0,0,.12)");
+    fr(0, 44, w, 10, "#3d1c12"); fr(0, 44, w, 2, "#7a4228"); for (let c = 10; c < w; c += 24) fr(c, 47, 1, 6, "rgba(0,0,0,.35)"); fr(0, 54, w, 4, "#2a0e0e");
+    fr(0, 56, 14, h - 56, "#3f1818"); fr(w - 14, 56, 14, h - 56, "#3f1818"); fr(12, 56, 2, h - 56, "#6b2a2a"); fr(w - 14, 56, 2, h - 56, "#6b2a2a"); fr(14, 56, 2, h - 56, "rgba(0,0,0,.4)"); fr(w - 16, 56, 2, h - 56, "rgba(0,0,0,.4)");
+    fr(0, h - 14, dx - hw, 14, "#3f1818"); fr(dx + hw, h - 14, w - dx - hw, 14, "#3f1818"); fr(0, h - 14, dx - hw, 2, "#6b2a2a"); fr(dx + hw, h - 14, w - dx - hw, 2, "#6b2a2a");
+    fr(dx - hw, h - 14, hw * 2, 14, "#a9d8f5"); fr(dx - hw, h - 14, 3, 14, "#2a0e0e"); fr(dx + hw - 3, h - 14, 3, 14, "#2a0e0e"); fr(dx - hw + 5, h - 12, 10, 2, "rgba(255,255,255,.6)"); fr(dx - hw + 17, h - 12, 4, 2, "rgba(255,255,255,.4)");
+    // --- enseigne néon (plaque + tube) en haut
+    fr(146, 1, 108, 13, "#160808"); x.strokeStyle = Math.sin(now / 90) > .93 ? "#8a4a4a" : "#ff5a4d"; x.lineWidth = 1.2; x.strokeRect(147.5, 2.5, 105, 10);
+    labels.push(["ARMES", 200, 11, Math.sin(now / 90) > .93 ? "#8a4a4a" : "#ff6a5a", 12]);
+    // --- décor du mur : affiche, horloge, licence, impacts
+    fr(30, 12, 22, 30, "#d9c89a"); fr(30, 12, 22, 2, "#b8a574"); fr(36, 18, 10, 10, "#8d5524"); fr(32, 33, 18, 2, "#6b1a1a"); fr(32, 37, 12, 1, "#6b1a1a");
+    fr(143, 21, 14, 14, "#2a1208"); fr(145, 23, 10, 10, "#f2ead0"); fr(149, 25, 2, 5, "#222"); fr(149, 29, 4, 1, "#222"); fr(150, 28, 1, 1, "#c33");
+    fr(240, 20, 20, 16, "#2a1208"); fr(242, 22, 16, 12, "#d9c89a"); fr(244, 25, 12, 1, "#7a5a2a"); fr(244, 28, 9, 1, "#7a5a2a"); fr(244, 31, 11, 1, "#7a5a2a");
+    for (const [bx, by] of [[64, 40], [262, 40], [334, 41], [136, 38]]) { fr(bx, by, 2, 2, "#120606"); fr(bx - 1, by - 1, 4, 1, "rgba(0,0,0,.25)"); }
+    // --- vitrines murales des 3 armes (cadre doré qui clignote quand on peut acheter)
+    SHOP_ARMS.forEach((a, i) => { const px = 100 + i * 100; fr(px - 32, 15, 64, 31, "#1d0a0a"); fr(px - 31, 16, 62, 29, "#2a1010"); x.strokeStyle = near ? `rgba(255,225,77,${(.45 + .5 * pulse).toFixed(2)})` : "#b0802f"; x.lineWidth = near ? 1.6 : 1.2; x.strokeRect(px - 32.5, 15.5, 64, 31); fr(px - 30, 17, 60, 2, "rgba(255,230,180,.25)"); wIcon(a.n, px, 28, 1.3); labels.push([WPN[a.n].n, px, 41, "#fff", 10]); labels.push([`$${a.p}`, px, 52, "#ffe14d", 11]); });
+    // râtelier à fusils
+    fr(342, 8, 48, 40, "#2b1810"); fr(342, 8, 48, 2, "#7a4a22"); fr(342, 46, 48, 2, "#7a4a22"); fr(342, 8, 2, 40, "#7a4a22"); fr(388, 8, 2, 40, "#7a4a22");
+    [[17, "#8a5a2c"], [27, "#6a4420"], [37, "#8a5a2c"]].forEach(([yy, cl], i) => { fr(358, yy, 28, 2, "#15151a"); fr(346, yy - 1, 14, 4, cl); fr(350 + i * 3, yy - 2, 6, 1, "#a87a44"); fr(366, yy - 2, 8, 2, "#3a3a44"); fr(360, yy, 22, 1, "#4a4a54"); fr(352, yy + 3, 3, 3, "#15151a"); });
     fr(372, 60, 10, 8, "#222"); fr(381, 62, 3, 3, Math.floor(now / 500) % 2 ? "#ff2a2a" : "#400");      // caméra
+    // --- derrière le comptoir : caisses, coffre-fort, caisse enregistreuse, vendeur
+    fr(22, 70, 32, 24, "#6b4a22"); fr(22, 70, 32, 3, "#8a6a3a"); fr(22, 82, 32, 1, "rgba(0,0,0,.4)"); fr(37, 70, 1, 24, "rgba(0,0,0,.35)"); fr(26, 62, 11, 8, "#3d5a2a"); fr(26, 62, 11, 2, "#5a7a3a"); fr(40, 64, 10, 6, "#8a6a1a"); fr(40, 64, 10, 2, "#c9a227"); fr(22, 94, 32, 2, "rgba(0,0,0,.35)");
+    fr(58, 76, 22, 18, "#6b4a22"); fr(58, 76, 22, 3, "#8a6a3a"); fr(58, 85, 22, 1, "rgba(0,0,0,.4)"); fr(58, 94, 22, 2, "rgba(0,0,0,.35)");
+    fr(346, 68, 34, 38, "#555a64"); fr(346, 68, 34, 3, "#7b808c"); fr(350, 75, 26, 27, "#3b3f48"); fr(360, 85, 8, 8, "#a8aeb8"); fr(362, 87, 4, 4, "#2a2e36"); fr(371, 87, 3, 10, "#e0b81f"); fr(346, 106, 34, 2, "rgba(0,0,0,.35)");
     drawWalker(200, 90, Math.PI / 2, "#2b2b2b", SKIN[2], null, 0, false); labels.push(["ARMAND", 200, 76, "#fff", 11]);
-    if (sp && sp.k === "counter") labels.push(["💬", 214, 72 + Math.sin(now / 200) * 2, "#fff", 16]);
-    fr(14, 112, 372, 24, "#5b3a1e"); fr(14, 112, 372, 5, "#8a5a30"); fr(20, 124, 360, 10, "rgba(155,208,232,.55)");   // comptoir + vitrine
-    for (let i = 0; i < 6; i++) wIcon(1 + i % 3, 54 + i * 58, 129, .7);
-    fr(300, 100, 26, 14, "#3a3a44"); fr(304, 102, 18, 6, "#3df0a0");     // caisse
-    for (const sx of [14, 350]) { fr(sx, 158, 36, 84, "#3b3b46"); fr(sx + 2, 160, 32, 80, "rgba(120,190,220,.35)"); for (let i = 0; i < 3; i++) wIcon(1 + i, sx + 18, 178 + i * 24, .9); }
-    fr(156, 196, 88, 24, "#4a4a56"); fr(156, 196, 88, 3, "#6a6a78"); for (let k = 0; k < 6; k++) fr(162 + k * 14, 202, 10, 9, k & 1 ? "#c9a227" : "#8a2b2b");
+    if (near) labels.push(["💬", 214, 72 + Math.sin(now / 200) * 2, "#fff", 16]);
+    // --- comptoir : bois veiné, coins dorés, vitrine à reflets et étiquettes de prix
+    fr(14, 112, 372, 24, "#664022"); fr(14, 112, 372, 5, near ? `rgb(${150 + 60 * pulse | 0},${100 + 50 * pulse | 0},52)` : "#a06a38");
+    for (let k = 0; k < 26; k++) fr(18 + (k * 41) % 350, 113 + k % 3, 8 + k % 6, 1, "rgba(255,230,180,.16)");
+    fr(14, 135, 372, 1, "#e0b81f"); fr(14, 112, 4, 24, "#e0b81f"); fr(382, 112, 4, 24, "#e0b81f"); fr(14, 112, 4, 2, "#fff1b0"); fr(382, 112, 4, 2, "#fff1b0");
+    fr(20, 124, 360, 10, "rgba(165,215,238,.6)");
+    for (let i = 0; i < 6; i++) { const gx = 54 + i * 58; wIcon(1 + i % 3, gx, 129, .7); fr(gx - 4, 132, 8, 2, "#ffe14d"); fr(gx + 26, 124, 2, 10, "rgba(0,0,0,.3)"); fr(gx - 20 + ((now / 90 + i * 17) % 120 | 0) % 40, 125, 5, 1, "rgba(255,255,255,.4)"); }
+    fr(300, 100, 26, 14, "#3a3a44"); fr(304, 102, 18, 6, "#3df0a0"); fr(306, 110, 14, 2, "#15151a");     // caisse
+    fr(262, 108, 10, 4, "#e0b81f"); fr(265, 106, 4, 2, "#e0b81f");                                      // sonnette
+    fr(100, 104, 14, 8, "#3d5a2a"); fr(100, 104, 14, 2, "#5a7a3a"); fr(118, 106, 10, 6, "#8a6a1a");
+    fr(14, 136, 372, 5, "rgba(0,0,0,.38)");
+    // --- vitrines latérales : cadre en bois, étagères, néon haut, reflets
+    for (const sx of [14, 350]) { fr(sx - 1, 157, 38, 87, "#5b3a1e"); fr(sx, 158, 36, 84, "#3b3b46"); fr(sx + 2, 160, 32, 80, "rgba(125,195,225,.4)"); fr(sx + 4, 160, 2, 78, "rgba(255,255,255,.25)"); fr(sx + 2, 160, 32, 3, "rgba(255,235,190,.5)"); for (let i = 0; i < 2; i++) fr(sx + 2, 190 + i * 24, 32, 1, "rgba(255,255,255,.3)"); fr(sx - 1, 244, 38, 3, "rgba(0,0,0,.35)"); for (let i = 0; i < 3; i++) wIcon(1 + i, sx + 18, 178 + i * 24, .9); }
+    // --- table centrale
+    fr(156, 196, 88, 24, "#50505c"); fr(156, 196, 88, 3, "#7a7a88"); for (let k = 0; k < 6; k++) fr(162 + k * 14, 202, 10, 9, k & 1 ? "#d9b02e" : "#962f2f");
+    fr(156, 220, 88, 3, "rgba(0,0,0,.35)"); fr(162, 190, 16, 8, "#3d5a2a"); fr(162, 190, 16, 2, "#5a7a3a"); fr(180, 192, 12, 6, "#8a6a1a");
+    // --- coins de l'entrée : caisse et baril
+    fr(18, 246, 34, 28, "#6b4a22"); fr(18, 246, 34, 4, "#8a6a3a"); fr(18, 258, 34, 1, "rgba(0,0,0,.4)"); fr(34, 246, 2, 28, "rgba(0,0,0,.35)"); fr(22, 252, 8, 5, "#3d5a2a"); fr(18, 274, 34, 2, "rgba(0,0,0,.35)");
+    fr(352, 248, 28, 28, "#7a2020"); fr(352, 248, 28, 3, "#a03a3a"); fr(352, 258, 28, 2, "#3a0f0f"); fr(352, 268, 28, 2, "#3a0f0f"); fr(361, 252, 10, 4, "#ffd23f"); fr(352, 276, 28, 2, "rgba(0,0,0,.35)");
+    // --- appliques sur les murs latéraux
+    for (const sy of [84, 200]) for (const sx of [2, w - 12]) { fr(sx, sy, 10, 8, "#7a5a1a"); fr(sx + 1, sy + 1, 8, 6, "#e0b81f"); fr(sx + 3, sy + 2, 4, 4, "#fff4c0"); }
     labels.push(["SORTIE", dx, h - 24, "#fff", 10]);
-    pool(100, 170, 100, "rgba(255,190,150,.12)"); pool(300, 170, 100, "rgba(255,190,150,.12)"); pool(200, 70, 110, "rgba(255,120,120,.10)"); pool(dx, h - 10, 60, "rgba(190,225,255,.16)");
+    // --- lumières
+    const fl = Math.sin(now / 90) > .93 ? .5 : 1;
+    for (const px of [100, 200, 300]) pool(px, 30, 62, "rgba(255,232,185,.18)");
+    pool(366, 28, 40, "rgba(255,232,185,.12)"); pool(200, 8, 100, `rgba(255,60,60,${(.14 * fl).toFixed(3)})`);
+    for (const sy of [88, 204]) { pool(14, sy, 52, "rgba(255,215,140,.16)"); pool(w - 14, sy, 52, "rgba(255,215,140,.16)"); }
+    pool(100, 170, 100, "rgba(255,190,150,.12)"); pool(300, 170, 100, "rgba(255,190,150,.12)"); pool(200, 80, 110, "rgba(255,200,140,.12)"); pool(dx, h - 10, 60, "rgba(190,225,255,.16)");
+    if (near) pool(200, 124, 150, `rgba(255,225,120,${(.06 + .06 * pulse).toFixed(3)})`);
   }
   function drawGarageRoom(now, labels) {
     const R = ROOMS.garage, w = R.w, h = R.h, dx = R.door.x, hw = R.door.hw, g = me.gcar, own = isOwner(), sp = innSpot();

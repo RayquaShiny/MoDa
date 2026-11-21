@@ -364,7 +364,7 @@ export function createStaClient(env) {
     for (const u in n) {                                                  // tirs des autres : traceurs + touche calculée chez la victime
       if (u === myUid) continue; const p = n[u], old = lastFc[u]; lastFc[u] = p.fc; if (old === undefined || old === p.fc) continue;
       let k = (p.fc - old + 1000) % 1000; if (k > 8) k = 1; const W = WPN[p.fw]; if (!W) continue;
-      const dd = dP.get(u); if (dd) dd.flash = tNow; SND.shot(p.fw, dv(p.x, p.y, 520) * .8);
+      const dd = dP.get(u); if (dd) { dd.flash = tNow; dd.fw = p.fw; } SND.shot(p.fw, dv(p.x, p.y, 520) * .8);
       for (let sh = 0; sh < k; sh++) for (let q = 0; q < W.pel; q++) {
         const ang = p.a + rr(-W.spr, W.spr), dx = Math.cos(ang), dy = Math.sin(ang), ox = p.x + dx * (p.vid ? 24 : 11), oy = p.y + dy * (p.vid ? 24 : 11), e = wallEnd(ox, oy, ang, W.rng);
         if (p.fw === 4) rockets.push({ x0: ox, y0: oy, x1: ox + dx * e, y1: oy + dy * e, t: tNow, dur: Math.max(260, e / 620 * 1000), impact: 0 });
@@ -1612,7 +1612,7 @@ function drawWreck(w, now) {
   drawCar(w.x, w.y, w.a, "#262626", false, now, w.id, 255);
   if (now - w.t < 9000) for (let k = 0; k < 3; k++) { x.fillStyle = (Math.floor(now / 90 + k) % 2) ? "#ff7a1a" : "#ffd23f"; x.beginPath(); x.arc(w.x + (k - 1) * 7 + Math.sin(now / 70 + k) * 1.5, w.y + Math.cos(now / 80 + k) * 3 - 4, 4 + (k % 2) * 2, 0, 7); x.fill(); }
 }
-function drawWalker(px, py, a, body, skin, ph, wpn, flash, hat) {
+function drawWalker(px, py, a, body, skin, ph, wpn, flash, hat, rl) {
   x.fillStyle = "rgba(0,0,0,.35)"; x.beginPath(); x.arc(px + 2, py + 2, 6, 0, 7); x.fill();
   x.save(); x.translate(px, py); x.rotate(a);
   const sw = ph !== null ? Math.sin(ph) : 0, sk = skin || "#f1c27d";
@@ -1620,7 +1620,12 @@ function drawWalker(px, py, a, body, skin, ph, wpn, flash, hat) {
   x.fillStyle = "#101010"; x.fillRect(-3.6, -6.8, 7.2, 13.6); x.fillStyle = body; x.fillRect(-2.8, -6, 5.6, 12);                   // épaules / haut
   if (wpn) {                                                                                                                        // bras tendus + arme
     x.fillStyle = sk; x.fillRect(1, -3.8, 6, 2.2); x.fillRect(1, 1.6, 6, 2.2);
-    if (wpn === 1) { x.fillStyle = "#111"; x.fillRect(6, -1, 6, 2); } else if (wpn === 2) { x.fillStyle = "#111"; x.fillRect(5, -1.3, 10, 2.6); x.fillRect(8, 1.2, 2, 3); } else if (wpn === 4) { x.fillStyle = "#3d4a2f"; x.fillRect(-2, -2.2, 17, 4.4); x.fillStyle = "#566644"; x.fillRect(-2, -2.2, 17, 1.4); x.fillStyle = "#15151a"; x.fillRect(-4, -2.8, 3, 5.6); x.fillRect(5, 2.2, 2, 3); x.fillStyle = "#8b8b95"; x.fillRect(11, -2.8, 2, 5.6); x.fillStyle = "#b3261e"; x.beginPath(); x.moveTo(15, -2.4); x.lineTo(20, 0); x.lineTo(15, 2.4); x.fill(); } else { x.fillStyle = "#5b3a1e"; x.fillRect(4, -1.3, 4, 2.6); x.fillStyle = "#8b8b95"; x.fillRect(8, -1, 9, 2); }
+    if (wpn === 1) { x.fillStyle = "#111"; x.fillRect(6, -1, 6, 2); } else if (wpn === 2) { x.fillStyle = "#111"; x.fillRect(5, -1.3, 10, 2.6); x.fillRect(8, 1.2, 2, 3); } else if (wpn === 4) {
+      const rp = rl === undefined ? 1 : rl, k = rp < .5 ? 0 : (rp - .5) / .5;                                                  // rechargement : tube vide, puis la roquette glisse dans le tube
+      x.fillStyle = "#3d4a2f"; x.fillRect(-2, -2.2, 17, 4.4); x.fillStyle = "#566644"; x.fillRect(-2, -2.2, 17, 1.4); x.fillStyle = "#15151a"; x.fillRect(-4, -2.8, 3, 5.6); x.fillRect(5, 2.2, 2, 3); x.fillStyle = "#8b8b95"; x.fillRect(11, -2.8, 2, 5.6);
+      if (k > 0) { const sh = (1 - k) * -7; x.fillStyle = "#b3261e"; x.beginPath(); x.moveTo(15 + sh, -2.4); x.lineTo(20 + sh, 0); x.lineTo(15 + sh, 2.4); x.fill(); }   // ogive visible seulement si une roquette est chargée
+      else { x.fillStyle = "#07070a"; x.fillRect(14, -2, 1.6, 4); }                                                              // bouche du tube vide
+    } else { x.fillStyle = "#5b3a1e"; x.fillRect(4, -1.3, 4, 2.6); x.fillStyle = "#8b8b95"; x.fillRect(8, -1, 9, 2); }
     if (flash) { const tx = wpn === 1 ? 12 : wpn === 2 ? 15 : wpn === 4 ? 20 : 17; x.fillStyle = "#fff2a8"; x.fillRect(tx, -2.5, 4, 5); x.fillStyle = "#ff9d1e"; x.fillRect(tx + 1, -1, 6, 2); if (wpn === 4) { x.fillStyle = "rgba(255,200,120,.8)"; x.fillRect(-12, -3, 8, 6); x.fillStyle = "rgba(160,160,160,.7)"; x.fillRect(-18, -2, 6, 4); } }
   } else if (flash) {                                                                                                                // coup de poing : un bras part vers l'avant (gauche / droite en alternance)
     const pr = me.fc & 1 ? 1 : -1; x.fillStyle = sk; x.fillRect(1, pr * 3.2 - 1.1, 9, 2.2); x.beginPath(); x.arc(10.5, pr * 3.2, 2.4, 0, 7); x.fill(); x.fillRect(-1, -pr * 3.2 - 1.1, 3.2, 2.4);
@@ -1838,8 +1843,8 @@ function frame(now) {
   for (const [id, d] of dCars) if (d.m !== "t" && id !== me.vid && inV(d.x, d.y)) drawCar(d.x, d.y, d.a, col(d.c), d.m === "c" || d.m === "s" ? 2 : d.cp ? 1 : false, now, id, dmx(d.dm | 0, wear(id)));
   if (me.pg && inV(me.pg.x, me.pg.y)) drawCar(me.pg.x, me.pg.y, me.pg.a, "#cfeeff", false, now, GHOST, 0);   // fantômes garés (le tien et ceux des autres owners)
   for (const [u, p] of activeP()) if (u !== myUid && p.pgx && inV(p.pgx, p.pgy)) drawCar(p.pgx, p.pgy, p.pga, "#cfeeff", false, now, GHOST, 0);
-  for (const [u, d] of dP) if (!d.ib && inV(d.x, d.y)) { const pl = lp[u] || {}; if (d.vid === HELI) { } else if (d.vid) { const cc = dCars.get(d.vid); drawCar(d.x, d.y, d.a, col(cc ? cc.c : 0), cc && cc.cp ? 1 : false, now, d.vid, d.dm); } else drawWalker(d.x, d.y, d.a, pl.color || "#fff", "#f1c27d", d.v > 0 ? now / 85 : null, d.wpn, now - (d.flash || -1e9) < 70); labels.push([pl.name || "?", d.x, d.y - (d.vid ? 20 : 12), "#fff"]); }
-  if (me.dead <= 0) { if (me.vid === HELI) { } else if (me.vid) drawCar(me.x, me.y, me.a, col(myCol), me.cop ? 1 : false, now, me.vid, me.dm); else drawWalker(me.x, me.y, me.a, (lp[myUid] || {}).color || "#fff", "#f1c27d", me.v > 0 ? now / 85 : null, me.wpn, me.flash > 0); x.fillStyle = "#ffe14d"; const ay = me.y - (me.vid === HELI ? 46 : me.vid ? 24 : 15) + Math.sin(now / 160) * 2; x.beginPath(); x.moveTo(me.x, ay + 6); x.lineTo(me.x - 5, ay - 2); x.lineTo(me.x + 5, ay - 2); x.fill(); }
+  for (const [u, d] of dP) if (!d.ib && inV(d.x, d.y)) { const pl = lp[u] || {}; if (d.vid === HELI) { } else if (d.vid) { const cc = dCars.get(d.vid); drawCar(d.x, d.y, d.a, col(cc ? cc.c : 0), cc && cc.cp ? 1 : false, now, d.vid, d.dm); } else drawWalker(d.x, d.y, d.a, pl.color || "#fff", "#f1c27d", d.v > 0 ? now / 85 : null, d.wpn, now - (d.flash || -1e9) < 70, false, d.wpn === 4 && d.fw === 4 ? clamp((now - (d.flash || -1e9)) / 920, 0, 1) : 1); labels.push([pl.name || "?", d.x, d.y - (d.vid ? 20 : 12), "#fff"]); }
+  if (me.dead <= 0) { if (me.vid === HELI) { } else if (me.vid) drawCar(me.x, me.y, me.a, col(myCol), me.cop ? 1 : false, now, me.vid, me.dm); else drawWalker(me.x, me.y, me.a, (lp[myUid] || {}).color || "#fff", "#f1c27d", me.v > 0 ? now / 85 : null, me.wpn, me.flash > 0, false, me.wpn === 4 && me.fw === 4 && me.cd > 0 ? clamp(1 - me.cd / .92, 0, 1) : 1); x.fillStyle = "#ffe14d"; const ay = me.y - (me.vid === HELI ? 46 : me.vid ? 24 : 15) + Math.sin(now / 160) * 2; x.beginPath(); x.moveTo(me.x, ay + 6); x.lineTo(me.x - 5, ay - 2); x.lineTo(me.x + 5, ay - 2); x.fill(); }
   // ----- ciel : hélicoptères (au-dessus de tout, bâtiments compris) -----
   for (const [u, d] of dP) if (!d.ib && d.vid === HELI && inV(d.x, d.y)) { drawHeli(d.x, d.y, d.a, { alt: d.hz, accent: (lp[u] || {}).color || "#ffd23f", rot: now / 38 + u.length * 1.7, now }); if (d.dm > 55 && d.vid === HELI && !d.ib && inV(d.x, d.y)) heliSmoke(d.x, d.y, d.a, now, u.length); }
   if (me.dead <= 0 && me.vid === HELI) { drawHeli(me.x, me.y, me.a, { alt: me.hz, accent: (lp[myUid] || {}).color || "#ffd23f", now }); if (me.hh < 45) heliSmoke(me.x, me.y, me.a, now, 0); }

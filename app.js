@@ -323,7 +323,7 @@ function enter(c){
     if(l.kick&&l.kick[me.uid]){if(code){local();toast("Un admin t'a retiré du lobby")}return}
     lobby=l;
     if(l.game==="sta"){
-      if(Object.keys(l.players||{}).length)scheduleEmptyStaClose(c)===undefined&&clearEmptyStaClose(c);
+      if(Object.keys(l.players||{}).length)clearEmptyStaClose(c);
       else scheduleEmptyStaClose(c);
     }
     if(spec&&l.status==="lobby")spec=false;   // la partie est finie / pas lancée : l'admin redevient un joueur du lobby

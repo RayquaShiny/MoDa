@@ -183,7 +183,7 @@ async function run(u){
     let isOwner=ow;
     if(own){await ensureOwner(u,own).catch(()=>{});isOwner=(await get(R(`owners/${u.uid}`))).exists();if(my!==seq)return}
     me={uid:u.uid,name,owner:isOwner};
-    if(visitorIP){set(R("clientIps/"+u.uid),{ip:visitorIP,updatedAt:serverTimestamp()}).catch(()=>{});if(visitorIPHash)presUn.push(onValue(R("ipBanHashes/"+visitorIPHash),s=>{if(s.exists())showIPDenied()}));}
+    if(visitorIP){if(visitorIPHash)set(R("clientIps/"+u.uid+"/"+visitorIPHash),{ip:visitorIP,updatedAt:serverTimestamp()}).catch(()=>{});if(visitorIPHash)presUn.push(onValue(R("ipBanHashes/"+visitorIPHash),s=>{if(s.exists())showIPDenied()}));}
     $("adm").hidden=!isOwner;$("sw").setAttribute("aria-checked",String(adm&&isOwner));
     $("who").textContent=name+(isOwner?" ★":"");$("out").hidden=false;$("net").hidden=true;resetAuthForm();showHome();
     let was=false,nt;
@@ -1726,7 +1726,8 @@ function renderStats(D){
   $("sthours").replaceChildren(box,ax);
   $("onlh").textContent=`En ligne maintenant (${online.length})`;
    const ips=D.clientIps||{};
-   $("onl").replaceChildren(...(online.length?online.map(u=>{const c=h("span");c.className="chip";const p=h("i");p.className="on";c.append(p,(us[u]?.name||"?")+" ("+(ips[u]?.ip||"IP inconnue")+")");return c}):[h("span","Personne en ligne")]));
+   const latestIP=v=>{if(!v)return"";const a=[];if(typeof v.ip==="string")a.push(v);for(const x of Object.values(v))if(x&&typeof x.ip==="string")a.push(x);a.sort((x,y)=>(y.updatedAt||0)-(x.updatedAt||0));return a[0]?.ip||""};
+   $("onl").replaceChildren(...(online.length?online.map(u=>{const c=h("span");c.className="chip";const p=h("i");p.className="on";c.append(p,(us[u]?.name||"?")+" ("+(latestIP(ips[u])||"IP inconnue")+")");return c}):[h("span","Personne en ligne")]));
   const rows=[...playing,...open].map(([c,l])=>{const g=GN[l.game]||["🎲",l.game||"Jeu"],n=Object.keys(l.players||{}).length,r=h("div");r.className="lrow";
     const t=h("span",`${g[0]} ${g[1]}`);t.className="g";const cd=h("code",c);const b=h("span",l.status==="playing"?"En partie":"Lobby");b.className="badge"+(l.status==="playing"?" pl2":"");
     r.append(t,cd,h("small",`${n} joueur${n>1?"s":""}`),b);return r});

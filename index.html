@@ -5,7 +5,7 @@
 <meta name="theme-color" content="var(--bg)">
 <!-- ⚠️ À CONSERVER À CHAQUE MISE À JOUR : à chaque nouvelle version (chaque modification), la version affichée doit faire +1.
      Changer le numéro aux 3 endroits, toujours identique : ce <meta name="moda-v">, `const VER` dans app.js, et `VERSION` dans sw.js. -->
-<meta name="moda-v" content="107"/>
+<meta name="moda-v" content="108"/>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -194,6 +194,92 @@ html[data-season=spring] header .logo::after{content:" 🌷"}
 html[data-season=summer] header .logo::after{content:" 😎"}
 /* bords des cartes : neige / feuilles / pétales / vagues */
 html[data-season] .panel{background-image:linear-gradient(var(--edge),var(--edge)),radial-gradient(circle at 50% 0,var(--edge) 6px,transparent 7px);background-size:100% 3px,16px 8px;background-repeat:no-repeat,repeat-x;background-position:0 0,0 0}
+
+/* ---- Refonte visuelle des quatre saisons ---- */
+html[data-season]{
+  background-image:
+    radial-gradient(ellipse at 12% 4%,color-mix(in srgb,var(--a) 22%,transparent),transparent 34%),
+    radial-gradient(ellipse at 92% 24%,color-mix(in srgb,var(--b) 17%,transparent),transparent 38%),
+    linear-gradient(155deg,var(--bg),var(--bg2) 72%,var(--deep));
+  background-attachment:fixed;
+}
+html[data-season] body{position:relative;isolation:isolate}
+html[data-season] body::after{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.26;
+  background-image:radial-gradient(circle at 1px 1px,#fff 1px,transparent 1.8px);
+  background-size:34px 34px;
+  mask-image:linear-gradient(to bottom,black,transparent 78%);
+}
+html[data-season] header{
+  background:linear-gradient(115deg,color-mix(in srgb,var(--deep) 94%,var(--a)),color-mix(in srgb,var(--bg2) 92%,var(--b)));
+  border:1px solid color-mix(in srgb,var(--edge) 42%,transparent);
+  border-radius:0 0 22px 22px;
+  box-shadow:0 12px 34px #0004,0 1px 0 color-mix(in srgb,var(--edge) 28%,transparent) inset;
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+}
+html[data-season] header .logo{letter-spacing:.4px;text-shadow:0 3px 16px color-mix(in srgb,var(--a) 40%,transparent)}
+html[data-season] .panel{
+  position:relative;overflow:hidden;
+  background-color:color-mix(in srgb,var(--card) 91%,transparent);
+  border:1px solid color-mix(in srgb,var(--edge) 26%,transparent);
+  border-radius:20px;
+  box-shadow:0 12px 30px #0003,0 1px 0 #ffffff12 inset;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  background-image:linear-gradient(110deg,color-mix(in srgb,var(--edge) 75%,transparent),transparent 38%);
+  background-size:100% 2px;background-repeat:no-repeat;
+}
+html[data-season] button{
+  border:1px solid color-mix(in srgb,var(--edge) 35%,transparent);
+  border-radius:13px;
+  box-shadow:0 5px 14px #0003,0 1px 0 #ffffff35 inset;
+  transition:transform .16s ease,filter .16s ease,box-shadow .16s ease;
+}
+html[data-season] button:active{transform:translateY(1px) scale(.985);filter:brightness(.96)}
+html[data-season] button.alt{
+  background:color-mix(in srgb,var(--s1) 88%,transparent);
+  border-color:color-mix(in srgb,var(--edge) 25%,transparent);
+}
+html[data-season] .chip,html[data-season] .tile,html[data-season] .stat{
+  border:1px solid color-mix(in srgb,var(--edge) 23%,transparent);
+  box-shadow:0 5px 16px #0002,0 1px 0 #ffffff10 inset;
+}
+html[data-season] .tile{border-radius:17px}
+html[data-season] .stat{border-radius:16px}
+html[data-season] input{
+  border-color:color-mix(in srgb,var(--edge) 38%,transparent);
+  box-shadow:0 2px 10px #0002 inset;
+}
+html[data-season] h1,html[data-season] h2,html[data-season] h3{
+  text-shadow:0 2px 16px color-mix(in srgb,var(--a) 17%,transparent);
+}
+html[data-season=autumn] body::after{
+  opacity:.22;background-image:radial-gradient(ellipse at 12% 18%,#ffb347 0 2px,transparent 3px),radial-gradient(ellipse at 74% 38%,#e4572e 0 2px,transparent 3px),radial-gradient(ellipse at 42% 70%,#ff9f1c 0 1.5px,transparent 3px);
+  background-size:83px 97px,117px 131px,67px 79px;
+}
+html[data-season=winter] body::after{
+  opacity:.48;background-image:radial-gradient(circle,#fff 0 1px,transparent 1.8px),radial-gradient(circle,#bde8ff 0 1px,transparent 2px);
+  background-size:39px 43px,73px 81px;background-position:0 0,19px 27px;
+}
+html[data-season=spring] body::after{
+  opacity:.3;background-image:radial-gradient(ellipse at center,#ffb8d8 0 2px,transparent 3px),radial-gradient(ellipse at center,#fff1a8 0 1.5px,transparent 3px);
+  background-size:91px 103px,137px 119px;background-position:11px 8px,42px 31px;
+}
+html[data-season=summer] body::after{
+  opacity:.3;background-image:radial-gradient(circle,#fff4b0 0 1.5px,transparent 3px),radial-gradient(ellipse,#7be7ff 0 2px,transparent 3px);
+  background-size:103px 97px,149px 131px;background-position:20px 17px,61px 49px;
+}
+html[data-season=autumn] .panel{box-shadow:0 14px 32px #16080055,0 1px 0 #ffd8a022 inset}
+html[data-season=winter] .panel{box-shadow:0 14px 34px #020c1d66,0 1px 0 #e7f6ff25 inset}
+html[data-season=spring] .panel{box-shadow:0 14px 32px #06190d55,0 1px 0 #f4fff022 inset}
+html[data-season=summer] .panel{box-shadow:0 14px 32px #001b2b55,0 1px 0 #e6fbff22 inset}
+@media(hover:hover){
+ html[data-season] button:hover{filter:brightness(1.08);box-shadow:0 8px 20px #0004,0 0 0 2px color-mix(in srgb,var(--edge) 17%,transparent)}
+ html[data-season] .tile:hover{transform:translateY(-2px);transition:transform .18s ease}
+}
+@media(prefers-reduced-motion:reduce){
+ html[data-season] button,html[data-season] .tile{transition:none}
+}
+
 /* paysage du bas et particules */
 #seasonbg{position:fixed;left:0;right:0;bottom:0;height:130px;z-index:-1;pointer-events:none;background-repeat:repeat-x;background-position:center bottom;background-size:auto 130px}
 html.neon #seasonbg,html.neon header::before,html.neon header::after,html.neon header .logo::after,body[data-g] #seasonbg{display:none}

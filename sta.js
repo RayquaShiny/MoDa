@@ -18,15 +18,32 @@ const SKIN = ["#f1c27d", "#e0ac69", "#c68642", "#8d5524", "#ffdbac", "#d9a066"],
 const KEYS = { ArrowUp: "U", ArrowDown: "D", ArrowLeft: "L", ArrowRight: "R", z: "U", s: "D", q: "L", d: "R", w: "U", a: "L" };
 const rnd = a => a[Math.floor(Math.random() * a.length)], rr = (a, b) => a + Math.random() * (b - a), clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const hs = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return (h ^ (h >>> 16)) >>> 0; };
-const isSpecial = (i, j) => (i === POLICE[0] && j === POLICE[1]) || (i === HOSP[0] && j === HOSP[1]) || (i === GARAGE[0] && j === GARAGE[1]) || (i === ARMS[0] && j === ARMS[1]);
+// ===== PRISON & MAISONS : tous les réglages sont ici =====
+const JAIL_BASE = 25, JAIL_STAR = 8, JAIL_LOSS = 0;      // prison : secondes de base + secondes par étoile (1★ = 33 s, 5★ = 65 s) · part de l'argent perdue à l'arrestation (0 = rien ; l'ancienne règle : .2)
+const BRIBE_BASE = 50, BRIBE_SEC = 6;                     // corrompre le gardien : $ de base + $ par seconde de peine restante
+const DIG_NEED = 10, DIG_RISK = .08, DIG_PENALTY = 10;    // évasion : appuis sur E au coin du mur · risque d'être entendu à chaque appui · secondes ajoutées si entendu
+const FREE_HEAT = 1.6, ESC_HEAT = 1.6;                    // chaleur gagnée en faisant évader un ami / en s'évadant (1.6 = 2 étoiles)
+const HOUSES = [                                          // quartier résidentiel (colonnes 7-8, lignes 3-5) : prix, nom, toit [base, clair, sombre], mur
+  { i: 7, j: 3, p: 3000, n: "MAISON 1", r: ["#b5483a", "#d36a58", "#7e2f25"], w: "#ecdcc0" },
+  { i: 8, j: 3, p: 3000, n: "MAISON 2", r: ["#3f6fb5", "#5e8fd6", "#2a4b80"], w: "#e4e0d2" },
+  { i: 7, j: 4, p: 4500, n: "MAISON 3", r: ["#4f8a52", "#6fae72", "#35603a"], w: "#f0e6cf" },
+  { i: 8, j: 4, p: 4500, n: "MAISON 4", r: ["#8a5aa8", "#a97ac8", "#5f3a78"], w: "#e9dcc8" },
+  { i: 7, j: 5, p: 7000, n: "MAISON 5", r: ["#c8903a", "#e6b25c", "#8c6120"], w: "#f2ead8" },
+  { i: 8, j: 5, p: 7000, n: "MAISON 6", r: ["#444b58", "#646d7e", "#2a2f39"], w: "#dcd8cc" }
+];
+const hIdx = (i, j) => HOUSES.findIndex(h => h.i === i && h.j === j);
+const newBox = () => ({ c: 0, a: [0, 0, 0, 0], v: 0 });  // coffre d'une maison : argent, munitions des 4 armes (= les armes), gilet
+const isSpecial = (i, j) => hIdx(i, j) >= 0 || (i === POLICE[0] && j === POLICE[1]) || (i === HOSP[0] && j === HOSP[1]) || (i === GARAGE[0] && j === GARAGE[1]) || (i === ARMS[0] && j === ARMS[1]);
 const isPark = (i, j) => !isSpecial(i, j) && hs(i, j) % 6 === 0;
 const lo = i => i * CELL + ROAD / 2, rc = v => Math.round(v / CELL) * CELL;
 const GZ = { x: lo(GARAGE[0]) + BL / 2, y: lo(GARAGE[1]) + BL - SW / 2 };   // zone du garage : sur le trottoir sud du bâtiment
 // zones des magasins (pastilles au sol, sur le trottoir sud du bâtiment) : armurerie, distributeur de soins (hôpital)
 const ZONES = {
   arms: { x: lo(ARMS[0]) + BL / 2, y: lo(ARMS[1]) + BL - SW / 2, c: "#ff5a4d", l: "ARMES" },
-  heal: { x: lo(HOSP[0]) + 52, y: lo(HOSP[1]) + BL - SW / 2, c: "#7ae582", l: "SOINS" }
+  heal: { x: lo(HOSP[0]) + 52, y: lo(HOSP[1]) + BL - SW / 2, c: "#7ae582", l: "SOINS" },
+  jail: { x: lo(POLICE[0]) + BL - 56, y: lo(POLICE[1]) + BL - SW / 2, c: "#ff6b6b", l: "PRISON" }   // sur le trottoir du commissariat : les amis libres peuvent y faire évader un détenu
 };
+const HZ = HOUSES.map(h => ({ x: lo(h.i) + BL / 2, y: lo(h.j) + BL - SW / 2 }));   // porte de chaque maison (trottoir sud)
 // donneurs de missions : fixes, les mêmes pour tout le monde (trottoir ouest d'un bâtiment ordinaire)
 const gcell = (i, j) => { while (isPark(i, j) || isSpecial(i, j)) i = (i + 1) % N; return [i, j]; };
 const GIVERS = [["any", "LE BOSS", "MISSIONS", [0, 4], "#2b2b3a", 3]]   // un seul donneur, au bord ouest de la carte : il distribue TOUTES les missions, au hasard
@@ -77,7 +94,7 @@ function push(p, r) {
   const o = ROAD / 2 - r; const nx = clamp(p.x, -o, WORLD + o), ny = clamp(p.y, -o, WORLD + o); if (nx !== p.x || ny !== p.y) { p.x = nx; p.y = ny; hit = true; }
   return hit;
 }
-const parseP = s => { const a = String(s).split(","); return { x: +a[0] || 0, y: +a[1] || 0, a: +a[2] || 0, vid: +a[3] || 0, wl: +a[4] || 0, cash: +a[5] || 0, hp: +a[6] || 0, v: +a[7] || 0, hs: +a[8] || 0, hid: +a[9] || 0, dm: +a[10] || 0, wpn: +a[11] || 0, fc: +a[12] || 0, fw: +a[13] || 0, cs: +a[14] || 0, cid: +a[15] || 0, ca: +a[16] || 0, gn: +a[17] || 0, go: +a[18] || 0, gi: +a[19] || 0, gm: +a[20] || 0, hn: +a[21] || 0, pgx: +a[22] || 0, pgy: +a[23] || 0, pga: +a[24] || 0, ib: +a[25] || 0, hz: +a[26] || 0 }; };
+const parseP = s => { const a = String(s).split(","); return { x: +a[0] || 0, y: +a[1] || 0, a: +a[2] || 0, vid: +a[3] || 0, wl: +a[4] || 0, cash: +a[5] || 0, hp: +a[6] || 0, v: +a[7] || 0, hs: +a[8] || 0, hid: +a[9] || 0, dm: +a[10] || 0, wpn: +a[11] || 0, fc: +a[12] || 0, fw: +a[13] || 0, cs: +a[14] || 0, cid: +a[15] || 0, ca: +a[16] || 0, gn: +a[17] || 0, go: +a[18] || 0, gi: +a[19] || 0, gm: +a[20] || 0, hn: +a[21] || 0, pgx: +a[22] || 0, pgy: +a[23] || 0, pga: +a[24] || 0, ib: +a[25] || 0, hz: +a[26] || 0, jl: +a[27] || 0, fu: a[28] || "" }; };
 
 export function createStaClient(env) {
   const { R: RF, set, get, remove, onValue, $, beep, getMe, getCode, getLobby, toast } = env;
@@ -101,7 +118,7 @@ export function createStaClient(env) {
   const VEST = [{ n: "GILET −10%", r: .10, p: 250 }, { n: "GILET −25%", r: .25, p: 600 }, { n: "GILET −50%", r: .50, p: 1200 }];
   const armK = () => 1 - (me.arm ? VEST[me.arm - 1].r : 0);
   let keys = new Set(), stick = null, useReq = 0, job = null, myCol = 0, cam = { x: 0, y: 0, z: 1.2 }, sentAt = 0, sentStr = "", savedCash = -1, saveAt = 0, tNow = 0, hitDone = new Set(), gLoaded = false, savedG = "";
-  let inn = null, mis = null, tgt = null, lastMk = "", shop = "", mmBase = null;   // mission en cours, cible à éliminer, boutique ouverte
+  let inn = null, jail = null, mis = null, tgt = null, lastMk = "", shop = "", mmBase = null;   // mission en cours, cible à éliminer, boutique ouverte
   let ejected = [], splats = [], floats = [], pendingPedHits = new Map(), brakeId = null, fireKey = false, fireId = null, killQ = [], carQ = [], killAt = 0, tracers = [], rockets = [], sparks = [], booms = [], wrecks = [], pickT = new Map(), lastFc = {}, lastCs = {};
 
   const lobbyP = () => (getLobby() || {}).players || {};
@@ -383,7 +400,7 @@ export function createStaClient(env) {
   const col = i => CCOL[(i | 0) % 8];
   function spawnAt(p) { me.hz = 0; me.land = 0; me.x = p[0] + rr(-30, 30); me.y = p[1]; me.vid = 0; me.v = 0; me.hp = 100; me.dead = 0; me.heat = 0; me.bust = 0; job = null; cam.x = me.x; cam.y = me.y; }
   function die(why, loss, where) { pwFail("tu es tombé"); me.hz = 0; me.land = 0; shop = ""; if (mis) missionFail("tu es tombé"); me.dead = 2.2; me.msg = why; me.wpn = 0; me.arm = 0; me.ammo = [0, 0, 0, 0, 0]; me.vid = 0; me.v = 0; me.heat = 0; me.cash = Math.floor(me.cash * (1 - loss)); me.where = where; SND.wasted(); }
-  const gStr = () => JSON.stringify({ g: me.g, c: me.gcar, g2: me.g2 ? 1 : 0, c2: me.gcar2, a: me.ammo.slice(1), w: me.wpn, h: me.hu ? 1 : 0, hh: Math.round(clamp(me.hh, 0, 100)), rp: me.rpgParts, rq: me.rpgQuest, aq: me.ammoQuest, rau: me.rpgAmmoUnlocked, ar: me.arm | 0 });
+  const gStr = () => JSON.stringify({ g: me.g, c: me.gcar, g2: me.g2 ? 1 : 0, c2: me.gcar2, a: me.ammo.slice(1), w: me.wpn, h: me.hu ? 1 : 0, hh: Math.round(clamp(me.hh, 0, 100)), rp: me.rpgParts, rq: me.rpgQuest, aq: me.ammoQuest, rau: me.rpgAmmoUnlocked, ar: me.arm | 0, ho: me.hou | 0, hq: me.hsp, hb: me.hb.map(b => [Math.round(b.c), b.a[0], b.a[1], b.a[2], b.a[3], b.v]) });
   function persist(force) {                                               // argent (users/<uid>/sta) + garage, voiture rangée, armes et munitions (users/<uid>/sta2)
     const cash = Math.round(me.cash);
     if (force || cash !== savedCash) { savedCash = cash; set(RF(`users/${myUid}/sta`), cash).catch(() => { }); }
@@ -509,7 +526,8 @@ export function createStaClient(env) {
     if (me.vid === HELI) { heliLand(); return; }
     if (!me.vid) {
       if (nearBM()) { shop = "bm"; beep(660, .06, "triangle", .05); return; }
-      const z = shopAt(); if (z) { if (z === "heal") healDo(); else enterInn(z); return; }
+      const nh = nearHouse(); if (nh >= 0) { houseDo(nh); return; }
+      const z = shopAt(); if (z) { if (z === "heal") healDo(); else if (z === "jail") { shop = "jail"; beep(660, .06, "triangle", .05); } else enterInn(z); return; }
       if (talkDo()) return;
     }
     if (garageDo()) return;
@@ -663,7 +681,7 @@ export function createStaClient(env) {
 
   // ================= BOUTIQUES =================
   const inZ = z => Math.abs(me.x - z.x) < 46 && me.y > z.y - 9 && me.y < z.y + 27;
-  const shopAt = () => { if (me.dead > 0) return ""; for (const k of ["heal", "arms"]) if (inZ(ZONES[k])) return k; return ""; };
+  const shopAt = () => { if (me.dead > 0) return ""; for (const k of ["heal", "arms", "jail"]) if (inZ(ZONES[k])) return k; return ""; };
   const healPrice = () => Math.max(20, Math.ceil((100 - me.hp) * 1.2));
   function healDo() {                                                     // distributeur de soins de l'hôpital : vie à fond contre de l'argent
     if (me.hp >= 99) { toast("Tu es déjà en pleine forme"); return; }
@@ -686,6 +704,8 @@ export function createStaClient(env) {
   const vestRows = rows => shop !== "arms" ? rows : rows.concat(VEST.map((v, k) => { const t = k + 1; return { ic: 10 + t, nm: v.n, sub: `−${Math.round(v.r * 100)}% dégâts`, l: `${rows.length + t} · ${v.n}`, r: me.arm === t ? "ÉQUIPÉ" : me.arm > t ? "—" : `${v.p}`, ok: me.arm < t && me.cash >= v.p, f: () => buyVest(t) }; }));   // gilets : en bas du menu de l'armurerie
   const shopItems = () => {
     if (shop === "arms" || shop === "bm") return vestRows((shop === "bm" ? SHOP_BM : SHOP_ARMS).map(a => { const WP = WPN[a.n], full = me.ammo[a.n] >= WP.max, locked = a.n === 4 && (!me.rpgAmmoUnlocked || me.rpgParts.length < 3); return { ic: a.n, nm: WP.n, sub: `+${WP.ammo} (${me.ammo[a.n]}/${WP.max})`, bar: me.ammo[a.n] / WP.max, l: `${a.n} · ${WP.n} +${WP.ammo}`, r: locked ? "VERROUILLÉ" : full ? "PLEIN" : `${a.p}`, ok: !locked && !full && me.cash >= a.p, f: () => buyArm(a) }; }));
+    if (shop === "chest" && inn && inn.k === "house") return chestRows();
+    if (shop === "jail") return jailRows();
     if (shop === "garage") {
       const hp2 = Math.ceil((100 - clamp(me.hh, 0, 100)) * 10), out = [];
       [[1, me.gcar], [2, me.gcar2]].forEach(([sl, g]) => {
@@ -719,9 +739,9 @@ export function createStaClient(env) {
     return -3;
   }
   function drawShop(now) {
-    const items = shopItems(), L = shopLay(), pw = L.pw, py = SH.py, ph = L.ph, px = L.px, zc = shop === "bm" ? "#b07bff" : (ZONES[shop] || ROOMS[shop]).c;
+    const items = shopItems(), L = shopLay(), pw = L.pw, py = SH.py, ph = L.ph, px = L.px, zc = shop === "bm" ? "#b07bff" : shop === "chest" ? "#7ae582" : (ZONES[shop] || ROOMS[shop]).c;
     x.fillStyle = "rgba(10,10,16,.9)"; x.fillRect(px, py, pw, ph); x.strokeStyle = zc; x.lineWidth = 3; x.strokeRect(px, py, pw, ph);
-    txt(shop === "garage" ? "🔧 ATELIER DE RICO" : shop === "bm" ? "🚚 LE CAMION" : "🔫 ARMURERIE", W / 2, py + 30, 20, zc); txt("✖", px + pw - 22, py + 28, 18, "#fff");
+    txt(shop === "garage" ? "🔧 ATELIER DE RICO" : shop === "bm" ? "🚚 LE CAMION" : shop === "chest" ? "🧰 TON COFFRE" : shop === "jail" ? "🔓 PRISON : FAIRE ÉVADER" : "🔫 ARMURERIE", W / 2, py + 30, 20, zc); txt("✖", px + pw - 22, py + 28, 18, "#fff");
     if (L.g) {
       items.forEach((it, i) => {
         const c = shopCard(L, i), cx = c.x + c.w / 2, dim = it.ok ? "#fff" : "#8a8a95";
@@ -758,9 +778,13 @@ export function createStaClient(env) {
     garage: { w: 580, h: 300, name: "GARAGE", c: "#ffd23f", door: { x: 220, hw: 50 },
       obs: [[18, 56, 160, 26], [86, 92, 20, 14], [136, 166, 28, 48], [436, 166, 28, 48], [516, 60, 42, 36], [18, 236, 26, 26], [48, 246, 22, 22], [526, 206, 32, 44]] }
   };
-  function enterInn(k) {
+  ROOMS.house = { w: 420, h: 300, name: "MA MAISON", c: "#7ae582", door: { x: 210, hw: 30 },
+    obs: [[18, 64, 84, 52], [304, 66, 84, 44], [150, 176, 120, 34]] };
+  ROOMS.jail = { w: 420, h: 300, name: "PRISON", c: "#ff6b6b", door: { x: -999, hw: 0 },          // pas de porte : on ne sort que par les moyens prévus
+    obs: [[22, 66, 86, 40], [236, 70, 26, 30], [268, 56, 8, 244]] };
+  function enterInn(k, hk) {
     if (me.wl > 0 || me.bust > 0) { toast("La police te colle : impossible d'entrer !"); return; }
-    const R = ROOMS[k]; inn = { k, x: R.door.x, y: R.h - 34, a: -Math.PI / 2, t0: tNow, hp: me.hp, mv: false };
+    const R = ROOMS[k]; inn = { k, hk: hk | 0, x: R.door.x, y: R.h - 34, a: -Math.PI / 2, t0: tNow, hp: me.hp, mv: false };
     shop = ""; me.v = 0; SND.door(); beep(1180, .07, "sine", .05); setTimeout(() => beep(1480, .09, "sine", .04), 90);
   }
   function leaveInn() { if (!inn) return; inn = null; shop = ""; me.a = Math.PI / 2; me.v = 0; SND.door(); }
@@ -776,6 +800,7 @@ export function createStaClient(env) {
     }
   }
   function innControl(dt) {
+    if (inn.k === "jail" && jailTick(dt)) return;
     const R = ROOMS[inn.k]; let ix = 0, iy = 0;
     if (stick) { const m = Math.hypot(stick.dx, stick.dy); if (m > .18) { const k = Math.min(1, (m - .18) / .7) / m; ix = stick.dx * k; iy = stick.dy * k; } }
     else { ix = (keys.has("R") ? 1 : 0) - (keys.has("L") ? 1 : 0); iy = (keys.has("D") ? 1 : 0) - (keys.has("U") ? 1 : 0); }
@@ -787,6 +812,16 @@ export function createStaClient(env) {
   function innSpot() {                                                    // ce que E fait ici
     if (!inn) return null; const R = ROOMS[inn.k], p = inn;
     if (Math.hypot(p.x - R.door.x, p.y - (R.h - 20)) < 46) return { k: "door", h: "E : SORTIR" };
+    if (inn.k === "house") {
+      if (Math.hypot(p.x - 346, p.y - 108) < 58) return { k: "chest", h: "E : OUVRIR TON COFFRE (ARGENT, ARMES, GILET)" };
+      if (Math.hypot(p.x - 62, p.y - 128) < 56) return { k: "bed", h: me.hsp === inn.hk ? "🛏️ POINT DE RÉAPPARITION : ICI ✔" : "E : DORMIR ICI = POINT DE RÉAPPARITION" };
+      return null;
+    }
+    if (inn.k === "jail") {
+      if (jail && p.x > 205 && Math.abs(p.y - 170) < 62) return { k: "guard", h: `E : CORROMPRE LE GARDIEN ($${bribeCost()})` };
+      if (jail && p.x < 96 && p.y > 224) return { k: "dig", h: `E : CREUSER LE MUR (${jail.dig}/${DIG_NEED}) · RISQUE D'ÊTRE ENTENDU` };
+      return null;
+    }
     if (inn.k === "arms") { if (p.y > 134 && p.y < 180 && p.x > 60 && p.x < 340) return { k: "counter", h: "E : ACHETER DES ARMES" }; return null; }
     if (me.hu && Math.hypot(p.x - 240, p.y - 98) < 36) return { k: "roof", h: "E : MONTER SUR LE TOIT · SORTIR L'HÉLICO 🚁" };
     if (p.y < 130 && p.x < 200) return { k: "bench", h: "E : ATELIER DE RICO (RÉPARER / REPEINDRE)" };
@@ -798,6 +833,10 @@ export function createStaClient(env) {
   function innUse() {
     const sp = innSpot(); if (!sp) return;
     if (sp.k === "door") leaveInn();
+    else if (sp.k === "chest") { shop = "chest"; beep(880, .06, "triangle", .05); }
+    else if (sp.k === "bed") { if (me.hsp !== inn.hk) { me.hsp = inn.hk; persist(true); floats.push({ x: me.x, y: me.y - 22, t: tNow, s: "🛏️ POINT DE RÉAPPARITION", c: "#7ae582" }); beep(660, .1, "triangle", .06); } }
+    else if (sp.k === "guard") bribeDo();
+    else if (sp.k === "dig") digDo();
     else if (sp.k === "counter") { shop = "arms"; beep(880, .06, "triangle", .05); }
     else if (sp.k === "bench") { shop = "garage"; beep(660, .06, "triangle", .05); }
     else if (sp.k === "take") { leaveInn(); garageDo(true, sp.s); }
@@ -809,6 +848,129 @@ export function createStaClient(env) {
     if (me.g2) return;
     if (me.cash < G2PRICE) { toast(`Il te faut $${G2PRICE} pour un emplacement de plus`); return; }
     me.cash -= G2PRICE; me.g2 = 1; floats.push({ x: me.x, y: me.y - 22, t: tNow, s: `🅿️ EMPLACEMENT ACHETÉ −$${G2PRICE}`, c: "#7ae582" }); beep(660, .12, "triangle", .06); setTimeout(() => beep(880, .12, "triangle", .06), 130); persist(true);
+  }
+  // ================= PRISON & MAISONS =================
+  // Prison : arrêté (étoiles + flic collé) = confiscation des armes/gilet, puis cellule. Peine = JAIL_BASE + JAIL_STAR par étoile.
+  // Sorties : la peine finie · corrompre le gardien ($) · creuser (E répété, risque d'être entendu) · un ami libre vient au commissariat (zone PRISON) et te fait évader.
+  // Rien de neuf sur Firebase : « je suis en prison pour n s » (champ 27) et « je fais évader untel » (champ 28) voyagent dans ta ligne p.
+  const owns = k => ((me.hou | 0) >> k) & 1;
+  const bribeCost = () => BRIBE_BASE + BRIBE_SEC * Math.ceil(jail ? jail.t : 0);
+  function startJail() {
+    const t = me.jT || JAIL_BASE + JAIL_STAR;
+    spawnAt(SPAWN.police); shop = ""; me.heat = 0; me.wl = 0; me.v = 0;
+    jail = { t, dig: 0 }; inn = { k: "jail", hk: 0, x: 90, y: 200, a: 0, t0: tNow, hp: me.hp, mv: false };
+    toast(`🔒 En cellule pour ${Math.round(t)} s : attends, corromps le gardien, creuse le mur… ou un ami peut te faire évader`); SND.door();
+  }
+  function jailOut(p, heat, msg) {
+    jail = null; leaveInn(); spawnAt(p); me.heat = heat; me.wl = Math.min(5, Math.ceil(heat - 1e-6)); toast(msg);
+    beep(660, .1, "triangle", .06); setTimeout(() => beep(880, .12, "triangle", .06), 110); persist(true);
+  }
+  function jailTick(dt) {                                                 // true = libéré (on a quitté la cellule)
+    if (!jail) { leaveInn(); return true; }
+    jail.t -= dt;
+    for (const [u, p] of activeP()) if (u !== myUid && p.fu === myUid && Math.hypot(p.x - ZONES.jail.x, p.y - ZONES.jail.y) < 160) {
+      jailOut(SPAWN.police, 0, `🔓 ${(lobbyP()[u] || {}).name || "Un ami"} t'a fait évader !`); return true;
+    }
+    if (jail.t <= 0) { jailOut(SPAWN.police, 0, "Tu es libéré. Fais profil bas !"); return true; }
+    return false;
+  }
+  function bribeDo() {
+    const p = bribeCost(); if (me.cash < p) { toast(`Il te faut $${p} pour corrompre le gardien`); return; }
+    me.cash -= p; jailOut(SPAWN.police, 0, `💸 Le gardien a fermé les yeux (−$${p})`);
+  }
+  function digDo() {
+    if (!jail) return;
+    if (Math.random() < DIG_RISK) { jail.t += DIG_PENALTY; jail.dig = 0; toast(`🚨 Le gardien t'a entendu ! +${DIG_PENALTY} s et tout est à refaire`); beep(120, .2, "sawtooth", .07, 60); return; }
+    jail.dig++; beep(300 + jail.dig * 30, .05, "square", .04, 200);
+    if (jail.dig >= DIG_NEED) jailOut([6 * CELL + 180, 2 * CELL], ESC_HEAT, "🏃 ÉVASION ! La police te recherche");
+  }
+  function jailFree(u) {                                                  // ami libre : faire évader un détenu depuis la zone PRISON
+    const p = pd[u]; shop = ""; if (!p || !(p.jl > 0)) { toast("Il n'est déjà plus en prison"); return; }
+    me.fu = u; me.fuT = tNow + 2500; me.heat = Math.min(5, Math.max(me.heat, FREE_HEAT));
+    toast("🔓 Évasion en cours… la police est alertée !"); beep(520, .1, "square", .05);
+  }
+  // Maisons : acheter à la porte (E), entrer, coffre (argent · armes · gilet), lit = point de réapparition quand tu es K.O.
+  // Chaque joueur a ses propres maisons (la maison 3 de l'un n'est pas celle de l'autre).
+  const nearHouse = () => { if (me.vid || me.dead > 0 || inn) return -1; for (let k = 0; k < HOUSES.length; k++) if (inZ(HZ[k])) return k; return -1; };
+  function houseDo(k) {
+    const H = HOUSES[k];
+    if (owns(k)) { enterInn("house", k); return; }
+    if (me.cash < H.p) { toast(`Il te faut $${H.p} pour acheter ${H.n}`); return; }
+    me.cash -= H.p; me.hou |= 1 << k; if (me.hsp < 0) me.hsp = k;
+    floats.push({ x: me.x, y: me.y - 22, t: tNow, s: `🏠 ${H.n} ACHETÉE −$${H.p}`, c: "#7ae582" }); beep(660, .12, "triangle", .06); setTimeout(() => beep(880, .12, "triangle", .06), 130); persist(true);
+    setTimeout(() => { if (active && me.wl === 0 && !inn && me.dead <= 0 && nearHouse() === k) enterInn("house", k); }, 450);
+  }
+  function spawnAtHouse(k) { spawnAt([HZ[k].x, HZ[k].y]); toast(`🏠 Tu te réveilles chez toi (${HOUSES[k].n})`); }
+  const fixWpn = () => { if (me.wpn > 0 && !(me.ammo[me.wpn] > 0)) { me.wpn = 0; cycleWpn(); } };
+  function chestMoney(dir, amt) {
+    const b = me.hb[inn.hk];
+    amt = dir > 0 ? Math.min(amt, Math.floor(me.cash)) : Math.min(amt, Math.floor(b.c)); if (amt <= 0) return;
+    if (dir > 0) { me.cash -= amt; b.c += amt; } else { b.c -= amt; me.cash += amt; }
+    floats.push({ x: me.x, y: me.y - 22, t: tNow, s: `${dir > 0 ? "DÉPOSÉ" : "RETIRÉ"} $${amt}`, c: "#ffd23f" }); beep(dir > 0 ? 560 : 740, .08, "triangle", .05); persist(true);
+  }
+  function chestGear(dir) {
+    const b = me.hb[inn.hk]; let n = 0;
+    if (dir > 0) {
+      for (let w = 1; w <= 4; w++) if (me.ammo[w] > 0) { b.a[w - 1] += me.ammo[w]; me.ammo[w] = 0; n++; }
+      if (me.arm > 0) { if (!b.v) { b.v = me.arm; me.arm = 0; n++; } else toast("Le coffre contient déjà un gilet"); }
+      fixWpn();
+    } else {
+      for (let w = 1; w <= 4; w++) { const t = Math.min(b.a[w - 1], WPN[w].max - me.ammo[w]); if (t > 0) { me.ammo[w] += t; b.a[w - 1] -= t; n++; } }
+      if (b.v > me.arm) { const old = me.arm; me.arm = b.v; b.v = old; n++; }
+      if (!me.wpn) cycleWpn();
+    }
+    if (!n) { toast(dir > 0 ? "Rien à ranger" : "Rien à reprendre (ou tes munitions sont pleines)"); return; }
+    floats.push({ x: me.x, y: me.y - 22, t: tNow, s: dir > 0 ? "🧰 RANGÉ DANS LE COFFRE" : "🧰 REPRIS DU COFFRE", c: "#9fd0ff" }); beep(dir > 0 ? 560 : 740, .08, "triangle", .05); persist(true);
+  }
+  function chestRows() {
+    const b = me.hb[inn.hk], gw = (a, v) => { const n = a.filter(q => q > 0).length; return `${n} arme${n > 1 ? "s" : ""}${v ? " + gilet" : ""}`; };
+    const cash = Math.floor(me.cash), inC = Math.floor(b.c), mine = me.ammo.slice(1).some(q => q > 0) || me.arm > 0, held = b.a.some(q => q > 0) || b.v > 0;
+    return [
+      { l: "DÉPOSER $500", r: `COFFRE $${inC}`, ok: cash >= 1, f: () => chestMoney(1, 500) },
+      { l: "DÉPOSER TOUT L'ARGENT", r: `$${cash}`, ok: cash >= 1, f: () => chestMoney(1, Infinity) },
+      { l: "RETIRER $500", r: `COFFRE $${inC}`, ok: inC >= 1, f: () => chestMoney(-1, 500) },
+      { l: "RETIRER TOUT L'ARGENT", r: `$${inC}`, ok: inC >= 1, f: () => chestMoney(-1, Infinity) },
+      { l: "RANGER ARMES + GILET", r: gw(me.ammo.slice(1), me.arm), ok: mine, f: () => chestGear(1) },
+      { l: "REPRENDRE ARMES + GILET", r: gw(b.a, b.v), ok: held, f: () => chestGear(-1) },
+      { l: "POINT DE RÉAPPARITION ICI", r: me.hsp === inn.hk ? "✔ ICI" : "DÉFINIR", ok: me.hsp !== inn.hk, f: () => { me.hsp = inn.hk; persist(true); toast("🛏️ Point de réapparition défini"); } }
+    ].map((it, k) => ({ ...it, l: `${k + 1} · ${it.l}` }));
+  }
+  function jailRows() {
+    const L = activeP().filter(([u, p]) => u !== myUid && p.jl > 0);
+    if (!L.length) return [{ l: "1 · PERSONNE EN PRISON POUR LE MOMENT", r: "—", ok: false, f: () => { } }];
+    return L.slice(0, 8).map(([u, p], k) => ({ l: `${k + 1} · FAIRE ÉVADER ${((lobbyP()[u] || {}).name || "?").slice(0, 12).toUpperCase()}`, r: `${p.jl} s`, ok: true, f: () => jailFree(u) }));
+  }
+  function drawHouseZone(k) { const o = owns(k); drawZone({ x: HZ[k].x, y: HZ[k].y, c: o ? "#7ae582" : "#ffd23f", l: o ? `MAISON ${k + 1}` : `$${HOUSES[k].p}` }); }
+  function drawHouseRoom(now, labels) {
+    const R = ROOMS.house, w = R.w, h = R.h, H = HOUSES[inn.hk | 0], dx = R.door.x, hw = R.door.hw, sp = innSpot(), nc = !!(sp && sp.k === "chest");
+    for (let y = 56, n = 0; y < h; y += 12, n++) { fr(0, y, w, 12, n & 1 ? "#8a6240" : "#80593a"); fr(0, y + 11, w, 1, "rgba(0,0,0,.3)"); for (let k = 0; k < 4; k++) fr((n * 83 + k * 109) % (w - 6), y, 1, 11, "rgba(0,0,0,.22)"); }
+    fr(0, 0, w, 58, H.w); for (let tx = 0; tx < w; tx += 14) fr(tx, 0, 1, 58, "rgba(0,0,0,.08)"); fr(0, 46, w, 6, H.r[0]); fr(0, 52, w, 6, "rgba(0,0,0,.35)");
+    fr(150, 8, 120, 34, "#6b4a2b"); fr(154, 12, 112, 26, "#9fd3ee"); fr(208, 12, 4, 26, "#6b4a2b"); fr(154, 23, 112, 3, "#6b4a2b");
+    fr(0, 56, 16, h - 56, "#6e5a44"); fr(w - 16, 56, 16, h - 56, "#6e5a44"); fr(0, h - 14, dx - hw, 14, "#6e5a44"); fr(dx + hw, h - 14, w - dx - hw, 14, "#6e5a44");
+    fr(dx - hw, h - 40, hw * 2, 26, "#7a2626"); fr(dx - hw, h - 40, hw * 2, 2, "#c9a227");                       // paillasson
+    fr(120, 224 - 70, 180, 8, "rgba(0,0,0,0)"); fr(130, 150, 160, 100, "#5b3b73"); fr(130, 150, 160, 3, "#c9a227"); fr(130, 247, 160, 3, "#c9a227"); fr(130, 150, 3, 100, "#c9a227"); fr(287, 150, 3, 100, "#c9a227");   // tapis
+    fr(150, 176, 120, 34, "#3b5b7a"); fr(150, 170, 120, 10, "#2f4a64"); fr(150, 176, 6, 34, "#2f4a64"); fr(264, 176, 6, 34, "#2f4a64");                // canapé
+    fr(18, 64, 84, 52, "#4a3320"); fr(22, 68, 76, 44, "#e8e8ee"); fr(26, 72, 24, 16, "#ffffff"); fr(22, 92, 76, 20, H.r[0]); fr(22, 92, 76, 3, H.r[1]);   // lit
+    fr(304, 76, 84, 34, "#6b4a22"); fr(304, 66, 84, 14, "#8a5f2b"); fr(322, 66, 6, 44, "#c9a227"); fr(364, 66, 6, 44, "#c9a227"); fr(342, 78, 10, 10, "#ffd23f"); fr(344, 80, 6, 6, "#7a5a10");   // coffre
+    if (nc) pool(346, 92, 80, "rgba(255,215,80,.3)");
+    labels.push(["COFFRE", 346, 126, nc ? "#ffe14d" : "#fff", 10], ["LIT", 60, 134, me.hsp === inn.hk ? "#7ae582" : "#fff", 10], ["SORTIE", dx, h - 24, "#fff", 10]);
+    pool(60, 95, 70, "rgba(255,230,180,.12)"); pool(210, 30, 90, "rgba(190,225,255,.14)"); pool(dx, h - 10, 70, "rgba(190,225,255,.2)");
+  }
+  function drawJailRoom(now, labels) {
+    const R = ROOMS.jail, w = R.w, h = R.h, sp = innSpot(), dg = jail ? jail.dig : 0;
+    for (let ty = 56; ty < h; ty += 20) for (let tx = 0; tx < w; tx += 20) fr(tx, ty, 20, 20, ((tx + ty) / 20) & 1 ? "#4a4d55" : "#43464e");
+    fr(276, 56, w - 292, h - 70, "#5f636e");                                                                       // couloir du gardien
+    fr(0, 0, w, 58, "#2c2e36"); for (let ty = 0; ty < 58; ty += 10) for (let tx = ((ty / 10) & 1) * 12; tx < w; tx += 24) fr(tx, ty, 22, 8, "#383b45");
+    fr(0, 52, w, 6, "rgba(0,0,0,.45)"); fr(0, 56, 16, h - 56, "#1f2026"); fr(w - 16, 56, 16, h - 56, "#1f2026"); fr(0, h - 14, w, 14, "#1f2026");
+    fr(22, 66, 86, 40, "#3a3d46"); fr(26, 70, 78, 14, "#9aa3b2"); fr(26, 86, 78, 14, "#b0b8c5"); fr(26, 70, 20, 14, "#e8e8ee");   // lit superposé
+    fr(236, 70, 26, 30, "#cfd5da"); fr(240, 74, 18, 14, "#8fa0ad");                                                   // toilettes
+    fr(316, 192, 72, 30, "#6b4a2b"); fr(320, 196, 64, 22, "#7d5a36"); fr(334, 200, 14, 10, "#222"); fr(336, 202, 10, 6, "#6fc3ff");   // bureau + écran
+    drawWalker(350, 168, Math.PI, "#1c2f6b", "#e0ac69", null, 0, false);                                              // le gardien
+    for (let by = 58; by < h - 14; by += 12) { fr(267, by, 10, 6, "#9097a6"); fr(267, by, 10, 1, "#d6dbe8"); fr(267, by + 5, 10, 1, "#4b5060"); }   // barreaux
+    fr(18, 246, 66, 40, "#5a4a3a"); for (let r = 0; r < 4; r++) for (let c2 = 0; c2 < 4; c2++) fr(20 + c2 * 16 + (r & 1) * 6, 248 + r * 9, 13, 7, "#6d5b49");   // briques descellées
+    if (dg > 0) { fr(26, 256, 4 + dg * 4, 20, "#0c0a08"); x.strokeStyle = "#0c0a08"; x.lineWidth = 1; x.beginPath(); for (let k = 0; k < dg; k++) { x.moveTo(24 + k * 6, 250); x.lineTo(30 + k * 6, 262); } x.stroke(); }
+    labels.push(["CELLULE", 140, 88, "#c9ced8", 10], ["GARDIEN", 350, 150, sp && sp.k === "guard" ? "#ffe14d" : "#9fb4ff", 10], ["MUR FRAGILE", 52, 240, sp && sp.k === "dig" ? "#ffe14d" : "#c9ced8", 10]);
+    pool(140, 170, 120, "rgba(255,240,200,.1)"); pool(350, 170, 80, "rgba(200,220,255,.12)");
   }
   function repairDo(sl) {
     const g = sl === 2 ? me.gcar2 : me.gcar; if (!g) { toast("Aucune voiture rangée"); return; }
@@ -956,7 +1118,7 @@ export function createStaClient(env) {
     me.hp = Math.max(me.hp, 0);
     x = lx; x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = "#08080c"; x.fillRect(0, 0, lc.width, lc.height);
     x.setTransform(z / LR, 0, 0, z / LR, tx, ty);
-    if (inn.k === "arms") drawArmsRoom(now, labels); else drawGarageRoom(now, labels);
+    if (inn.k === "arms") drawArmsRoom(now, labels); else if (inn.k === "house") drawHouseRoom(now, labels); else if (inn.k === "jail") drawJailRoom(now, labels); else drawGarageRoom(now, labels);
     drawWalker(inn.x, inn.y, inn.a, (lobbyP()[myUid] || {}).color || "#fff", "#f1c27d", inn.mv ? now / 85 : null, 0, false);
     { const ay = inn.y - 15 + Math.sin(now / 160) * 2; x.fillStyle = "#ffe14d"; x.strokeStyle = "#000"; x.lineWidth = 1; x.beginPath(); x.moveTo(inn.x, ay + 6); x.lineTo(inn.x - 5, ay - 2); x.lineTo(inn.x + 5, ay - 2); x.closePath(); x.fill(); x.stroke(); }
     x.setTransform(1, 0, 0, 1, 0, 0);                                      // pénombre autour de toi
@@ -966,9 +1128,9 @@ export function createStaClient(env) {
     { const [fx, fy] = sxy(inn.x, inn.y - 14); floats = floats.filter(f => now - f.t < 1400); floats.forEach(f => { x.globalAlpha = 1 - (now - f.t) / 1400; txt(f.s, fx, fy - (now - f.t) / 25, 15, f.c); }); x.globalAlpha = 1; }
     txt(`$${Math.round(me.cash)}`, 14, 32, 28, "#ffe14d", "left");
     x.fillStyle = "#000"; x.fillRect(13, 42, 112, 11); x.fillStyle = me.hp > 40 ? "#3ee62f" : "#ff3b30"; x.fillRect(15, 44, 108 * clamp(me.hp, 0, 100) / 100, 7);
-    txt(R.name, W / 2, 30, 20, R.c); txt("À L'ABRI : LA POLICE NE TE VOIT PAS", W / 2, 48, 11, "#9be7ff");
+    txt(R.name, W / 2, 30, 20, R.c); if (inn.k === "jail" && jail) { const t = Math.max(0, Math.ceil(jail.t)); txt(`⏱ LIBÉRATION DANS ${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")} · UN AMI PEUT TE FAIRE ÉVADER`, W / 2, 48, 11, "#ff9f9f"); } else txt("À L'ABRI : LA POLICE NE TE VOIT PAS", W / 2, 48, 11, "#9be7ff");
     const sp = innSpot(); if (sp && !shop) txt(sp.h, W / 2, H - 60, 15, sp.k === "none" ? "#9a9aa5" : "#ffe14d");
-    if (now - inn.t0 < 7000) txt(TOUCH ? "JOYSTICK : BOUGER · BOUTON : AGIR" : "ZQSD / FLÈCHES : BOUGER · E : AGIR · ÉCHAP : SORTIR", W / 2, H - 28, 12, "#fffa");
+    if (now - inn.t0 < 7000) txt(TOUCH ? "JOYSTICK : BOUGER · BOUTON : AGIR" : (inn.k === "jail" ? "ZQSD / FLÈCHES : BOUGER · E : AGIR (CREUSER AU COIN, CORROMPRE LE GARDIEN)" : "ZQSD / FLÈCHES : BOUGER · E : AGIR · ÉCHAP : SORTIR"), W / 2, H - 28, 12, "#fffa");
     { const bx = W - 56, by = H - 62; x.fillStyle = "#1f4fbf"; x.beginPath(); x.arc(bx, by, 38, 0, 7); x.fill(); x.strokeStyle = "#000"; x.lineWidth = 3; x.stroke(); txt(sp && sp.k === "door" ? "SORTIR" : "ACTION", bx, by + 4, 12); }
     if (shop) drawShop(now);
     if (stick) { x.fillStyle = "rgba(255,255,255,.08)"; x.strokeStyle = "rgba(255,255,255,.28)"; x.lineWidth = 2; x.beginPath(); x.arc(stick.ox, stick.oy, 55, 0, 7); x.fill(); x.stroke(); x.fillStyle = "rgba(255,255,255,.65)"; x.beginPath(); x.arc(stick.ox + stick.dx * 55, stick.oy + stick.dy * 55, 22, 0, 7); x.fill(); }
@@ -1261,7 +1423,7 @@ export function createStaClient(env) {
     g.fillStyle = "#262a38"; g.fillRect(0, 0, S, S);
     g.strokeStyle = "rgba(255,255,255,.08)"; g.lineWidth = 1; g.beginPath();                          // lignes centrales des routes
     for (let i = 0; i <= N; i++) { g.moveTo(i * CELL * k, 0); g.lineTo(i * CELL * k, S); g.moveTo(0, i * CELL * k); g.lineTo(S, i * CELL * k); } g.stroke();
-    const SP = [[POLICE, "#2f55c4", "P"], [HOSP, "#e9edf0", "+"], [GARAGE, "#6b7080", "G"], [ARMS, "#a14040", "A"]];
+    const SP = [[POLICE, "#2f55c4", "P"], [HOSP, "#e9edf0", "+"], [GARAGE, "#6b7080", "G"], [ARMS, "#a14040", "A"], ...HOUSES.map(h => [[h.i, h.j], "#3f7d4e", "H"])];
     for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
       const bx = lo(i) * k, by = lo(j) * k, bs = BL * k, sp = SP.find(s => s[0][0] === i && s[0][1] === j), pk = isPark(i, j);
       g.fillStyle = sp ? sp[1] : pk ? "#2f6b2c" : hs(i, j) % 3 ? "#4b5066" : "#575d75"; g.fillRect(bx, by, bs, bs);
@@ -1332,7 +1494,7 @@ export function createStaClient(env) {
     if (me.wl > 0 && bust && Math.abs(me.v) < 90) me.bust += dt; else me.bust = Math.max(0, me.bust - dt * 1.5);
     if (me.vid === GHOST) { me.hp = 100; me.bust = 0; me.hurt = 0; }
     if (me.vid === HELI) { me.bust = 0; me.hurt = 0; }   // en l'air : personne ne peut t'arrêter   // fantôme : ni blessé, ni arrêté
-    if (me.bust > .9) die("🚓 ARRÊTÉ ! −20 % de ton argent", .2, "police");
+    if (me.bust > .9 && me.dead <= 0) { me.jT = JAIL_BASE + JAIL_STAR * Math.max(1, me.wl); die(`🚓 ARRÊTÉ ! PRISON : ${me.jT} s`, JAIL_LOSS, "police"); }
     if (me.hp <= 0) die("💀 K.O. : −10 % de ton argent", .1, "hosp");
     if (me.vid === HELI && me.hh <= 0) { me.hh = 0; die("💥 HÉLICO ABATTU : −10 % de ton argent (répare-le chez Rico)", .1, "hosp"); }
     // conflit : deux joueurs montent dans la même voiture
@@ -1342,7 +1504,7 @@ export function createStaClient(env) {
     if (me.vid && job && Math.hypot(job.x - me.x, job.y - me.y) < 60) { const r = 200 + Math.round(job.d / 6); me.cash += r; floats.push({ x: me.x, y: me.y - 20, t: tNow, s: `+$${r} livraison !`, c: "#ffd23f" }); beep(660, .12, "triangle", .06); newJob(); }
   }
   function sendP(now) {
-    const s = `${Math.round(me.x)},${Math.round(me.y)},${me.a.toFixed(2)},${me.vid},${me.wl},${Math.round(me.cash)},${Math.round(me.hp)},${Math.round(Math.abs(me.v))},${me.hs},${me.hid},${me.vid ? me.dm : 0},${me.wpn},${me.fc},${me.fw},${me.cs},${me.cid},${me.ca},${me.gn},${me.go},${me.gi},${me.gm},${me.hn | 0},${me.pg ? Math.round(me.pg.x) : 0},${me.pg ? Math.round(me.pg.y) : 0},${me.pg ? me.pg.a.toFixed(2) : 0},${inn ? 1 : 0},${me.vid === HELI ? me.hz.toFixed(2) : 0}`;
+    const s = `${Math.round(me.x)},${Math.round(me.y)},${me.a.toFixed(2)},${me.vid},${me.wl},${Math.round(me.cash)},${Math.round(me.hp)},${Math.round(Math.abs(me.v))},${me.hs},${me.hid},${me.vid ? me.dm : 0},${me.wpn},${me.fc},${me.fw},${me.cs},${me.cid},${me.ca},${me.gn},${me.go},${me.gi},${me.gm},${me.hn | 0},${me.pg ? Math.round(me.pg.x) : 0},${me.pg ? Math.round(me.pg.y) : 0},${me.pg ? me.pg.a.toFixed(2) : 0},${inn ? 1 : 0},${me.vid === HELI ? me.hz.toFixed(2) : 0},${inn && jail ? Math.max(1, Math.ceil(jail.t)) : 0},${me.fuT > now ? me.fu : ""}`;
     if ((s === sentStr && now - sentAt < 700) || now - sentAt < 110) return;
     sentStr = s; sentAt = now; set(RF(`games/${c}/p/${myUid}`), s).catch(() => { });
     if (now - saveAt > 8000) { saveAt = now; persist(false); }
@@ -1778,6 +1940,8 @@ function drawWorld(vx0, vy0, vx1, vy1) {
     if (i === GARAGE[0] && j === GARAGE[1]) drawGarageZone(tNow);
     else if (i === ARMS[0] && j === ARMS[1]) drawZone(ZONES.arms);
     else if (i === HOSP[0] && j === HOSP[1]) drawZone(ZONES.heal);
+    else if (i === POLICE[0] && j === POLICE[1]) drawZone(ZONES.jail);
+    else if (hIdx(i, j) >= 0) drawHouseZone(hIdx(i, j));
     if (!isPark(i, j)) { blds.push([i, j]); continue; }
     x.fillStyle = patGrass; x.fillRect(ox, oy, bw, bw);
     x.fillStyle = "#34702a"; for (let k = 0; k < 8; k++) x.fillRect(ox + hs(i + k, j) % (bw - 30), oy + hs(j + k, i + 9) % (bw - 30), 30, 22);
@@ -1788,9 +1952,9 @@ function drawWorld(vx0, vy0, vx1, vy1) {
   const dist = b => Math.hypot(lo(b[0]) + BL / 2 - cam.x, lo(b[1]) + BL / 2 - cam.y);
   blds.sort((p, q) => dist(q) - dist(p));
   blds.forEach(([i, j]) => {
-    const h = hs(i, j), bw = BL - 2 * SW, ox = lo(i) + SW, oy = lo(j) + SW, pol = i === POLICE[0] && j === POLICE[1], hos = i === HOSP[0] && j === HOSP[1], gar = i === GARAGE[0] && j === GARAGE[1], arm = i === ARMS[0] && j === ARMS[1];
-    const pal = gar ? ["#4a4e5a", "#6b7080", "#2d3039"] : pol ? ["#2f55c4", "#5a7fe0", "#1c3585"] : hos ? ["#e9edf0", "#ffffff", "#aab3ba"] : arm ? ["#7a2a2a", "#a14040", "#4a1616"] : ROOF[h % ROOF.length];
-    const wc = gar ? "#59606f" : pol ? "#3f66d0" : hos ? "#e3e8ec" : arm ? "#8a3a3a" : WALL[h % 8], k = .17 * (pol || hos || gar || arm ? 1.1 : .8 + (h % 4) * .13);
+    const h = hs(i, j), bw = BL - 2 * SW, ox = lo(i) + SW, oy = lo(j) + SW, pol = i === POLICE[0] && j === POLICE[1], hos = i === HOSP[0] && j === HOSP[1], gar = i === GARAGE[0] && j === GARAGE[1], arm = i === ARMS[0] && j === ARMS[1], hk = hIdx(i, j);
+    const pal = gar ? ["#4a4e5a", "#6b7080", "#2d3039"] : pol ? ["#2f55c4", "#5a7fe0", "#1c3585"] : hos ? ["#e9edf0", "#ffffff", "#aab3ba"] : arm ? ["#7a2a2a", "#a14040", "#4a1616"] : hk >= 0 ? HOUSES[hk].r : ROOF[h % ROOF.length];
+    const wc = gar ? "#59606f" : pol ? "#3f66d0" : hos ? "#e3e8ec" : arm ? "#8a3a3a" : hk >= 0 ? HOUSES[hk].w : WALL[h % 8], k = .17 * (pol || hos || gar || arm ? 1.1 : hk >= 0 ? .55 : .8 + (h % 4) * .13);
     const P = (gx, gy) => [gx + (gx - cam.x) * k, gy + (gy - cam.y) * k];
     const g00 = [ox, oy], g10 = [ox + bw, oy], g11 = [ox + bw, oy + bw], g01 = [ox, oy + bw], r00 = P(ox, oy), r10 = P(ox + bw, oy), r11 = P(ox + bw, oy + bw), r01 = P(ox, oy + bw);
     x.fillStyle = "rgba(0,0,0,.4)"; x.fillRect(ox + 14, oy + 14, bw, bw);                         // ombre portée
@@ -1803,20 +1967,20 @@ function drawWorld(vx0, vy0, vx1, vy1) {
       const nc = 7, nr = 3;
       for (let c = 0; c < nc; c++) for (let r = 0; r < nr; r++) {
         const t0 = (c + .2) / nc, t1 = (c + .8) / nc, u0 = .1 + (r + .15) / nr * .82, u1 = .1 + (r + .75) / nr * .82, hv = (h >>> ((c + r * 3) % 28)) & 3;
-        x.fillStyle = gar ? (hv & 1 ? "#20232b" : "#2c303a") : pol ? (hv & 1 ? "#e8f0ff" : "#aac0ff") : hos ? (hv & 1 ? "#8fc7ea" : "#cfe9f7") : ["#3b84b3", "#2f6f9c", "#b84455", "#58a0c4"][hv];
+        x.fillStyle = gar ? (hv & 1 ? "#20232b" : "#2c303a") : pol ? (hv & 1 ? "#e8f0ff" : "#aac0ff") : hos ? (hv & 1 ? "#8fc7ea" : "#cfe9f7") : hk >= 0 ? ["#f4d58d", "#e9c46a", "#9ad1d4", "#f4d58d"][hv] : ["#3b84b3", "#2f6f9c", "#b84455", "#58a0c4"][hv];
         const a1 = Q(t0, u0), a2 = Q(t1, u0), a3 = Q(t1, u1), a4 = Q(t0, u1);
         x.beginPath(); x.moveTo(a1[0], a1[1]); x.lineTo(a2[0], a2[1]); x.lineTo(a3[0], a3[1]); x.lineTo(a4[0], a4[1]); x.closePath(); x.fill();
         x.strokeStyle = "rgba(0,0,0,.45)"; x.lineWidth = 1; x.stroke();
       }
-      if ((gar || arm) && g0[1] === oy + bw && g1[1] === oy + bw) {                                      // la porte (mur sud) : E pour entrer
-        const dX = gar ? GZ.x : ZONES.arms.x, hwd = (gar ? 34 : 18) / bw, tc = (dX - ox) / bw, uh = gar ? .56 : .62, pt = (a, b) => { x.lineTo(a[0], a[1]); };
+      if ((gar || arm || hk >= 0) && g0[1] === oy + bw && g1[1] === oy + bw) {                                      // la porte (mur sud) : E pour entrer
+        const dX = gar ? GZ.x : hk >= 0 ? HZ[hk].x : ZONES.arms.x, hwd = (gar ? 34 : hk >= 0 ? 22 : 18) / bw, tc = (dX - ox) / bw, uh = gar ? .56 : hk >= 0 ? .5 : .62, dc = gar ? "#ffd23f" : hk >= 0 ? (owns(hk) ? "#7ae582" : "#ffd23f") : "#ff5a4d", pt = (a, b) => { x.lineTo(a[0], a[1]); };
         const d1 = Q(tc - hwd, 0), d2 = Q(tc + hwd, 0), d3 = Q(tc + hwd, uh), d4 = Q(tc - hwd, uh);
-        x.fillStyle = gar ? "#7d8190" : "#241012"; x.beginPath(); x.moveTo(d1[0], d1[1]); pt(d2); pt(d3); pt(d4); x.closePath(); x.fill();
+        x.fillStyle = gar ? "#7d8190" : hk >= 0 ? "#5a3a22" : "#241012"; x.beginPath(); x.moveTo(d1[0], d1[1]); pt(d2); pt(d3); pt(d4); x.closePath(); x.fill();
         if (gar) { x.strokeStyle = "rgba(0,0,0,.38)"; x.lineWidth = 1; x.beginPath(); for (let s2 = 1; s2 < 8; s2++) { const p = Q(tc - hwd, uh * s2 / 8), q = Q(tc + hwd, uh * s2 / 8); x.moveTo(p[0], p[1]); x.lineTo(q[0], q[1]); } x.stroke(); }
-        else { const e1 = Q(tc - hwd * .7, .06), e2 = Q(tc + hwd * .7, .06), e3 = Q(tc + hwd * .7, uh - .08), e4 = Q(tc - hwd * .7, uh - .08); x.globalAlpha = .6; x.fillStyle = "#ff9a8a"; x.beginPath(); x.moveTo(e1[0], e1[1]); pt(e2); pt(e3); pt(e4); x.closePath(); x.fill(); x.globalAlpha = 1; }
-        x.strokeStyle = gar ? "#ffd23f" : "#ff5a4d"; x.lineWidth = 2; x.beginPath(); x.moveTo(d1[0], d1[1]); pt(d4); pt(d3); pt(d2); x.stroke();
+        else if (hk < 0) { const e1 = Q(tc - hwd * .7, .06), e2 = Q(tc + hwd * .7, .06), e3 = Q(tc + hwd * .7, uh - .08), e4 = Q(tc - hwd * .7, uh - .08); x.globalAlpha = .6; x.fillStyle = "#ff9a8a"; x.beginPath(); x.moveTo(e1[0], e1[1]); pt(e2); pt(e3); pt(e4); x.closePath(); x.fill(); x.globalAlpha = 1; }
+        x.strokeStyle = dc; x.lineWidth = 2; x.beginPath(); x.moveTo(d1[0], d1[1]); pt(d4); pt(d3); pt(d2); x.stroke();
         const s1 = Q(tc - hwd, uh + .05), s2b = Q(tc + hwd, uh + .05), s3 = Q(tc + hwd, uh + .15), s4 = Q(tc - hwd, uh + .15);
-        x.fillStyle = gar ? "#ffd23f" : "#ff5a4d"; x.beginPath(); x.moveTo(s1[0], s1[1]); pt(s2b); pt(s3); pt(s4); x.closePath(); x.fill();   // enseigne lumineuse
+        x.fillStyle = dc; x.beginPath(); x.moveTo(s1[0], s1[1]); pt(s2b); pt(s3); pt(s4); x.closePath(); x.fill();   // enseigne lumineuse
       }
       x.strokeStyle = shade(wc, 1.3); x.lineWidth = 2; x.beginPath(); x.moveTo(r0[0], r0[1]); x.lineTo(r1[0], r1[1]); x.stroke();            // corniche
       x.strokeStyle = "rgba(0,0,0,.5)"; x.beginPath(); x.moveTo(g0[0], g0[1]); x.lineTo(g1[0], g1[1]); x.stroke();                            // pied du mur
@@ -1835,6 +1999,8 @@ function drawWorld(vx0, vy0, vx1, vy1) {
     else if (hos) { x.strokeStyle = "#d62828"; x.lineWidth = 4; x.beginPath(); x.arc(rx + rw / 2, ry + rw / 2, 46 * sc, 0, 7); x.stroke(); x.fillStyle = "#d62828"; x.fillRect(rx + rw / 2 - 8 * sc, ry + rw / 2 - 26 * sc, 16 * sc, 52 * sc); x.fillRect(rx + rw / 2 - 26 * sc, ry + rw / 2 - 8 * sc, 52 * sc, 16 * sc); }
     else if (gar) { x.fillStyle = "#ffd23f"; x.fillRect(rx + 14 * sc, ry + 22 * sc, rw - 28 * sc, 3); x.fillRect(rx + 14 * sc, ry + rw - 25 * sc, rw - 28 * sc, 3); x.font = `bold ${Math.round(24 * sc)}px "Courier New",monospace`; x.textAlign = "center"; x.fillStyle = "#fff"; x.fillText("GARAGE", rx + rw / 2, ry + 52 * sc); drawRoofPad(rx + rw / 2, ry + rw / 2 + 10 * sc, sc); }
     else if (arm) { x.strokeStyle = "#ffb4a8"; x.lineWidth = 3; const cx2 = rx + rw / 2, cy2 = ry + rw / 2 - 8 * sc; x.beginPath(); x.arc(cx2, cy2, 38 * sc, 0, 7); x.stroke(); x.beginPath(); x.moveTo(cx2 - 52 * sc, cy2); x.lineTo(cx2 + 52 * sc, cy2); x.moveTo(cx2, cy2 - 52 * sc); x.lineTo(cx2, cy2 + 52 * sc); x.stroke(); x.font = `bold ${Math.round(24 * sc)}px "Courier New",monospace`; x.textAlign = "center"; x.fillStyle = "#fff"; x.fillText("ARMURERIE", rx + rw / 2, ry + rw / 2 + 74 * sc); }
+    else if (hk >= 0) { x.strokeStyle = pal[2]; x.lineWidth = 3; x.beginPath(); x.moveTo(rx + 16 * sc, ry + rw / 2); x.lineTo(rx + rw - 16 * sc, ry + rw / 2); x.stroke(); x.fillStyle = "#6b4a3a"; x.fillRect(rx + rw - 46 * sc, ry + 26 * sc, 16 * sc, 20 * sc);   // faîtage + cheminée
+      x.font = `bold ${Math.round(17 * sc)}px "Courier New",monospace`; x.textAlign = "center"; x.fillStyle = "#fff"; x.fillText(owns(hk) ? `MAISON ${hk + 1} ✔` : `À VENDRE $${HOUSES[hk].p}`, rx + rw / 2, ry + rw / 2 + 56 * sc); }
     else for (let n = 0; n < 3; n++) { const w = 18 + (h >>> (n * 5)) % 18, hh = 14 + (h >>> (n * 4 + 2)) % 16, px = rx + (22 + (h >>> (n * 6)) % (bw - 70)) * sc, py = ry + (22 + (h >>> (n * 7 + 1)) % (bw - 60)) * sc; x.fillStyle = pal[1]; x.fillRect(px, py, w * sc, hh * sc); x.fillStyle = pal[2]; x.fillRect(px, py + (hh - 3) * sc, w * sc, 3); x.fillRect(px + (w - 3) * sc, py, 3, hh * sc); }
   });
 }
@@ -1865,7 +2031,7 @@ function frame(now) {
   const lp = lobbyP();
   for (const [u, p] of activeP()) { if (u === myUid) continue; let d = dP.get(u); if (!d) dP.set(u, d = { x: p.x, y: p.y, a: p.a }); if (Math.abs(p.x - d.x) + Math.abs(p.y - d.y) > 300) { d.x = p.x; d.y = p.y; } else { d.x += (p.x - d.x) * k; d.y += (p.y - d.y) * k; } d.a = angLerp(d.a, p.a, k); d.vid = p.vid; d.cash = p.cash; d.wl = p.wl; d.v = p.v; d.dm = p.dm; d.wpn = p.wpn; d.hn = p.hn; d.ib = p.ib; d.hz = p.hz; }
   for (const u of dP.keys()) if (!lp[u]) dP.delete(u);
-  if (me.dead > 0) { me.dead -= dt; if (me.dead <= 0) spawnAt(SPAWN[me.where || "hosp"]); }
+  if (me.dead > 0) { me.dead -= dt; if (me.dead <= 0) { if (me.where === "police") startJail(); else if (me.hsp >= 0 && owns(me.hsp)) spawnAtHouse(me.hsp); else spawnAt(SPAWN[me.where || "hosp"]); } }
   else { if (useReq) { useReq = 0; useKey(); } if (inn) { innControl(dt); missions(dt); } else { control(dt); interact(dt); weapons(dt, now); missions(dt); } }
   stepRockets(dt, now);                                                  // les roquettes volent même si je suis mort ou dans un bâtiment
   useReq = 0; if (me.vid) me.carT += dt;
@@ -2041,16 +2207,18 @@ function frame(now) {
   if (pw === 2) { ping(ZONES.arms.x, ZONES.arms.y, "#ff9a3d", 5); }
   { const mp = misPt(); if (mp && !mp.nm) { ping(mp.x, mp.y, mp.c, 4); dot(mp.x, mp.y, mp.c, 4); } }
   if (me.wl > 0 && Math.floor(now / 250) % 2) { x.strokeStyle = "rgba(255,60,60,.9)"; x.lineWidth = 2; rrect(mx + 1, my + 1, mm - 2, mm - 2, 11); x.stroke(); }   // recherché : le cadre clignote
+  HOUSES.forEach((h, k) => { if (owns(k)) dot(HZ[k].x, HZ[k].y, "#7ae582", 3); });
   ping(me.x, me.y, "#fff", 3);
   arrow(me.x, me.y, me.a, "#fff");   // toi : une flèche blanche dans le sens de la marche
   x.restore();
   x.strokeStyle = "#0b0c10"; x.lineWidth = 4; rrect(mx, my, mm, mm, 12); x.stroke(); x.strokeStyle = "#e8e8f0"; x.lineWidth = 1.5; rrect(mx, my, mm, mm, 12); x.stroke();   // cadre
   txt("N", mx + mm - 10, my + 14, 11, "#fffc");
-  const bx = W - 56, by = H - 62; x.fillStyle = "#1f4fbf"; x.beginPath(); x.arc(bx, by, 38, 0, 7); x.fill(); x.strokeStyle = "#000"; x.lineWidth = 3; x.stroke(); txt(gAct() ? "GARAGE" : !me.vid && (shopAt() || nearGiver()) ? "ACTION" : me.vid ? "SORTIR" : "ENTRER", bx, by + 4, 12);
+  const bx = W - 56, by = H - 62; x.fillStyle = "#1f4fbf"; x.beginPath(); x.arc(bx, by, 38, 0, 7); x.fill(); x.strokeStyle = "#000"; x.lineWidth = 3; x.stroke(); txt(gAct() ? "GARAGE" : !me.vid && (shopAt() || nearGiver() || nearHouse() >= 0) ? "ACTION" : me.vid ? "SORTIR" : "ENTRER", bx, by + 4, 12);
   { const ga = gAct(); if (ga || (me.g && me.vid !== HELI && inGarage())) txt(ga === "buy" ? `E : ACHETER LE GARAGE ($${GPRICE})` : ga === "store" ? "E : RANGER LA VOITURE" : !me.vid ? (isOwner() ? "E : ENTRER AU GARAGE · G : FANTÔME 👻" : "E : ENTRER AU GARAGE") : ga === "take" ? (me.g && isOwner() ? "E : SORTIR TA VOITURE · G : FANTÔME 👻" : "E : SORTIR TA VOITURE") : ga === "ghost" ? "E : SORTIR LA VOITURE FANTÔME 👻" : ga === "ghostPut" ? "E : RANGER LE FANTÔME" : me.vid ? "GARAGE PLEIN" : "GARAGE VIDE", W / 2, H - 60, 15, ga === "buy" && me.cash < GPRICE ? "#ff9f43" : "#ffe14d"); }
   if (me.dead <= 0 && !shop) {
-    let h = "", hc = "#ffe14d"; const sa = shopAt();
-    if (sa) { if (me.vid) h = `DESCENDS (E) POUR ${sa === "heal" ? "TE SOIGNER" : "ACHETER DES ARMES"}`; else if (sa === "heal") { const p = healPrice(); h = me.hp >= 99 ? "TU ES EN PLEINE FORME" : `E : TE SOIGNER ($${p})`; if (me.hp < 99 && p > me.cash) hc = "#ff9f43"; } else h = "E : ENTRER DANS L'ARMURERIE"; }
+    let h = "", hc = "#ffe14d"; const sa = shopAt(), nh = nearHouse();
+    if (nh >= 0) { h = owns(nh) ? `E : ENTRER CHEZ TOI (${HOUSES[nh].n})` : `E : ACHETER ${HOUSES[nh].n} ($${HOUSES[nh].p})`; if (!owns(nh) && me.cash < HOUSES[nh].p) hc = "#ff9f43"; }
+    else if (sa) { if (me.vid) h = `DESCENDS (E) POUR ${sa === "heal" ? "TE SOIGNER" : sa === "jail" ? "OUVRIR LA PRISON" : "ACHETER DES ARMES"}`; else if (sa === "heal") { const p = healPrice(); h = me.hp >= 99 ? "TU ES EN PLEINE FORME" : `E : TE SOIGNER ($${p})`; if (me.hp < 99 && p > me.cash) hc = "#ff9f43"; } else if (sa === "jail") h = "E : PRISON (FAIRE ÉVADER UN AMI)"; else h = "E : ENTRER DANS L'ARMURERIE"; }
     else { const g = nearGiver(); if (g) h = mis ? `${g.n} : TU AS DÉJÀ UNE MISSION` : `E : PARLER À ${g.n} (${g.l})`; else if (nearBM()) h = "E : PARLER AU CHAUFFEUR 🚚"; else if (nearMech()) h = pw === 2 ? `🧨 LIVRE LA POUDRE À L’ARMURERIE : ${Math.max(0, Math.ceil(pwT))}s` : "E : PARLER AU MÉCANO (QUÊTE RPG 🧩)"; else if (nearPilot()) h = me.hu ? "E : PARLER AU PILOTE" : mis && mis.k === "heli" ? (mis.st === 1 ? "E : RENDRE LES PIÈCES AU PILOTE" : "E : PARLER AU PILOTE") : mis ? "LE PILOTE : TU AS DÉJÀ UNE MISSION" : "E : PARLER AU PILOTE (QUÊTE SPÉCIALE 🚁)"; }
     if (h) txt(h, W / 2, H - 60, 15, hc);
   }
@@ -2088,7 +2256,7 @@ function frame(now) {
     if (e.key === "x" || e.key === "X") { if (!e.repeat) cycleWpn(); e.preventDefault(); return; }
     if (e.key === "r" || e.key === "R") { if (!e.repeat) nextStation(); e.preventDefault(); return; }
     if (e.key === "h" || e.key === "H") { hornKey = true; e.preventDefault(); return; }
-    if (inn && e.key === "Escape" && !shop) { leaveInn(); return; }
+    if (inn && e.key === "Escape" && !shop) { if (inn.k !== "jail") leaveInn(); return; }
     if (admOpen && e.key === "Escape") { admOpen = false; e.preventDefault(); return; }
     if ((e.key === "p" || e.key === "P") && !e.repeat && isOwner() && !inn) { admOpen = !admOpen; e.preventDefault(); return; }
     if ((e.key === "g" || e.key === "G") && !shop && !inn) { if (!e.repeat && me.g && isOwner() && inGarage() && !me.vid && me.dead <= 0) ghostTake(); e.preventDefault(); return; }
@@ -2131,10 +2299,10 @@ function frame(now) {
     enter(code) {
       active = true; c = code; myUid = getMe().uid; ls = null; lastT = 0; lastH = ""; lastEv = 0; pd = {}; hostOn = false; keys = new Set(); stick = null; brakeId = null; useReq = 0;
       dPeds.clear(); dCars.clear(); dCops.clear(); dHelis.clear(); helis = []; dP.clear(); ejected = []; sPrevCash = 0; sPrevWl = 0; sAmbT = performance.now() + 8000; hornKey = false; hornId = null; me.pg = null; splats = []; floats = []; hitDone = new Set(); lastHs = {}; sentStr = ""; sentAt = 0; savedCash = -1; saveAt = performance.now(); gLoaded = false; savedG = ""; lastGn = {};
-      Object.assign(me, { vid: 0, hp: 100, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, bust: 0, hurt: 0, v: 0, a: 0, cash: 0, cop: 0, wpn: 0, ammo: [0, 0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100, rpgParts: [], rpgQuest: 0, ammoQuest: 0, rpgAmmoUnlocked: 0, arm: 0 });
-      inn = null; mis = null; tgt = null; pw = 0; pwT = 0; shop = ""; killQ = []; carQ = []; pendingPedHits = new Map(); tracers = []; rockets = []; sparks = []; booms = []; wrecks = []; pickT = new Map(); lastFc = {}; lastCs = {}; fireKey = false; fireId = null;
+      Object.assign(me, { vid: 0, hp: 100, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, bust: 0, hurt: 0, v: 0, a: 0, cash: 0, cop: 0, wpn: 0, ammo: [0, 0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100, rpgParts: [], rpgQuest: 0, ammoQuest: 0, rpgAmmoUnlocked: 0, arm: 0, hou: 0, hsp: -1, hb: HOUSES.map(newBox), fu: "", fuT: 0, jT: 0 });
+      inn = null; jail = null; mis = null; tgt = null; pw = 0; pwT = 0; shop = ""; killQ = []; carQ = []; pendingPedHits = new Map(); tracers = []; rockets = []; sparks = []; booms = []; wrecks = []; pickT = new Map(); lastFc = {}; lastCs = {}; fireKey = false; fireId = null;
       const ix = 2 + Math.floor(Math.random() * 5), iy = 2 + Math.floor(Math.random() * 5); spawnAt([ix * CELL, iy * CELL]);
-      $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : monter / descendre d'une voiture · en voiture ↑ accélère, ↓ freine, ←→ tourne · livre les colis 📦, écrase des piétons, évite la police ! · Sans arme tu frappes avec tes poings 👊 (F : 3 coups pour un piéton) ; ramasse les armes au sol : F tirer, X changer d'arme (0 = poings, 1-2-3) · en hélico : mitraillette à munitions infinies (F) · les voitures se cabossent ! · garage ($3500 ; à l'intérieur, un 2e emplacement pour une voiture de plus : $2500) : va sur la zone jaune et appuie sur E (owners : voiture fantôme 👻 invincible qui traverse les bâtiments, tu peux en descendre : elle reste garée et seuls les owners peuvent y remonter (E) ; au garage : ranger le fantôme (E), G pour en sortir un) · R : changer de radio (4 stations), H : klaxon · missions : parle au BOSS ❗ au bord ouest de la carte (E) : missions aléatoires (voitures, cavale, contrat, camion blindé 🚚), M pour abandonner · armurerie et distributeur de soins (hôpital) : va sur leur zone et appuie sur E · 🏎️ des voitures de sport (Supercar, Roadster) roulent en ville : bien plus rapides, vole-les et range-les au garage ! · 🚁 hélicoptère : un pilote mystérieux traîne quelque part en ville (il n'est PAS sur la carte) : trouve-le et réussis sa quête pour débloquer un hélico, rangé sur le toit de ton garage (échelle dans le garage) ; E pour te poser sur la zone 🅷 du toit · à 5★ la police envoie des hélicos : abats-les !";
+      $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : monter / descendre d'une voiture · en voiture ↑ accélère, ↓ freine, ←→ tourne · livre les colis 📦, écrase des piétons, évite la police ! · Sans arme tu frappes avec tes poings 👊 (F : 3 coups pour un piéton) ; ramasse les armes au sol : F tirer, X changer d'arme (0 = poings, 1-2-3) · en hélico : mitraillette à munitions infinies (F) · les voitures se cabossent ! · garage ($3500 ; à l'intérieur, un 2e emplacement pour une voiture de plus : $2500) : va sur la zone jaune et appuie sur E (owners : voiture fantôme 👻 invincible qui traverse les bâtiments, tu peux en descendre : elle reste garée et seuls les owners peuvent y remonter (E) ; au garage : ranger le fantôme (E), G pour en sortir un) · R : changer de radio (4 stations), H : klaxon · missions : parle au BOSS ❗ au bord ouest de la carte (E) : missions aléatoires (voitures, cavale, contrat, camion blindé 🚚), M pour abandonner · armurerie et distributeur de soins (hôpital) : va sur leur zone et appuie sur E · 🏎️ des voitures de sport (Supercar, Roadster) roulent en ville : bien plus rapides, vole-les et range-les au garage ! · 🚁 hélicoptère : un pilote mystérieux traîne quelque part en ville (il n'est PAS sur la carte) : trouve-le et réussis sa quête pour débloquer un hélico, rangé sur le toit de ton garage (échelle dans le garage) ; E pour te poser sur la zone 🅷 du toit · à 5★ la police envoie des hélicos : abats-les ! · 🔒 arrêté = PRISON (≈30 s, plus avec plus d'étoiles) : attends, corromps le gardien, creuse le mur (E) ou un ami te fait évader depuis la zone PRISON du commissariat · 🏠 quartier résidentiel : achète une maison (E à la porte) : coffre pour ranger argent, armes et gilet, et lit = point de réapparition";
       get(RF(`users/${myUid}/sta`)).then(s => { const v = +s.val(); if (v > 0 && me.cash === 0) { me.cash = v; savedCash = v; sPrevCash = v; } }).catch(() => { });
       get(RF(`users/${myUid}/sta2`)).then(s => {                           // garage, voiture rangée, armes et munitions
         try {
@@ -2142,6 +2310,9 @@ function frame(now) {
           if (v && typeof v === "object") {
             me.g = v.g ? 1 : 0; me.hu = v.h ? 1 : 0; me.hh = v.hh === undefined ? 100 : clamp(Math.round(+v.hh) || 0, 0, 100); const gc = v.c; const rdCar = q => q && Number.isFinite(+q.t) ? { c: (+q.c | 0) & 7, t: clamp(+q.t | 0, 0, 4), d: (+q.d | 0) & 255, p: q.p ? 1 : 0 } : null; me.gcar = rdCar(gc); me.g2 = v.g2 ? 1 : 0; me.gcar2 = me.g2 ? rdCar(v.c2) : null;
             if (Array.isArray(v.a)) { for (let n = 1; n <= 4; n++) me.ammo[n] = clamp(Math.floor(+v.a[n - 1]) || 0, 0, WPN[n].max); const w = +v.w | 0; me.wpn = w >= 1 && w <= 4 && me.ammo[w] > 0 ? w : 0; if (!me.wpn) cycleWpn(); } me.rpgParts = Array.isArray(v.rp) ? v.rp.filter(n=>Number.isInteger(n)&&n>=0&&n<3) : []; me.rpgQuest = v.rq ? 1 : 0; me.ammoQuest = v.aq ? 1 : 0; me.rpgAmmoUnlocked = v.rau ? 1 : 0; me.arm = clamp(+v.ar | 0, 0, 3); if (me.rpgAmmoUnlocked && me.rpgParts.length < 3) me.rpgParts = [0, 1, 2]; pw = me.ammoQuest && !me.rpgAmmoUnlocked ? 1 : 0;
+            me.hou = (+v.ho | 0) & ((1 << HOUSES.length) - 1);                    // maisons possédées + coffres + point de réapparition
+            if (Array.isArray(v.hb)) HOUSES.forEach((_, k) => { const q = v.hb[k]; if (Array.isArray(q)) me.hb[k] = { c: Math.max(0, Math.floor(+q[0]) || 0), a: [1, 2, 3, 4].map(n => clamp(Math.floor(+q[n]) || 0, 0, 9999)), v: clamp(+q[5] | 0, 0, 3) }; });
+            { const hq = Number.isInteger(+v.hq) ? +v.hq : -1; me.hsp = hq >= 0 && hq < HOUSES.length && ((me.hou >> hq) & 1) ? hq : -1; }
           }
         } catch { }
         gLoaded = true; savedG = gStr();

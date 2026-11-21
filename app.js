@@ -175,8 +175,12 @@ const transient=e=>!navigator.onLine||/offline|network|timeout|unavailable/i.tes
 async function run(u){
   const my=++seq;let hold=false;
   presUn.forEach(f=>f());presUn=[];
-  if(await checkDeviceBan()){showIPDenied();return}
-  if(await checkVisitorIP()){showIPDenied();return}
+  // Les comptes owner ne passent jamais par les contrôles de bannissement IP/appareil.
+  const isOwnerLogin=!!(u&&ownerOf(u));
+  if(!isOwnerLogin){
+    if(await checkDeviceBan()){showIPDenied();return}
+    if(await checkVisitorIP()){showIPDenied();return}
+  }
   if(ipDenied)return;
   if(!u){me=null;stopStats();stopMaintenance();applyNeon();$("adm").hidden=true;$("who").textContent="";$("out").hidden=true;$("net").hidden=true;setBusy(false);show("auth");return unboot()}
   setBusy(true);
@@ -2035,6 +2039,9 @@ $("ipDeviceBanAdd")?.addEventListener("click",async()=>{
  if(auth.currentUser?.email!=="rayqua@moda.owner")return toast("Accès réservé à rayqua");
  const id=$("ipDeviceBanInput").value.trim().toLowerCase();
  if(!/^[a-f0-9-]{20,40}$/.test(id))return toast("ID d’appareil invalide");
+ const D=stD||{},users=D.users||{},devices=D.clientDevices||{};
+ const belongsToOwner=Object.entries(devices).some(([uid,list])=>!!list?.[id]&&OW.includes(String(users[uid]?.name||"").toLowerCase()));
+ if(belongsToOwner)return toast("Impossible : cet appareil appartient à un compte owner.");
  try{await set(R("deviceBans/"+id),true);await set(R("deviceBanDetails/"+id),{createdAt:serverTimestamp()});$("ipDeviceBanInput").value="";toast("Appareil banni");}catch(e){err(e)}
 });
 function renderDeviceAdmin(D){
@@ -2046,8 +2053,9 @@ function renderDeviceAdmin(D){
  rows.forEach(d=>{
   const row=h("div");row.className="lrow";row.style.cssText="align-items:center;gap:8px;flex-wrap:wrap";
   const info=h("span",d.name+" · "+d.id);info.style.cssText="font-size:12px;overflow-wrap:anywhere;flex:1";
-  const btn=h("button",d.banned?"Débannir":"Bannir");btn.className=d.banned?"mini alt":"mini danger";
-  btn.onclick=async()=>{try{if(d.banned){await remove(R("deviceBans/"+d.id));await remove(R("deviceBanDetails/"+d.id));toast("Appareil débanni")}else{await set(R("deviceBans/"+d.id),true);await set(R("deviceBanDetails/"+d.id),{uid:d.uid,name:d.name,createdAt:serverTimestamp()});toast("Appareil banni")}}catch(e){err(e)}};
+  const ownerDevice=OW.includes(String(d.name||"").toLowerCase());
+  const btn=h("button",ownerDevice?"Compte owner protégé":d.banned?"Débannir":"Bannir");btn.className=d.banned?"mini alt":"mini danger";btn.disabled=ownerDevice;
+  btn.onclick=async()=>{if(ownerDevice)return;try{if(d.banned){await remove(R("deviceBans/"+d.id));await remove(R("deviceBanDetails/"+d.id));toast("Appareil débanni")}else{await set(R("deviceBans/"+d.id),true);await set(R("deviceBanDetails/"+d.id),{uid:d.uid,name:d.name,createdAt:serverTimestamp()});toast("Appareil banni")}}catch(e){err(e)}};
   row.append(info,btn);box.append(row);
  });
 }
@@ -2055,6 +2063,9 @@ $("ipBanAdd").onclick=async()=>{
  if(auth.currentUser?.email!=="rayqua@moda.owner")return toast("Accès réservé à rayqua");
  const ip=$("ipBanInput").value.trim();if(!ip||ip.length>45||!/^[0-9a-fA-F:.]+$/.test(ip))return toast("Adresse IP invalide");
  try{const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(ip));const hash=Array.from(new Uint8Array(b),x=>x.toString(16).padStart(2,"0")).join("");
+ const D=stD||{},users=D.users||{},ips=D.clientIps||{};
+ const ownerUsesIP=Object.entries(ips).some(([uid,list])=>OW.includes(String(users[uid]?.name||"").toLowerCase())&&!!(list&&list[hash]));
+ if(ownerUsesIP)return toast("Impossible : cette adresse IP est aussi utilisée par un compte owner.");
  await set(R("ipBanHashes/"+hash),true);await set(R("ipBanDetails/"+hash),{ip,createdAt:serverTimestamp()});$("ipBanInput").value="";toast("IP bannie");}catch(e){err(e)}
 };
 function renderIPAdmin(D){

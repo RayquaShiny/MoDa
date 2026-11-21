@@ -5,7 +5,7 @@
 <meta name="theme-color" content="var(--bg)">
 <!-- ⚠️ À CONSERVER À CHAQUE MISE À JOUR : à chaque nouvelle version (chaque modification), la version affichée doit faire +1.
      Changer le numéro aux 3 endroits, toujours identique : ce <meta name="moda-v">, `const VER` dans app.js, et `VERSION` dans sw.js. -->
-<meta name="moda-v" content="108"/>
+<meta name="moda-v" content="109"/>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -180,18 +180,14 @@ html.neon body::before,body[data-g]::before{display:none}
 html[data-season] header{position:relative;margin-bottom:12px}
 html[data-season] header::before,html[data-season] header::after{position:absolute;left:0;right:0;top:100%;height:16px;pointer-events:none;z-index:3;overflow:hidden;white-space:nowrap;font-size:13px;line-height:16px;letter-spacing:12px}
 html[data-season] header::before{content:none}
-html[data-season=autumn] header::after{content:"🍂🍁🍄🍂🎃🍁🍂🍁🍄🍂🍁🎃🍂🍁🍄🍂🍁🍂🎃🍁🍂🍁🍄🍂🍁🎃🍂🍁🍄🍂"}
-html[data-season=spring] header::after{content:"🌷🌸🌼🌿🌷🌸🌼🦋🌷🌸🌼🌿🌷🌸🌼🌿🌷🌸🌼🦋🌷🌸🌼🌿🌷🌸🌼🌿🌷🌸"}
-html[data-season=summer] header::after{content:"🌊🐚🌴🌊🏖️🌊🐚🌴🌊🐚🌊🌴🌊🐚🌴🌊🏖️🌊🐚🌴🌊🐚🌊🌴🌊🐚🌴🌊🏖️🌊"}
+html[data-season=autumn] header::after{content:"";background:radial-gradient(ellipse at 10px 8px,#ffb347 0 3px,transparent 4px),radial-gradient(ellipse at 30px 8px,#e4572e 0 3px,transparent 4px);background-size:40px 16px}
+html[data-season=spring] header::after{content:"";background:radial-gradient(circle at 10px 8px,#ff8fc7 0 3px,transparent 4px),radial-gradient(circle at 30px 8px,#b8f06a 0 3px,transparent 4px);background-size:40px 16px}
+html[data-season=summer] header::after{content:"";background:linear-gradient(165deg,transparent 35%,#3ec6ff 38% 48%,transparent 51%);background-size:32px 16px}
 html[data-season=winter] header::before,html[data-season=winter] header::after{content:"";height:14px;letter-spacing:0;background-size:80px 14px;background-repeat:repeat-x}
 html[data-season=winter] header::after{background-image:radial-gradient(circle at 10px 8px,#ff4d6d 4px,transparent 5px),radial-gradient(circle at 30px 8px,#ffd23f 4px,transparent 5px),radial-gradient(circle at 50px 8px,#3ee6c4 4px,transparent 5px),radial-gradient(circle at 70px 8px,#6ab7ff 4px,transparent 5px);filter:drop-shadow(0 0 4px #fff8);animation:lt 1.4s steps(1) infinite}
 html[data-season=winter] header::before{background-image:linear-gradient(#0008,#0008),radial-gradient(circle at 10px 8px,#3ee6c4 4px,transparent 5px),radial-gradient(circle at 30px 8px,#6ab7ff 4px,transparent 5px),radial-gradient(circle at 50px 8px,#ff4d6d 4px,transparent 5px),radial-gradient(circle at 70px 8px,#ffd23f 4px,transparent 5px);background-size:100% 1px,80px 14px,80px 14px,80px 14px,80px 14px;background-position:0 2px,0 0,0 0,0 0,0 0;filter:drop-shadow(0 0 4px #fff8);animation:lt 1.4s steps(1) infinite reverse}
 @keyframes lt{50%{opacity:.25}}
-html[data-season] header .logo::after{font-size:.8em}
-html[data-season=autumn] header .logo::after{content:" 🍁"}
-html[data-season=winter] header .logo::after{content:" ⛄"}
-html[data-season=spring] header .logo::after{content:" 🌷"}
-html[data-season=summer] header .logo::after{content:" 😎"}
+html[data-season] header .logo::after{content:none}
 /* bords des cartes : neige / feuilles / pétales / vagues */
 html[data-season] .panel{background-image:linear-gradient(var(--edge),var(--edge)),radial-gradient(circle at 50% 0,var(--edge) 6px,transparent 7px);background-size:100% 3px,16px 8px;background-repeat:no-repeat,repeat-x;background-position:0 0,0 0}
 
@@ -364,10 +360,10 @@ html.neon .adl{border-top-color:#ff1f4b33}
 /* Thème de saison : hémisphère nord, saisons météorologiques (déc-fév hiver, mars-mai printemps, juin-août été, sept-nov automne) */
 (function(){
   var S={
-    autumn:{n:"Automne",e:"🍂",tc:"#231410",fr:"🍂🍁🍄🍂🎃🍁🍂🍁🍄🍂"},
-    winter:{n:"Hiver",e:"❄️",tc:"#0f1e33",fr:""},
-    spring:{n:"Printemps",e:"🌸",tc:"#1b2b22",fr:"🌷🌸🌼🌿🌷🌸🌼🦋🌷🌸"},
-    summer:{n:"Été",e:"☀️",tc:"#0d2a3a",fr:"🌊🐚🌴🌊🏖️🌊🐚🌴🌊🐚"}
+    autumn:{n:"Automne",e:"",tc:"#231410",fr:"🍂🍁🍄🍂🎃🍁🍂🍁🍄🍂"},
+    winter:{n:"Hiver",e:"",tc:"#0f1e33",fr:""},
+    spring:{n:"Printemps",e:"",tc:"#1b2b22",fr:"🌷🌸🌼🌿🌷🌸🌼🦋🌷🌸"},
+    summer:{n:"Été",e:"",tc:"#0d2a3a",fr:"🌊🐚🌴🌊🏖️🌊🐚🌴🌊🐚"}
   };
   /* Icônes de l'app selon la saison : onglet, écran d'accueil iPhone (apple-touch-icon) et manifeste (Android/Chrome) */
   var mfUrl=null;

@@ -750,6 +750,7 @@ export function createStaClient(env) {
     x.save(); x.translate(px, py); x.scale(s, s);
     if (n === 1) { fr(-8, -3, 16, 5, "#15151a"); fr(-8, 2, 5, 7, "#15151a"); fr(-6, -3, 10, 2, "#3a3a44"); }
     else if (n === 2) { fr(-13, -3, 26, 5, "#15151a"); fr(-2, 2, 4, 9, "#15151a"); fr(-18, -2, 6, 3, "#15151a"); fr(-10, -3, 14, 2, "#3a3a44"); }
+    else if (n === 4) { fr(-16, -4, 30, 8, "#3d4a2f"); fr(-16, -4, 30, 2, "#566644"); fr(-19, -5, 5, 10, "#15151a"); fr(-3, 4, 4, 7, "#15151a"); fr(8, -5, 3, 10, "#8b8b95"); x.fillStyle = "#b3261e"; x.beginPath(); x.moveTo(14, -4); x.lineTo(22, 0); x.lineTo(14, 4); x.fill(); }
     else { fr(-4, -3, 22, 3, "#15151a"); fr(-20, -3, 17, 6, "#7a4a22"); fr(-4, 0, 14, 2, "#3a3a44"); }
     x.restore();
   }
@@ -1516,6 +1517,7 @@ function drawPick(p, now) {                                                     
   x.save(); x.translate(p.x, p.y + b); x.rotate(-.35);
   if (p.t === 1) { x.fillStyle = "#101010"; x.fillRect(-6, -3, 12, 5); x.fillStyle = "#6c6c76"; x.fillRect(-6, -3, 12, 2); x.fillStyle = "#3a2a1a"; x.fillRect(-5, 1, 4, 5); }
   else if (p.t === 2) { x.fillStyle = "#101010"; x.fillRect(-8, -3, 16, 5); x.fillStyle = "#5a5a64"; x.fillRect(-8, -3, 16, 2); x.fillStyle = "#101010"; x.fillRect(-2, 2, 4, 6); x.fillStyle = "#3a2a1a"; x.fillRect(-9, -2, 4, 4); }
+  else if (p.t === 4) { x.fillStyle = "#3d4a2f"; x.fillRect(-10, -3, 20, 6); x.fillStyle = "#566644"; x.fillRect(-10, -3, 20, 1.6); x.fillStyle = "#15151a"; x.fillRect(-12, -3.6, 3, 7.2); x.fillRect(-2, 3, 3, 4); x.fillStyle = "#8b8b95"; x.fillRect(5, -3.6, 2, 7.2); x.fillStyle = "#b3261e"; x.beginPath(); x.moveTo(10, -3); x.lineTo(15, 0); x.lineTo(10, 3); x.fill(); }
   else { x.fillStyle = "#5b3a1e"; x.fillRect(-9, -2, 7, 5); x.fillStyle = "#101010"; x.fillRect(-3, -3, 12, 3); x.fillStyle = "#8b8b95"; x.fillRect(-3, -3, 12, 1.5); }
   x.restore();
 }
@@ -1618,8 +1620,8 @@ function drawWalker(px, py, a, body, skin, ph, wpn, flash, hat) {
   x.fillStyle = "#101010"; x.fillRect(-3.6, -6.8, 7.2, 13.6); x.fillStyle = body; x.fillRect(-2.8, -6, 5.6, 12);                   // épaules / haut
   if (wpn) {                                                                                                                        // bras tendus + arme
     x.fillStyle = sk; x.fillRect(1, -3.8, 6, 2.2); x.fillRect(1, 1.6, 6, 2.2);
-    if (wpn === 1) { x.fillStyle = "#111"; x.fillRect(6, -1, 6, 2); } else if (wpn === 2) { x.fillStyle = "#111"; x.fillRect(5, -1.3, 10, 2.6); x.fillRect(8, 1.2, 2, 3); } else { x.fillStyle = "#5b3a1e"; x.fillRect(4, -1.3, 4, 2.6); x.fillStyle = "#8b8b95"; x.fillRect(8, -1, 9, 2); }
-    if (flash) { const tx = wpn === 1 ? 12 : wpn === 2 ? 15 : 17; x.fillStyle = "#fff2a8"; x.fillRect(tx, -2.5, 4, 5); x.fillStyle = "#ff9d1e"; x.fillRect(tx + 1, -1, 6, 2); }
+    if (wpn === 1) { x.fillStyle = "#111"; x.fillRect(6, -1, 6, 2); } else if (wpn === 2) { x.fillStyle = "#111"; x.fillRect(5, -1.3, 10, 2.6); x.fillRect(8, 1.2, 2, 3); } else if (wpn === 4) { x.fillStyle = "#3d4a2f"; x.fillRect(-2, -2.2, 17, 4.4); x.fillStyle = "#566644"; x.fillRect(-2, -2.2, 17, 1.4); x.fillStyle = "#15151a"; x.fillRect(-4, -2.8, 3, 5.6); x.fillRect(5, 2.2, 2, 3); x.fillStyle = "#8b8b95"; x.fillRect(11, -2.8, 2, 5.6); x.fillStyle = "#b3261e"; x.beginPath(); x.moveTo(15, -2.4); x.lineTo(20, 0); x.lineTo(15, 2.4); x.fill(); } else { x.fillStyle = "#5b3a1e"; x.fillRect(4, -1.3, 4, 2.6); x.fillStyle = "#8b8b95"; x.fillRect(8, -1, 9, 2); }
+    if (flash) { const tx = wpn === 1 ? 12 : wpn === 2 ? 15 : wpn === 4 ? 20 : 17; x.fillStyle = "#fff2a8"; x.fillRect(tx, -2.5, 4, 5); x.fillStyle = "#ff9d1e"; x.fillRect(tx + 1, -1, 6, 2); if (wpn === 4) { x.fillStyle = "rgba(255,200,120,.8)"; x.fillRect(-12, -3, 8, 6); x.fillStyle = "rgba(160,160,160,.7)"; x.fillRect(-18, -2, 6, 4); } }
   } else if (flash) {                                                                                                                // coup de poing : un bras part vers l'avant (gauche / droite en alternance)
     const pr = me.fc & 1 ? 1 : -1; x.fillStyle = sk; x.fillRect(1, pr * 3.2 - 1.1, 9, 2.2); x.beginPath(); x.arc(10.5, pr * 3.2, 2.4, 0, 7); x.fill(); x.fillRect(-1, -pr * 3.2 - 1.1, 3.2, 2.4);
   } else { x.fillStyle = sk; x.fillRect(sw * 2.4 - 1.5, -7.6, 3.2, 2.4); x.fillRect(-sw * 2.4 - 1.5, 5.2, 3.2, 2.4); }              // bras qui balancent

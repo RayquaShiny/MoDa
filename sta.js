@@ -96,7 +96,10 @@ export function createStaClient(env) {
   // --- simulation de l'hôte ---
   let cops = [], helis = [], heliCd = 0, hostOn = false, peds = [], cars = [], nid = 1, evs = [], evId = 0, lastHs = {}, spawnCd = 0, streamCd = 0, pubAt = 0, hostT = 0, cleanCd = 0, lastGn = {};
   // --- moi ---
-  const me = { x: 0, y: 0, a: 0, v: 0, vid: 0, hp: 100, cash: 0, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, msg: "", hurt: 0, bust: 0, carT: 99, wpn: 0, ammo: [0, 0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100, rpgParts: [], rpgQuest: 0, ammoQuest: 0, rpgAmmoUnlocked: 0 };
+  const me = { x: 0, y: 0, a: 0, v: 0, vid: 0, hp: 100, cash: 0, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, msg: "", hurt: 0, bust: 0, carT: 99, wpn: 0, ammo: [0, 0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100, rpgParts: [], rpgQuest: 0, ammoQuest: 0, rpgAmmoUnlocked: 0, arm: 0 };
+  // --- gilets pare-balles : un seul gilet porté (me.arm = 0 aucun · 1 · 2 · 3), il réduit TOUS les dégâts reçus (balles, explosions, chocs). Perdu à la mort comme les armes.
+  const VEST = [{ n: "GILET −10%", r: .10, p: 250 }, { n: "GILET −25%", r: .25, p: 600 }, { n: "GILET −50%", r: .50, p: 1200 }];
+  const armK = () => 1 - (me.arm ? VEST[me.arm - 1].r : 0);
   let keys = new Set(), stick = null, useReq = 0, job = null, myCol = 0, cam = { x: 0, y: 0, z: 1.2 }, sentAt = 0, sentStr = "", savedCash = -1, saveAt = 0, tNow = 0, hitDone = new Set(), gLoaded = false, savedG = "";
   let inn = null, mis = null, tgt = null, lastMk = "", shop = "", mmBase = null;   // mission en cours, cible à éliminer, boutique ouverte
   let ejected = [], splats = [], floats = [], pendingPedHits = new Map(), brakeId = null, fireKey = false, fireId = null, killQ = [], carQ = [], killAt = 0, tracers = [], rockets = [], sparks = [], booms = [], wrecks = [], pickT = new Map(), lastFc = {}, lastCs = {};
@@ -332,14 +335,14 @@ export function createStaClient(env) {
         const ang = e[4], dx = Math.cos(ang), dy = Math.sin(ang), ox = e[1] + dx * 10, oy = e[2] + dy * 10, en = wallEnd(ox, oy, ang, 330), cd = dCops.get(e[5]);
         tracers.push({ x0: ox, y0: oy, x1: ox + dx * en, y1: oy + dy * en, t: tNow }); if (cd) cd.flash = tNow;
         if (Math.hypot(e[1] - me.x, e[2] - me.y) < 450) SND.shot(1, dv(e[1], e[2], 450));
-        if (me.dead <= 0 && me.vid !== HELI) { const rx = me.x - ox, ry = me.y - oy, f = rx * dx + ry * dy; if (f > 0 && f < en && Math.abs(-rx * dy + ry * dx) < (me.vid ? 15 : 8)) { me.hp -= 9 * (me.vid ? .6 : 1); beep(150, .06, "square", .05, 50); navigator.vibrate && navigator.vibrate(40); if (me.vid && Math.random() < .35) dent(ang + Math.PI, 1); } }
+        if (me.dead <= 0 && me.vid !== HELI) { const rx = me.x - ox, ry = me.y - oy, f = rx * dx + ry * dy; if (f > 0 && f < en && Math.abs(-rx * dy + ry * dx) < (me.vid ? 15 : 8)) { me.hp -= 9 * (me.vid ? .6 : 1) * armK(); beep(150, .06, "square", .05, 50); navigator.vibrate && navigator.vibrate(40); if (me.vid && Math.random() < .35) dent(ang + Math.PI, 1); } }
         return;
       }
       if (e[3] === 5) {                                                   // hélico de police : mitrailleuse, tir du ciel (aucun mur ne l'arrête)
         const ang = e[4], dx = Math.cos(ang), dy = Math.sin(ang), ox = e[1] + dx * 24, oy = e[2] + dy * 24, en = 400, hd = dHelis.get(e[5]);
         tracers.push({ x0: ox, y0: oy, x1: ox + dx * en, y1: oy + dy * en, t: tNow }); if (hd) hd.fl = tNow;
         if (Math.hypot(e[1] - me.x, e[2] - me.y) < 600) SND.shot(2, dv(e[1], e[2], 600));
-        if (me.dead <= 0 && !inn) { const rx = me.x - ox, ry = me.y - oy, f = rx * dx + ry * dy; if (f > 0 && f < en && Math.abs(-rx * dy + ry * dx) < (me.vid ? 16 : 8)) { if (me.vid === HELI) me.hh -= 5; else me.hp -= 7 * (me.vid ? .7 : 1); beep(150, .06, "square", .05, 50); navigator.vibrate && navigator.vibrate(40); if (me.vid && me.vid !== HELI && Math.random() < .35) dent(ang + Math.PI, 1); } }
+        if (me.dead <= 0 && !inn) { const rx = me.x - ox, ry = me.y - oy, f = rx * dx + ry * dy; if (f > 0 && f < en && Math.abs(-rx * dy + ry * dx) < (me.vid ? 16 : 8)) { if (me.vid === HELI) me.hh -= 5; else me.hp -= 7 * (me.vid ? .7 : 1) * armK(); beep(150, .06, "square", .05, 50); navigator.vibrate && navigator.vibrate(40); if (me.vid && me.vid !== HELI && Math.random() < .35) dent(ang + Math.PI, 1); } }
         return;
       }
       if (e[3] === 6) {                                                   // hélico abattu : explosion + épave qui brûle
@@ -371,7 +374,7 @@ export function createStaClient(env) {
         else tracers.push({ x0: ox, y0: oy, x1: ox + dx * e, y1: oy + dy * e, t: tNow });
         if (me.dead > 0) continue;
         const rx = me.x - ox, ry = me.y - oy, f = rx * dx + ry * dy;
-        if (f > 0 && f < e && Math.abs(-rx * dy + ry * dx) < (me.vid ? 15 : 8)) { if (me.vid === HELI) me.hh -= W.pvp * .6; else me.hp -= W.pvp * (me.vid ? .6 : 1); beep(150, .05, "square", .04, 50); if (me.vid && Math.random() < .3) dent(ang + Math.PI, 1); }
+        if (f > 0 && f < e && Math.abs(-rx * dy + ry * dx) < (me.vid ? 15 : 8)) { if (me.vid === HELI) me.hh -= W.pvp * .6; else me.hp -= W.pvp * (me.vid ? .6 : 1) * armK(); beep(150, .05, "square", .04, 50); if (me.vid && Math.random() < .3) dent(ang + Math.PI, 1); }
       }
     }
   }
@@ -379,8 +382,8 @@ export function createStaClient(env) {
   // ================= MOI =================
   const col = i => CCOL[(i | 0) % 8];
   function spawnAt(p) { me.hz = 0; me.land = 0; me.x = p[0] + rr(-30, 30); me.y = p[1]; me.vid = 0; me.v = 0; me.hp = 100; me.dead = 0; me.heat = 0; me.bust = 0; job = null; cam.x = me.x; cam.y = me.y; }
-  function die(why, loss, where) { pwFail("tu es tombé"); me.hz = 0; me.land = 0; shop = ""; if (mis) missionFail("tu es tombé"); me.dead = 2.2; me.msg = why; me.wpn = 0; me.ammo = [0, 0, 0, 0, 0]; me.vid = 0; me.v = 0; me.heat = 0; me.cash = Math.floor(me.cash * (1 - loss)); me.where = where; SND.wasted(); }
-  const gStr = () => JSON.stringify({ g: me.g, c: me.gcar, g2: me.g2 ? 1 : 0, c2: me.gcar2, a: me.ammo.slice(1), w: me.wpn, h: me.hu ? 1 : 0, hh: Math.round(clamp(me.hh, 0, 100)), rp: me.rpgParts, rq: me.rpgQuest, aq: me.ammoQuest, rau: me.rpgAmmoUnlocked });
+  function die(why, loss, where) { pwFail("tu es tombé"); me.hz = 0; me.land = 0; shop = ""; if (mis) missionFail("tu es tombé"); me.dead = 2.2; me.msg = why; me.wpn = 0; me.arm = 0; me.ammo = [0, 0, 0, 0, 0]; me.vid = 0; me.v = 0; me.heat = 0; me.cash = Math.floor(me.cash * (1 - loss)); me.where = where; SND.wasted(); }
+  const gStr = () => JSON.stringify({ g: me.g, c: me.gcar, g2: me.g2 ? 1 : 0, c2: me.gcar2, a: me.ammo.slice(1), w: me.wpn, h: me.hu ? 1 : 0, hh: Math.round(clamp(me.hh, 0, 100)), rp: me.rpgParts, rq: me.rpgQuest, aq: me.ammoQuest, rau: me.rpgAmmoUnlocked, ar: me.arm | 0 });
   function persist(force) {                                               // argent (users/<uid>/sta) + garage, voiture rangée, armes et munitions (users/<uid>/sta2)
     const cash = Math.round(me.cash);
     if (force || cash !== savedCash) { savedCash = cash; set(RF(`users/${myUid}/sta`), cash).catch(() => { }); }
@@ -404,7 +407,7 @@ export function createStaClient(env) {
   // ================= HÉLICOPTÈRE DU JOUEUR =================
   // Débloqué par la quête du PILOTE (me.hu, sauvegardé dans users/<uid>/sta2). Il se range sur le toit du garage :
   // on le sort par l'échelle du garage (comme la voiture), on ne peut le poser que sur l'héliport (zone 🅷), jamais dans la rue.
-  const hurtBoom = () => { if (me.vid === HELI) me.hh -= 25; else me.hp -= 30; };   // explosion proche : la coque encaisse en hélico
+  const hurtBoom = () => { if (me.vid === HELI) me.hh -= 25; else me.hp -= 30 * armK(); };   // explosion proche : la coque encaisse en hélico
   function heliTake() {
     if (!me.hu || !me.g) return;
     if (me.hh < 15) { toast("L'hélico est trop abîmé : fais-le réparer chez Rico (atelier du garage)"); return; }
@@ -538,6 +541,7 @@ export function createStaClient(env) {
   // --- RPG : vraie roquette. Elle avance image par image et explose là où sont RÉELLEMENT les cibles à cet instant
   // (plus de calcul instantané au moment du tir : si la voiture roule, la roquette la suit dans le monde).
   const RK_SPEED = 620, RK_STEP = 5;
+  const RK_SELF_R = 62, RK_SELF_DMG = 65;                                  // dégâts sur soi : max à bout portant, 0 à RK_SELF_R px du point d'impact
   function rocketProbe(q) {
     if (inBld(q.x, q.y)) return 2;
     for (const [id, d] of dCars) { if (d.m === "t" || (q.own && id === me.vid)) continue; if (Math.hypot(d.x - q.x, d.y - q.y) < 20) return 1; }
@@ -555,8 +559,16 @@ export function createStaClient(env) {
     booms.push({ x: q.x, y: q.y, t: now, rpg: 1 }); SND.boom(dv(q.x, q.y, 900)); sparks.push({ x: q.x, y: q.y, t: now });
     const W = WPN[4];
     if (!q.own) {                                                            // roquette d'un autre joueur : je prends les dégâts si je suis dans le souffle
-      if (me.dead <= 0 && Math.hypot(me.x - q.x, me.y - q.y) < (me.vid ? 34 : 28)) { if (me.vid === HELI) me.hh -= W.pvp * .6; else me.hp -= W.pvp * (me.vid ? .6 : 1); beep(150, .05, "square", .04, 50); if (me.vid && Math.random() < .3) dent(q.ang + Math.PI, 1); }
+      if (me.dead <= 0 && Math.hypot(me.x - q.x, me.y - q.y) < (me.vid ? 34 : 28)) { if (me.vid === HELI) me.hh -= W.pvp * .6; else me.hp -= W.pvp * (me.vid ? .6 : 1) * armK(); beep(150, .05, "square", .04, 50); if (me.vid && Math.random() < .3) dent(q.ang + Math.PI, 1); }
       return;
+    }
+    if (me.dead <= 0 && me.vid !== GHOST) {                                  // ma propre explosion : tirer à bout portant fait mal (linéaire selon la distance)
+      const ds = Math.hypot(me.x - q.x, me.y - q.y);
+      if (ds < RK_SELF_R) {
+        const dm = RK_SELF_DMG * (1 - ds / RK_SELF_R) * (me.vid ? .6 : 1);
+        if (me.vid === HELI) me.hh -= dm; else me.hp -= dm * armK();
+        if (dm >= 1) { floats.push({ x: me.x, y: me.y - 24, t: now, s: `💥 −${Math.round(dm)}`, c: "#ff5a4d" }); beep(130, .08, "square", .05, 45); if (me.vid && me.vid !== HELI && Math.random() < .5) dent(q.ang + Math.PI, 1); }
+      }
     }
     const pushCar = (id, v) => { me.lastCar = id; me.lastCarT = tNow; const l = carQ[carQ.length - 1]; if (l && l[0] === id) l[1] += v; else carQ.push([id, v]); if (carQ.length > 8) carQ.shift(); };
     const near = (d, r) => Math.hypot(d.x - q.x, d.y - q.y) < r;
@@ -601,7 +613,7 @@ export function createStaClient(env) {
   // --- poings 👊 : portée courte, dans un cône devant toi. Piéton = 3 coups, policier = 10 dégâts/coup, cible de mission aussi.
   const FIST = { rate: .38, rng: 30, arc: .95, dm: 10, heat: .1 }, pedPunch = new Map();
   function punch(now) {
-    me.cd = FIST.rate; me.flash = .16; me.fc = (me.fc + 1) % 1000; me.fw = 0; me.heat = Math.min(5, me.heat + .02);
+    me.cd = me.cdMax = FIST.rate; me.flash = .16; me.fc = (me.fc + 1) % 1000; me.fw = 0; me.heat = Math.min(5, me.heat + .02);
     const dx = Math.cos(me.a), dy = Math.sin(me.a); let best = null, bd = FIST.rng;
     const cand = (k, id, d, rad) => { const rx = d.x - me.x, ry = d.y - me.y, dist = Math.hypot(rx, ry) - (rad || 0); if (dist > bd || dist < -rad - 4) return; const an = Math.atan2(ry, rx), df = Math.abs(Math.atan2(Math.sin(an - me.a), Math.cos(an - me.a))); if (df < FIST.arc || dist < 8) { bd = dist; best = [k, id, d]; } };
     for (const [id, d] of dPeds) if (!hitDone.has(id)) cand("p", id, d, 6);
@@ -632,7 +644,7 @@ export function createStaClient(env) {
       if (heli || (me.wpn && me.ammo[me.wpn] > 0)) {                       // en hélico : mitraillette à munitions INFINIES (uniquement là) ; à pied / en voiture : munitions normales
         const wi = heli ? 2 : me.wpn, W = WPN[wi], dx = Math.cos(me.a), dy = Math.sin(me.a), ox = me.x + dx * (me.vid ? 24 : 11), oy = me.y + dy * (me.vid ? 24 : 11);
         if (!heli) me.ammo[wi]--;
-        me.cd = wi === 4 ? .92 : W.rate; me.fc = (me.fc + 1) % 1000; me.fw = wi; me.flash = wi === 4 ? .18 : .07; me.heat = Math.min(5, me.heat + W.heat);
+        me.cd = me.cdMax = wi === 4 ? .92 : W.rate; me.fc = (me.fc + 1) % 1000; me.fw = wi; me.flash = wi === 4 ? .18 : .07; me.heat = Math.min(5, me.heat + W.heat);
         for (let q = 0; q < W.pel; q++) {
            const ang = me.a + rr(-W.spr, W.spr);
            if (wi === 4) { rockets.push({ own: 1, x: ox, y: oy, dx: Math.cos(ang), dy: Math.sin(ang), ang, d: 0, max: W.rng, t: now, done: 0 }); continue; }   // RPG : vraie roquette qui vole
@@ -666,8 +678,14 @@ export function createStaClient(env) {
     const had = me.ammo[a.n] > 0; me.cash -= a.p; me.ammo[a.n] = Math.min(WP.max, me.ammo[a.n] + WP.ammo); if (!had || !me.wpn) me.wpn = a.n; me.gunT = tNow;
     floats.push({ x: me.x, y: me.y - 22, t: tNow, s: `🔫 ${WP.n} +${WP.ammo} −$${a.p}`, c: "#ffe14d" }); beep(880, .1, "triangle", .06); persist(true);
   }
+  function buyVest(t) {
+    if (me.arm >= t) { toast(me.arm === t ? "Tu portes déjà ce gilet" : "Tu portes déjà un meilleur gilet"); return; }
+    const v = VEST[t - 1]; if (me.cash < v.p) { toast(`Il te faut $${v.p}`); return; }
+    me.cash -= v.p; me.arm = t; floats.push({ x: me.x, y: me.y - 22, t: tNow, s: `🛡️ ${v.n} −$${v.p}`, c: "#9fd0ff" }); beep(700, .1, "triangle", .06); persist(true);
+  }
+  const vestRows = rows => shop !== "arms" ? rows : rows.concat(VEST.map((v, k) => { const t = k + 1; return { ic: 10 + t, nm: v.n, sub: `−${Math.round(v.r * 100)}% dégâts`, l: `${rows.length + t} · ${v.n}`, r: me.arm === t ? "ÉQUIPÉ" : me.arm > t ? "—" : `${v.p}`, ok: me.arm < t && me.cash >= v.p, f: () => buyVest(t) }; }));   // gilets : en bas du menu de l'armurerie
   const shopItems = () => {
-    if (shop === "arms" || shop === "bm") return (shop === "bm" ? SHOP_BM : SHOP_ARMS).map(a => { const WP = WPN[a.n], full = me.ammo[a.n] >= WP.max, locked = a.n === 4 && (!me.rpgAmmoUnlocked || me.rpgParts.length < 3); return { l: `${a.n} · ${WP.n} +${WP.ammo}`, r: locked ? "VERROUILLÉ" : full ? "PLEIN" : `${a.p}`, ok: !locked && !full && me.cash >= a.p, f: () => buyArm(a) }; });
+    if (shop === "arms" || shop === "bm") return vestRows((shop === "bm" ? SHOP_BM : SHOP_ARMS).map(a => { const WP = WPN[a.n], full = me.ammo[a.n] >= WP.max, locked = a.n === 4 && (!me.rpgAmmoUnlocked || me.rpgParts.length < 3); return { ic: a.n, nm: WP.n, sub: `+${WP.ammo} (${me.ammo[a.n]}/${WP.max})`, bar: me.ammo[a.n] / WP.max, l: `${a.n} · ${WP.n} +${WP.ammo}`, r: locked ? "VERROUILLÉ" : full ? "PLEIN" : `${a.p}`, ok: !locked && !full && me.cash >= a.p, f: () => buyArm(a) }; }));
     if (shop === "garage") {
       const hp2 = Math.ceil((100 - clamp(me.hh, 0, 100)) * 10), out = [];
       [[1, me.gcar], [2, me.gcar2]].forEach(([sl, g]) => {
@@ -684,17 +702,39 @@ export function createStaClient(env) {
   };
   const shopPick = i => { const it = shopItems()[i]; if (it) it.f(); };
   const SH = { pw: 380, py: 80 };
-  function shopHit(p) {                                                   // -1 : hors du panneau · -2 : croix · -3 : panneau (rien) · ≥0 : ligne
-    const n = shopItems().length, ph = 84 + n * 46, px = W / 2 - SH.pw / 2;
-    if (p.x < px || p.x > px + SH.pw || p.y < SH.py || p.y > SH.py + ph) return -1;
-    if (p.x > px + SH.pw - 44 && p.y < SH.py + 42) return -2;
-    for (let i = 0; i < n; i++) { const ry = SH.py + 46 + i * 46; if (p.y >= ry && p.y <= ry + 38) return i; }
+  // armurerie et camion : une CARTE par arme / gilet (grande icône, nom, munitions, barre de stock, prix) · garage : liste classique
+  function shopLay() {
+    const n = shopItems().length, g = shop === "arms" || shop === "bm";
+    if (!g) return { g, n, pw: SH.pw, ph: 84 + n * 46, px: W / 2 - SH.pw / 2 };
+    const cols = Math.min(n, 3), rows = Math.ceil(n / cols), pw = Math.max(270, cols * 110 + (cols - 1) * 8 + 28);
+    return { g, n, cols, rows, pw, ph: 46 + rows * 136 + 30, px: W / 2 - pw / 2 };
+  }
+  function shopCard(L, i) { const gw = L.cols * 110 + (L.cols - 1) * 8; return { x: L.px + (L.pw - gw) / 2 + (i % L.cols) * 118, y: SH.py + 46 + Math.floor(i / L.cols) * 136, w: 110, h: 128 }; }
+  function shopHit(p) {                                                   // -1 : hors du panneau · -2 : croix · -3 : panneau (rien) · ≥0 : ligne / carte
+    const L = shopLay();
+    if (p.x < L.px || p.x > L.px + L.pw || p.y < SH.py || p.y > SH.py + L.ph) return -1;
+    if (p.x > L.px + L.pw - 44 && p.y < SH.py + 42) return -2;
+    if (L.g) { for (let i = 0; i < L.n; i++) { const c = shopCard(L, i); if (p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h) return i; } return -3; }
+    for (let i = 0; i < L.n; i++) { const ry = SH.py + 46 + i * 46; if (p.y >= ry && p.y <= ry + 38) return i; }
     return -3;
   }
   function drawShop(now) {
-    const items = shopItems(), pw = SH.pw, py = SH.py, ph = 84 + items.length * 46, px = W / 2 - pw / 2, zc = shop === "bm" ? "#b07bff" : (ZONES[shop] || ROOMS[shop]).c;
+    const items = shopItems(), L = shopLay(), pw = L.pw, py = SH.py, ph = L.ph, px = L.px, zc = shop === "bm" ? "#b07bff" : (ZONES[shop] || ROOMS[shop]).c;
     x.fillStyle = "rgba(10,10,16,.9)"; x.fillRect(px, py, pw, ph); x.strokeStyle = zc; x.lineWidth = 3; x.strokeRect(px, py, pw, ph);
     txt(shop === "garage" ? "🔧 ATELIER DE RICO" : shop === "bm" ? "🚚 LE CAMION" : "🔫 ARMURERIE", W / 2, py + 30, 20, zc); txt("✖", px + pw - 22, py + 28, 18, "#fff");
+    if (L.g) {
+      items.forEach((it, i) => {
+        const c = shopCard(L, i), cx = c.x + c.w / 2, dim = it.ok ? "#fff" : "#8a8a95";
+        x.fillStyle = it.ok ? "rgba(255,255,255,.14)" : "rgba(255,255,255,.05)"; x.fillRect(c.x, c.y, c.w, c.h); x.strokeStyle = it.ok ? zc : "#555"; x.lineWidth = 1.5; x.strokeRect(c.x, c.y, c.w, c.h);
+        txt(String(i + 1), c.x + 9, c.y + 16, 12, it.ok ? zc : "#8a8a95", "left");                                                       // numéro = touche du clavier
+        x.save(); x.beginPath(); x.rect(c.x + 2, c.y + 4, c.w - 4, 66); x.clip(); x.globalAlpha = it.ok ? 1 : .45; wIcon(it.ic, cx, c.y + 38, 1.7); x.restore();   // grande icône (grisée si indisponible)
+        txt(it.nm, cx, c.y + 80, 11, dim); txt(it.sub, cx, c.y + 94, 10, "#b8b8c4");
+        if (it.bar !== undefined) { x.fillStyle = "#000"; x.fillRect(c.x + 12, c.y + 100, c.w - 24, 6); x.fillStyle = it.bar >= 1 ? "#3ee62f" : "#ff9d1e"; x.fillRect(c.x + 13, c.y + 101, (c.w - 26) * clamp(it.bar, 0, 1), 4); }   // stock de munitions
+        txt(/^\d+$/.test(it.r) ? `$${it.r}` : it.r, cx, c.y + 121, 13, it.ok ? "#ffe14d" : "#8a8a95");
+      });
+      txt(`$${Math.round(me.cash)}${TOUCH ? "" : " · E / ÉCHAP : FERMER"}`, W / 2, py + ph - 12, 13, "#ffe14d");
+      return;
+    }
     items.forEach((it, i) => {
       const ry = py + 46 + i * 46; x.fillStyle = it.ok ? "rgba(255,255,255,.14)" : "rgba(255,255,255,.05)"; x.fillRect(px + 14, ry, pw - 28, 38); x.strokeStyle = it.ok ? zc : "#555"; x.lineWidth = 1.5; x.strokeRect(px + 14, ry, pw - 28, 38);
       txt(it.l, px + 26, ry + 25, 14, it.ok ? "#fff" : "#8a8a95", "left"); txt(it.r, px + pw - 26, ry + 25, 14, it.ok ? "#ffe14d" : "#8a8a95", "right");
@@ -797,6 +837,11 @@ export function createStaClient(env) {
     if (n === 1) { fr(-8, -3, 16, 5, "#15151a"); fr(-8, 2, 5, 7, "#15151a"); fr(-6, -3, 10, 2, "#3a3a44"); }
     else if (n === 2) { fr(-13, -3, 26, 5, "#15151a"); fr(-2, 2, 4, 9, "#15151a"); fr(-18, -2, 6, 3, "#15151a"); fr(-10, -3, 14, 2, "#3a3a44"); }
     else if (n === 4) { fr(-16, -4, 30, 8, "#3d4a2f"); fr(-16, -4, 30, 2, "#566644"); fr(-19, -5, 5, 10, "#15151a"); fr(-3, 4, 4, 7, "#15151a"); fr(8, -5, 3, 10, "#8b8b95"); x.fillStyle = "#b3261e"; x.beginPath(); x.moveTo(14, -4); x.lineTo(22, 0); x.lineTo(14, 4); x.fill(); }
+    else if (n >= 11) {                                                   // gilet pare-balles : bouclier (bleu · or · rouge selon le niveau)
+      x.fillStyle = "#15151a"; x.beginPath(); x.moveTo(-11, -11); x.lineTo(11, -11); x.lineTo(11, 2); x.quadraticCurveTo(11, 11, 0, 15); x.quadraticCurveTo(-11, 11, -11, 2); x.closePath(); x.fill();
+      x.fillStyle = ["#7f9bb3", "#e0a93b", "#b3261e"][n - 11]; x.beginPath(); x.moveTo(-9, -9); x.lineTo(9, -9); x.lineTo(9, 2); x.quadraticCurveTo(9, 9, 0, 12.5); x.quadraticCurveTo(-9, 9, -9, 2); x.closePath(); x.fill();
+      fr(-1, -9, 2, 21, "rgba(0,0,0,.25)"); fr(-9, -2, 18, 2, "rgba(0,0,0,.25)");
+    }
     else { fr(-4, -3, 22, 3, "#15151a"); fr(-20, -3, 17, 6, "#7a4a22"); fr(-4, 0, 14, 2, "#3a3a44"); }
     x.restore();
   }
@@ -1274,7 +1319,7 @@ export function createStaClient(env) {
     for (const [u, p] of activeP()) if (u !== myUid && p.vid && p.vid !== HELI) ot.push([dP.get(u) ? dP.get(u).x : p.x, dP.get(u) ? dP.get(u).y : p.y, p.v, "u"]);
     for (const [ox, oy, ov, om] of ot) {
       const dx = me.x - ox, dy = me.y - oy, d = Math.hypot(dx, dy);
-      if (!me.vid) { if (ov > 50 && d < 19 && me.hurt <= 0) { me.hp -= Math.min(60, ov / 6); me.hurt = .6; me.x += dx / (d || 1) * 18; me.y += dy / (d || 1) * 18; beep(90, .15, "sawtooth", .05, 40); navigator.vibrate && navigator.vibrate(80); } }
+      if (!me.vid) { if (ov > 50 && d < 19 && me.hurt <= 0) { me.hp -= Math.min(60, ov / 6) * armK(); me.hurt = .6; me.x += dx / (d || 1) * 18; me.y += dy / (d || 1) * 18; beep(90, .15, "sawtooth", .05, 40); navigator.vibrate && navigator.vibrate(80); } }
       else if (me.vid !== GHOST && me.vid !== HELI && d < 30 && ov !== undefined) { me.x += dx / (d || 1) * (30 - d); me.y += dy / (d || 1) * (30 - d); if (Math.abs(me.v) > 90) { const sv = Math.abs(me.v); me.v *= .5; dent(Math.atan2(-dy, -dx), sv > 170 ? 2 : 1); beep(100, .1, "square", .04, 30); } if (om === "c") me.heat += dt * .5; }
     }
     // police : « arrêté » si un flic est collé à toi et que tu ne fonces pas
@@ -1956,9 +2001,20 @@ function frame(now) {
   txt(`$${Math.round(me.cash)}`, 14, 32, 28, "#ffe14d", "left");
   for (let i = 0; i < 5; i++) drawStar(24 + i * 26, 46, 11.5, i < me.wl, Math.floor(now / 250) % 2, now, i);
   x.fillStyle = "#000"; x.fillRect(13, 62, 112, 11); x.fillStyle = me.hp > 40 ? "#3ee62f" : "#ff3b30"; x.fillRect(15, 64, 108 * clamp(me.hp, 0, 100) / 100, 7);
+  if (me.arm) { wIcon(10 + me.arm, 138, 67, .6); txt(`−${Math.round(VEST[me.arm - 1].r * 100)}%`, 150, 71, 11, "#cfe6ff", "left"); }   // gilet porté : bouclier + réduction des dégâts
   if (me.vid === HELI) txt("🚁 MITRAILLETTE ×∞", 14, 94, 14, "#3ee6c4", "left");
   else if (!me.vid && !me.wpn) txt("👊 POINGS", 14, 94, 14, "#fff", "left");
-  if (me.wpn && me.vid !== HELI) { const W = WPN[me.wpn]; txt(`${W.n} ×${me.ammo[me.wpn]}`, 14, 94, 14, "#fff", "left"); txt(me.ammo.slice(1).map((v, i) => v ? `${i + 1}:${v}` : "").filter(Boolean).join("  "), 14, 110, 11, "#ffe14d", "left"); }
+  if (me.wpn && me.vid !== HELI) {                                                                                                  // arme en main : icône, compteur de munitions, indicateur de rechargement
+    const W = WPN[me.wpn], am = me.ammo[me.wpn], low = am <= Math.max(1, Math.round(W.max * .1)), cdm = me.cdMax || .5, fast = cdm < .2;
+    const rl = fast ? 1 : clamp(1 - me.cd / cdm, 0, 1), ready = rl >= 1;
+    x.fillStyle = "rgba(0,0,0,.5)"; rrect(10, 80, 200, 60, 8); x.fill(); x.strokeStyle = ready ? "rgba(255,255,255,.25)" : "rgba(255,157,30,.7)"; x.lineWidth = 1.5; x.stroke();
+    wIcon(me.wpn, 40, 104, 1);
+    txt(W.n, 70, 96, 12, "#fff", "left"); txt(ready ? "PRÊT" : "RECHARGE", 204, 96, 10, ready ? "#3ee62f" : "#ff9d1e", "right");
+    txt(`×${am}`, 70, 120, 20, low ? (Math.floor(now / 250) % 2 ? "#ff5a4d" : "#fff") : "#ffe14d", "left");
+    if (me.wpn === 4) for (let i = 0; i < Math.min(am, 12); i++) { const rx = 114 + i * 7.2; x.fillStyle = "#3d4a2f"; x.fillRect(rx, 111, 4, 4); x.fillStyle = "#b3261e"; x.beginPath(); x.moveTo(rx + 4, 110); x.lineTo(rx + 7, 113); x.lineTo(rx + 4, 116); x.fill(); }   // une mini-roquette par roquette restante
+    x.fillStyle = "#000"; x.fillRect(70, 127, 130, 7); x.fillStyle = ready ? "#3ee62f" : "#ff9d1e"; x.fillRect(71, 128, 128 * rl, 5);
+    txt(me.ammo.slice(1).map((v, i) => v ? `${i + 1}:${v}` : "").filter(Boolean).join("  "), 14, 156, 11, "#ffe14d", "left");
+  }
   if (!TOUCH && hasGun() && me.vid !== HELI && now - me.gunT < 9000) txt("F : TIRER · X ou 0-1-2-3 : CHANGER D'ARME (0 = POINGS 👊)", W / 2, H - 40, 13, "#ffe14d");
   if (TOUCH && (hasGun() || me.vid === HELI || !me.vid)) { const fb = fireId !== null; x.fillStyle = fb ? "#ff5a4d" : "#b3261e"; x.beginPath(); x.arc(W - 56, H - 142, 34, 0, 7); x.fill(); x.strokeStyle = "#000"; x.lineWidth = 3; x.stroke(); txt(me.vid === HELI || me.wpn ? "FEU" : "👊", W - 56, H - 138, 14); if (hasGun() && me.vid !== HELI) { x.fillStyle = "#555a66"; x.beginPath(); x.arc(W - 136, H - 136, 26, 0, 7); x.fill(); x.stroke(); txt("ARME", W - 136, H - 132, 11); } }
   const rank = [[myUid, me.cash]].concat(activeP().filter(([u]) => u !== myUid).map(([u, p]) => [u, p.cash])).sort((a, b) => b[1] - a[1]);
@@ -1999,7 +2055,7 @@ function frame(now) {
     if (h) txt(h, W / 2, H - 60, 15, hc);
   }
   drawMis(now);
-  if (pw === 2) { const tm = Math.max(0, Math.ceil(pwT)), tt = `${Math.floor(tm / 60)}:${String(tm % 60).padStart(2, "0")}`, yy = mis ? 196 : 120;
+  if (pw === 2) { const tm = Math.max(0, Math.ceil(pwT)), tt = `${Math.floor(tm / 60)}:${String(tm % 60).padStart(2, "0")}`, yy = mis ? 196 : 168;
     x.fillStyle = "rgba(0,0,0,.55)"; x.fillRect(10, yy, 276, 50); txt("QUÊTE RPG · LIVRAISON", 18, yy + 16, 11, "#ff9a3d", "left"); txt(`🧨 ARMURERIE · ⏱ ${tt}`, 18, yy + 38, 13, tm < 30 && Math.floor(now / 300) % 2 ? "#ff5a4d" : "#fff", "left");
     const a = Math.atan2(ZONES.arms.y - me.y, ZONES.arms.x - me.x), d = Math.hypot(ZONES.arms.x - me.x, ZONES.arms.y - me.y);
     if (d > 120) { const ax = W / 2 + Math.cos(a) * 96, ay = H / 2 + Math.sin(a) * 78; x.save(); x.translate(ax, ay); x.rotate(a); x.fillStyle = "#ff9a3d"; x.strokeStyle = "#000"; x.lineWidth = 2; x.beginPath(); x.moveTo(15, 0); x.lineTo(-9, -9); x.lineTo(-9, 9); x.closePath(); x.fill(); x.stroke(); x.restore(); } }
@@ -2075,7 +2131,7 @@ function frame(now) {
     enter(code) {
       active = true; c = code; myUid = getMe().uid; ls = null; lastT = 0; lastH = ""; lastEv = 0; pd = {}; hostOn = false; keys = new Set(); stick = null; brakeId = null; useReq = 0;
       dPeds.clear(); dCars.clear(); dCops.clear(); dHelis.clear(); helis = []; dP.clear(); ejected = []; sPrevCash = 0; sPrevWl = 0; sAmbT = performance.now() + 8000; hornKey = false; hornId = null; me.pg = null; splats = []; floats = []; hitDone = new Set(); lastHs = {}; sentStr = ""; sentAt = 0; savedCash = -1; saveAt = performance.now(); gLoaded = false; savedG = ""; lastGn = {};
-      Object.assign(me, { vid: 0, hp: 100, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, bust: 0, hurt: 0, v: 0, a: 0, cash: 0, cop: 0, wpn: 0, ammo: [0, 0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100, rpgParts: [], rpgQuest: 0, ammoQuest: 0, rpgAmmoUnlocked: 0 });
+      Object.assign(me, { vid: 0, hp: 100, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, bust: 0, hurt: 0, v: 0, a: 0, cash: 0, cop: 0, wpn: 0, ammo: [0, 0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100, rpgParts: [], rpgQuest: 0, ammoQuest: 0, rpgAmmoUnlocked: 0, arm: 0 });
       inn = null; mis = null; tgt = null; pw = 0; pwT = 0; shop = ""; killQ = []; carQ = []; pendingPedHits = new Map(); tracers = []; rockets = []; sparks = []; booms = []; wrecks = []; pickT = new Map(); lastFc = {}; lastCs = {}; fireKey = false; fireId = null;
       const ix = 2 + Math.floor(Math.random() * 5), iy = 2 + Math.floor(Math.random() * 5); spawnAt([ix * CELL, iy * CELL]);
       $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : monter / descendre d'une voiture · en voiture ↑ accélère, ↓ freine, ←→ tourne · livre les colis 📦, écrase des piétons, évite la police ! · Sans arme tu frappes avec tes poings 👊 (F : 3 coups pour un piéton) ; ramasse les armes au sol : F tirer, X changer d'arme (0 = poings, 1-2-3) · en hélico : mitraillette à munitions infinies (F) · les voitures se cabossent ! · garage ($3500 ; à l'intérieur, un 2e emplacement pour une voiture de plus : $2500) : va sur la zone jaune et appuie sur E (owners : voiture fantôme 👻 invincible qui traverse les bâtiments, tu peux en descendre : elle reste garée et seuls les owners peuvent y remonter (E) ; au garage : ranger le fantôme (E), G pour en sortir un) · R : changer de radio (4 stations), H : klaxon · missions : parle au BOSS ❗ au bord ouest de la carte (E) : missions aléatoires (voitures, cavale, contrat, camion blindé 🚚), M pour abandonner · armurerie et distributeur de soins (hôpital) : va sur leur zone et appuie sur E · 🏎️ des voitures de sport (Supercar, Roadster) roulent en ville : bien plus rapides, vole-les et range-les au garage ! · 🚁 hélicoptère : un pilote mystérieux traîne quelque part en ville (il n'est PAS sur la carte) : trouve-le et réussis sa quête pour débloquer un hélico, rangé sur le toit de ton garage (échelle dans le garage) ; E pour te poser sur la zone 🅷 du toit · à 5★ la police envoie des hélicos : abats-les !";
@@ -2085,7 +2141,7 @@ function frame(now) {
           const v = JSON.parse(String(s.val() || "null"));
           if (v && typeof v === "object") {
             me.g = v.g ? 1 : 0; me.hu = v.h ? 1 : 0; me.hh = v.hh === undefined ? 100 : clamp(Math.round(+v.hh) || 0, 0, 100); const gc = v.c; const rdCar = q => q && Number.isFinite(+q.t) ? { c: (+q.c | 0) & 7, t: clamp(+q.t | 0, 0, 4), d: (+q.d | 0) & 255, p: q.p ? 1 : 0 } : null; me.gcar = rdCar(gc); me.g2 = v.g2 ? 1 : 0; me.gcar2 = me.g2 ? rdCar(v.c2) : null;
-            if (Array.isArray(v.a)) { for (let n = 1; n <= 4; n++) me.ammo[n] = clamp(Math.floor(+v.a[n - 1]) || 0, 0, WPN[n].max); const w = +v.w | 0; me.wpn = w >= 1 && w <= 4 && me.ammo[w] > 0 ? w : 0; if (!me.wpn) cycleWpn(); } me.rpgParts = Array.isArray(v.rp) ? v.rp.filter(n=>Number.isInteger(n)&&n>=0&&n<3) : []; me.rpgQuest = v.rq ? 1 : 0; me.ammoQuest = v.aq ? 1 : 0; me.rpgAmmoUnlocked = v.rau ? 1 : 0; if (me.rpgAmmoUnlocked && me.rpgParts.length < 3) me.rpgParts = [0, 1, 2]; pw = me.ammoQuest && !me.rpgAmmoUnlocked ? 1 : 0;
+            if (Array.isArray(v.a)) { for (let n = 1; n <= 4; n++) me.ammo[n] = clamp(Math.floor(+v.a[n - 1]) || 0, 0, WPN[n].max); const w = +v.w | 0; me.wpn = w >= 1 && w <= 4 && me.ammo[w] > 0 ? w : 0; if (!me.wpn) cycleWpn(); } me.rpgParts = Array.isArray(v.rp) ? v.rp.filter(n=>Number.isInteger(n)&&n>=0&&n<3) : []; me.rpgQuest = v.rq ? 1 : 0; me.ammoQuest = v.aq ? 1 : 0; me.rpgAmmoUnlocked = v.rau ? 1 : 0; me.arm = clamp(+v.ar | 0, 0, 3); if (me.rpgAmmoUnlocked && me.rpgParts.length < 3) me.rpgParts = [0, 1, 2]; pw = me.ammoQuest && !me.rpgAmmoUnlocked ? 1 : 0;
           }
         } catch { }
         gLoaded = true; savedG = gStr();

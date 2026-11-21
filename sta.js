@@ -784,7 +784,7 @@ export function createStaClient(env) {
   ROOMS.house = { w: 520, h: 340, name: "MA MAISON", c: "#7ae582", door: { x: 260, hw: 30 },
     obs: [[20,70,108,66],[142,76,26,28],[184,68,76,34],[300,62,182,34],[464,98,40,68],[18,182,34,80],[70,180,104,58],[82,250,72,26],[310,210,92,48],[442,210,64,48],[470,120,34,70]] };
   ROOMS.jail = { w: 520, h: 340, name: "PRISON", c: "#ff6b6b", door: { x: -999, hw: 0 },          // pas de porte : on ne sort que par les moyens prévus
-    obs: [[22, 66, 100, 46], [250, 68, 44, 38], [172, 200, 46, 32], [298, 56, 8, 270]] };
+    obs: [[20, 72, 108, 48], [224, 72, 64, 66], [150, 202, 74, 27], [28, 190, 88, 23], [293, 56, 13, 270], [344, 70, 74, 72], [440, 70, 62, 94]] };
   function enterInn(k, hk) {
     if (me.wl > 0 || me.bust > 0) { toast("La police te colle : impossible d'entrer !"); return; }
     const R = ROOMS[k]; inn = { k, hk: hk | 0, x: R.door.x, y: R.h - 34, a: -Math.PI / 2, t0: tNow, hp: me.hp, mv: false };
@@ -978,68 +978,117 @@ export function createStaClient(env) {
     labels.push(["COFFRE",474,276,nc?"#ffe14d":"#fff",10],["LIT",72,150,me.hsp===inn.hk?"#7ae582":spk==="bed"?"#ffe14d":"#fff",10],["TÉLÉ",34,272,spk==="tv"?"#ffe14d":"#fff",10],["SORTIE",dx,h-24,"#fff",10]);
   }
   function drawJailRoom(now, labels) {
-    const R = ROOMS.jail, w = R.w, h = R.h, sp = innSpot(), dg = jail ? jail.dig : 0, BX = 298, spk = sp ? sp.k : "", fl = .85 + .15 * Math.sin(now / 90) * Math.sin(now / 370 + 1);
-    // sol : dalles de béton fissurées (cellule) · lino gris (couloir du gardien) avec ligne de sécurité
-    for (let a = 0; a < 15; a++) for (let b = 0; b < 14; b++) fr(a * 20, 56 + b * 20, 20, 20, (a + b) & 1 ? "#4a4d55" : "#43464e");
-    for (let a = 0; a < 11; a++) for (let b = 0; b < 14; b++) fr(BX + 8 + a * 20, 56 + b * 20, 20, 20, (a + b) & 1 ? "#6d727c" : "#656a74");
-    for (let n = 0; n < 16; n++) fr(10 + hs(n, 1) % (BX - 40), 70 + hs(n, 2) % (h - 110), 6 + hs(n, 3) % 16, 1.5, "rgba(0,0,0,.28)");
-    x.fillStyle = "rgba(20,40,60,.35)"; x.beginPath(); x.ellipse(262, 112, 16, 7, 0, 0, 7); x.fill();                  // flaque près des toilettes
-    x.fillStyle = "#2a2c33"; x.beginPath(); x.arc(150, 296, 8, 0, 7); x.fill(); x.strokeStyle = "#5a5e68"; x.lineWidth = 1; for (let k = -4; k <= 4; k += 4) { x.beginPath(); x.moveTo(150 + k, 289); x.lineTo(150 + k, 303); x.stroke(); }   // bonde
-    fr(BX + 26, 58, 3, h - 72, "#c9a227");
-    // mur du fond : briques, fenêtre à barreaux avec lune, traits de jours comptés, casiers + clés + affiches côté gardien
-    fr(0, 0, w, 58, "#2c2e36"); for (let ty = 0; ty < 58; ty += 10) for (let tx = ((ty / 10) & 1) * 12; tx < w; tx += 24) fr(tx, ty, 22, 8, "#383b45");
-    fr(150, 8, 58, 36, "#1a1b20"); fr(154, 12, 50, 28, "#1b2a4a"); x.fillStyle = "#ecebc8"; x.beginPath(); x.arc(190, 24, 6, 0, 7); x.fill(); x.fillStyle = "#1b2a4a"; x.beginPath(); x.arc(192, 22, 5, 0, 7); x.fill();
-    for (let k = 0; k < 5; k++) fr(160 + k * 9, 12, 3, 28, "#8c93a2"); fr(154, 24, 50, 2, "#8c93a2");
-    x.strokeStyle = "#b9bdc6"; x.lineWidth = 1.5; x.beginPath(); for (let g = 0; g < 3; g++) { for (let k = 0; k < 4; k++) { x.moveTo(34 + g * 24 + k * 4, 16); x.lineTo(34 + g * 24 + k * 4, 34); } x.moveTo(32 + g * 24, 32); x.lineTo(50 + g * 24, 18); } x.stroke();
-    fr(322, 10, 56, 32, "#3a2a1a"); fr(324, 12, 52, 28, "#4a3623"); for (let k = 0; k < 6; k++) { fr(330 + k * 8, 18, 3, 3, "#ffd23f"); fr(330 + k * 8, 20, 1, 8, "#ffd23f"); fr(330 + k * 8, 30, 3, 3, "#c9a227"); }
-    fr(396, 8, 42, 34, "#e8e4d0"); for (let k = 0; k < 5; k++) fr(402, 14 + k * 6, 30, 2, "#9a9684"); fr(402, 10, 30, 3, "#b3261e");
-    fr(450, 8, 34, 38, "#d9cfa8"); x.fillStyle = "#8a7a5a"; x.beginPath(); x.arc(467, 26, 8, 0, 7); x.fill(); fr(458, 36, 18, 6, "#8a7a5a"); fr(454, 11, 26, 3, "#b3261e");
-    fr(0, 52, w, 6, "rgba(0,0,0,.45)"); fr(0, 56, 16, h - 56, "#1f2026"); fr(w - 16, 56, 16, h - 56, "#1f2026"); fr(0, h - 14, w, 14, "#1f2026");
-    // faisceau de lune sur le sol de la cellule
-    x.fillStyle = "rgba(190,205,255," + (.07 + .01 * Math.sin(now / 900)) + ")"; x.beginPath(); x.moveTo(154, 58); x.lineTo(204, 58); x.lineTo(248, 196); x.lineTo(178, 196); x.closePath(); x.fill();
-    // cellule : lit superposé, toilettes + lavabo, petite table en fer
-    fr(22, 66, 100, 46, "#2f3138"); fr(26, 70, 92, 18, "#9aa3b2"); fr(26, 90, 92, 18, "#b0b8c5"); fr(26, 70, 22, 18, "#e8e8ee"); fr(26, 90, 22, 18, "#e8e8ee"); fr(50, 72, 66, 14, "#6b5a3a"); fr(50, 92, 66, 14, "#7d6a45"); fr(112, 66, 6, 46, "#3a3d46"); for (let k = 0; k < 4; k++) fr(112, 70 + k * 10, 6, 2, "#8c93a2");
-    fr(252, 70, 16, 12, "#cfd5da"); fr(250, 82, 20, 20, "#e6eaee"); x.fillStyle = "#9aa6b0"; x.beginPath(); x.ellipse(260, 92, 6, 7, 0, 0, 7); x.fill(); fr(274, 72, 18, 16, "#cfd5da"); fr(277, 75, 12, 10, "#a9b8c4"); fr(281, 70, 4, 5, "#555");
-    fr(172, 200, 46, 28, "#7a6a50"); fr(172, 200, 46, 3, "#9a8a6a"); fr(174, 228, 4, 4, "#3a3d46"); fr(212, 228, 4, 4, "#3a3d46"); fr(180, 208, 8, 8, "#e8e8ee"); fr(200, 206, 10, 10, "#5a6a7a"); fr(202, 208, 6, 6, "#c9d3dd");
-    // barreaux + porte de cellule avec cadenas
-    fr(BX - 1, 56, 10, h - 70, "#2b2d34"); for (let by = 58; by < h - 14; by += 10) { fr(BX + 1, by, 6, 7, "#9097a6"); fr(BX + 1, by, 6, 1, "#d6dbe8"); fr(BX + 1, by + 6, 6, 1, "#4b5060"); }
-    fr(BX - 4, 198, 16, 40, "#3d4049"); fr(BX - 4, 198, 16, 3, "#6a6e7a"); fr(BX - 4, 235, 16, 3, "#6a6e7a"); fr(BX, 214, 8, 8, "#c9a227"); fr(BX + 2, 210, 4, 5, "#8a6f18"); fr(BX - 6, 226, 4, 6, "#1b1c20");
-    // côté gardien : bureau avec 2 écrans, clavier, tasse · casiers · porte blindée SORTIE
-    fr(350, 200, 112, 36, "#5a3d22"); fr(350, 200, 112, 28, "#7d5a36"); fr(350, 226, 112, 3, "#3a2a1a");
-    fr(366, 204, 28, 18, "#111"); fr(398, 204, 28, 18, "#111"); const gl = .55 + .25 * Math.sin(now / 250); x.globalAlpha = gl; fr(368, 206, 24, 14, "#2fd36a"); fr(400, 206, 24, 14, "#2fd36a"); x.globalAlpha = 1; fr(372, 211, 6, 6, "#0b3a1c"); fr(408, 209, 8, 8, "#0b3a1c");
-    fr(372, 226, 40, 6, "#2a2a30"); fr(432, 210, 9, 9, "#fff"); fr(434, 212, 5, 5, "#6b3a1e"); fr(444, 208, 12, 10, "#2a2a30");
-    fr(480, 70, 24, 112, "#5d6b7a"); fr(480, 70, 24, 3, "#8896a6"); for (let k = 0; k < 3; k++) { fr(482, 76 + k * 36, 20, 32, "#6e7d8d"); for (let v = 0; v < 4; v++) fr(485, 80 + k * 36 + v * 4, 14, 1.5, "#3a4450"); fr(497, 92 + k * 36, 3, 6, "#c9a227"); }
-    fr(436, h - 20, 54, 6, "#2a2f36"); fr(440, h - 34, 46, 20, "#4a525c"); fr(444, h - 30, 38, 12, "#2f353d"); fr(446, h - 28, 34, 8, "#7fc4d9"); x.fillStyle = Math.floor(now / 500) % 2 ? "#ff3b30" : "#7a1a16"; x.beginPath(); x.arc(463, h - 40, 3, 0, 7); x.fill();
-    // gardien en patrouille devant les barreaux
-    { const gy = 168 + 26 * Math.sin(now / 1900); drawWalker(410, gy, Math.PI, "#1c2f6b", "#e0ac69", now / 110, 0, false, true); }
-    // trou creusé dans le coin du mur fragile
-    fr(18, 282, 70, 40, "#5a4a3a"); for (let r = 0; r < 4; r++) for (let c2 = 0; c2 < 4; c2++) fr(20 + c2 * 16 + (r & 1) * 6, 284 + r * 9, 13, 7, "#6d5b49");
-    if (dg > 0) { fr(26, 292, 4 + dg * 5, 22, "#0c0a08"); x.strokeStyle = "#0c0a08"; x.lineWidth = 1; x.beginPath(); for (let k = 0; k < dg; k++) { x.moveTo(24 + k * 6, 286); x.lineTo(30 + k * 6, 298); } x.stroke(); for (let k = 0; k < Math.min(dg, 6); k++) fr(22 + (k * 23) % 60, 318, 4, 3, "#6d5b49"); }
-    labels.push(["CELLULE", 150, 104, "#c9ced8", 10], ["TOILETTES", 270, 120, "#9aa3b2", 9], ["GARDIEN", 410, 140 + 26 * Math.sin(now / 1900), spk === "guard" ? "#ffe14d" : "#9fb4ff", 10], ["MUR FRAGILE", 52, 274, spk === "dig" ? "#ffe14d" : "#c9ced8", 10], ["SORTIE", 463, h - 46, "#9fe6a8", 9]);
-    pool(150, 190, 160, "rgba(255,240,200," + (.1 * fl) + ")"); pool(410, 170, 110, "rgba(200,220,255,.12)"); pool(463, h - 30, 40, "rgba(140,230,255,.12)");
-    if (dg > 0 && Math.floor(now / 400) % 2) pool(60, 300, 70, "rgba(255,60,50,.12)");
-    // Finition prison : ambiance froide, signalétique, éclairage de sécurité et détails de cellule.
-    x.save();
-    // bandes de sécurité au seuil du couloir du gardien
-    for(let q=0;q<10;q++){fr(BX+18+q*18,h-20,10,5,q&1?"#d2a83b":"#24262c");}
-    fr(18, 54, w-36, 2, "rgba(190,200,220,.22)");
-    // tuyaux et conduites apparentes sur le mur latéral
-    fr(506, 64, 5, 214, "#343943"); fr(507, 64, 2, 214, "#737d8d");
-    [82,146,214,276].forEach(py=>{fr(502,py,12,4,"#777f8d");fr(502,py+4,12,2,"#252932");});
-    // affiche réglementaire et panneau d'identification de la cellule
-    fr(218, 12, 54, 30, "#252a34"); fr(220, 14, 50, 26, "#c9c4ad"); fr(224, 18, 42, 3, "#8d302d");
-    for(let q=0;q<3;q++)fr(224,24+q*5, q===1?28:38, 1.5, "#77786f");
-    fr(22, 118, 82, 24, "#343a45"); fr(24, 120, 78, 20, "#20252e"); fr(27, 123, 72, 2, "#aab4c3");
-    // éclairage de sécurité rouge qui pulse au-dessus de la porte blindée
-    const alarm=.45+.45*(.5+.5*Math.sin(now/180));
-    x.globalAlpha=alarm; pool(463, h-40, 52, "rgba(255,48,38,.3)"); x.globalAlpha=1;
-    fr(448, 58, 32, 4, "#242831"); fr(452, 62, 24, 3, "#59616e");
-    // ombres des barreaux projetées sur le sol de la cellule
-    x.strokeStyle="rgba(8,10,16,.2)";x.lineWidth=2;x.beginPath();
-    for(let q=0;q<7;q++){x.moveTo(20+q*15,116);x.lineTo(34+q*15,190);}x.stroke();
-    // traces d'usure et petits rivets métalliques
-    for(let q=0;q<12;q++){const px=BX+14+(q*29)%180,py=70+(q*47)%220;fr(px,py,2,2,"rgba(210,215,225,.22)");}
-    x.restore();
+    const R = ROOMS.jail, w = R.w, h = R.h, sp = innSpot(), dg = jail ? jail.dig : 0, BX = 298;
+    const pulse = .5 + .5 * Math.sin(now / 520), alarm = .5 + .5 * Math.sin(now / 210);
+    // Sol de la cellule : béton usé, dalles régulières et zone de circulation dégagée.
+    fr(0, 0, w, h, "#252a32");
+    for (let row = 0; row < 15; row++) for (let col = 0; col < 15; col++) {
+      const px = col * 20, py = 56 + row * 20;
+      fr(px, py, 19, 19, (row + col) & 1 ? "#555b65" : "#4d535d");
+      fr(px + 1, py + 1, 17, 1, "rgba(255,255,255,.035)");
+    }
+    // Couloir sécurisé du gardien, plus clair que la cellule.
+    fr(BX + 8, 56, w - BX - 8, h - 70, "#69727d");
+    for (let yy = 64; yy < h - 18; yy += 24) fr(BX + 12, yy, w - BX - 24, 1, "rgba(255,255,255,.12)");
+    // Murs et briques du fond.
+    fr(0, 0, w, 58, "#303640");
+    for (let yy = 5; yy < 54; yy += 12) for (let xx = ((yy / 12) & 1) * 15; xx < w; xx += 30)
+      fr(xx, yy, 27, 9, "#3a424e");
+    fr(0, 54, w, 4, "#1b2028");
+    // Fenêtre haute, verre froid, barreaux et lumière du jour.
+    fr(132, 8, 78, 38, "#171d28"); fr(136, 12, 70, 30, "#253d59");
+    x.fillStyle = "rgba(150,205,255,.22)"; x.beginPath(); x.moveTo(138, 14); x.lineTo(203, 14); x.lineTo(192, 42); x.lineTo(138, 42); x.fill();
+    fr(169, 12, 3, 30, "#aeb9c8"); fr(190, 12, 3, 30, "#aeb9c8"); fr(136, 26, 70, 3, "#aeb9c8");
+    pool(170, 72, 130, "rgba(145,190,255,.10)");
+    // Petite plaque de cellule et signalétique.
+    fr(18, 10, 78, 34, "#171c24"); fr(21, 13, 72, 28, "#46515e");
+    txt("CELLULE 04", 57, 31, 10, "#e7d7a8");
+    fr(224, 12, 52, 30, "#202833"); fr(228, 16, 44, 22, "#b8c2ce");
+    fr(232, 20, 36, 2, "#8e3434"); fr(232, 26, 28, 2, "#68717c"); fr(232, 32, 33, 2, "#68717c");
+    // Lit métallique : cadre, matelas, couverture pliée et oreiller.
+    fr(20, 76, 108, 42, "#252a32"); fr(24, 72, 104, 8, "#788492");
+    fr(24, 82, 100, 29, "#9ca8b5"); fr(27, 85, 94, 22, "#778797");
+    fr(28, 86, 26, 18, "#d4d9dc"); fr(57, 87, 64, 17, "#526b83");
+    fr(57, 87, 64, 3, "#718ba4"); fr(24, 113, 104, 5, "#303844");
+    fr(28, 118, 5, 9, "#252a32"); fr(116, 118, 5, 9, "#252a32");
+    // Tablette murale et effets personnels.
+    fr(24, 145, 84, 5, "#8b7354"); fr(29, 150, 5, 12, "#514332"); fr(98, 150, 5, 12, "#514332");
+    fr(38, 136, 22, 8, "#b9c1c9"); fr(66, 136, 14, 8, "#c6a45b");
+    // Toilettes et lavabo dans un petit renfoncement carrelé.
+    fr(224, 72, 64, 66, "#3b4652");
+    for (let q = 0; q < 4; q++) fr(228 + q * 14, 76, 1, 58, "rgba(220,230,240,.13)");
+    for (let q = 0; q < 4; q++) fr(228, 76 + q * 14, 56, 1, "rgba(220,230,240,.13)");
+    fr(236, 82, 28, 16, "#c5ccd2"); fr(239, 85, 22, 10, "#e1e5e8");
+    x.fillStyle = "#8fa4b4"; x.beginPath(); x.ellipse(250, 90, 6, 3, 0, 0, 7); x.fill();
+    fr(269, 80, 12, 20, "#cbd2d8"); fr(272, 83, 6, 14, "#eef1f2"); fr(274, 76, 3, 6, "#aab7c3");
+    fr(238, 108, 32, 18, "#aeb9c4"); fr(241, 111, 26, 12, "#dce2e6"); fr(250, 104, 8, 5, "#8da2b2");
+    // Banc fixé au mur et petite table vissée au sol.
+    fr(28, 190, 88, 9, "#594b3c"); fr(32, 199, 6, 14, "#353943"); fr(106, 199, 6, 14, "#353943");
+    fr(150, 202, 74, 9, "#6d5944"); fr(155, 211, 6, 18, "#343a43"); fr(213, 211, 6, 18, "#343a43");
+    fr(160, 195, 18, 7, "#c5cbd0"); fr(185, 194, 14, 8, "#b8894b");
+    // Traces de vie : marques de taille, chaussures, livre et gobelet.
+    for (let q = 0; q < 5; q++) fr(18 + q * 18, 244 + (q % 2) * 3, 11, 2, "rgba(20,23,29,.45)");
+    fr(238, 160, 30, 20, "#343c47"); fr(241, 163, 24, 14, "#b7a98b");
+    for (let q = 0; q < 3; q++) fr(244, 166 + q * 3, 18, 1, "#6d6a61");
+    // Zone du mur fragile : fissures qui progressent à mesure que le joueur creuse.
+    fr(12, 274, 92, 54, "#39414a");
+    for (let row = 0; row < 4; row++) for (let col = 0; col < 5; col++)
+      fr(16 + col * 17 + (row & 1) * 7, 278 + row * 11, 15, 9, (row + col) & 1 ? "#59616b" : "#626a73");
+    x.strokeStyle = "rgba(20,22,27,.8)"; x.lineWidth = 2; x.beginPath();
+    x.moveTo(35, 280); x.lineTo(43, 290); x.lineTo(38, 299); x.lineTo(53, 308); x.lineTo(49, 320); x.stroke();
+    if (dg > 0) {
+      fr(27, 292, 8 + dg * 5, 22, "#111317");
+      x.strokeStyle = "#17191d"; x.lineWidth = 2; x.beginPath();
+      for (let q = 0; q < dg; q++) { x.moveTo(27 + q * 6, 288); x.lineTo(34 + q * 6, 300 + (q % 2) * 4); }
+      x.stroke();
+      for (let q = 0; q < Math.min(dg, 7); q++) fr(22 + (q * 19) % 72, 320, 4, 3, "#8b765d");
+    }
+    // Barreaux épais, porte coulissante et verrou central.
+    fr(BX - 5, 56, 13, h - 70, "#202630");
+    for (let yy = 60; yy < h - 18; yy += 12) {
+      fr(BX - 3, yy, 3, 9, "#aab4c1"); fr(BX + 4, yy, 2, 9, "#687482");
+    }
+    fr(BX - 10, 184, 22, 54, "#333c48"); fr(BX - 8, 188, 18, 46, "#596575");
+    fr(BX - 5, 195, 12, 4, "#c3a14e"); fr(BX - 1, 203, 5, 13, "#d4b65e");
+    fr(BX - 7, 222, 16, 3, "#303844");
+    // Poste du gardien : bureau, écrans, lampe et tableau de surveillance.
+    fr(344, 192, 126, 42, "#382d27"); fr(348, 190, 118, 32, "#76543a");
+    fr(356, 194, 42, 26, "#171d26"); fr(358, 196, 38, 22, "#243f50");
+    fr(361, 199, 32, 2, "#5fc5ad"); fr(361, 204, 25, 2, "#5fc5ad"); fr(361, 209, 29, 2, "#5fc5ad");
+    fr(404, 194, 42, 26, "#171d26"); fr(406, 196, 38, 22, "#263e50");
+    x.globalAlpha = .45 + .3 * pulse; fr(408, 199, 34, 16, "#4cbf9b"); x.globalAlpha = 1;
+    fr(418, 202, 18, 2, "#173b36"); fr(418, 207, 12, 2, "#173b36");
+    fr(370, 224, 60, 4, "#262a31"); fr(452, 198, 8, 12, "#c7cbd0"); fr(454, 200, 4, 8, "#a7b2be");
+    // Tableau de clés et armoire de dossiers.
+    fr(350, 70, 68, 72, "#46515e"); fr(354, 74, 60, 64, "#303a47");
+    for (let q = 0; q < 4; q++) {
+      fr(360 + q * 13, 82, 8, 8, "#b58d42"); fr(363 + q * 13, 90, 2, 16, "#d5b66c");
+      fr(359 + q * 13, 110, 9, 20, q & 1 ? "#71859a" : "#8b6e58");
+    }
+    fr(440, 70, 62, 94, "#3c4652"); fr(444, 74, 54, 86, "#596777");
+    for (let q = 0; q < 3; q++) { fr(447, 80 + q * 25, 48, 20, "#485462"); fr(450, 84 + q * 25, 40, 2, "#aab4c0"); fr(450, 90 + q * 25, 30, 2, "#aab4c0"); }
+    // Gardien en ronde lente, lampe témoin et porte de sécurité au fond du couloir.
+    { const gy = 164 + 25 * Math.sin(now / 1900); drawWalker(414, gy, Math.PI, "#243c63", "#e0ac69", now / 110, 0, false, true); }
+    fr(452, h - 48, 48, 30, "#252d37"); fr(456, h - 44, 40, 22, "#455363");
+    fr(460, h - 40, 32, 14, "#263847"); fr(466, h - 36, 20, 6, "#79bfd0");
+    x.fillStyle = alarm > .5 ? "#ff554c" : "#8d2727"; x.beginPath(); x.arc(476, h - 53, 4, 0, 7); x.fill();
+    x.fillStyle = "rgba(255,60,48," + (.10 + .10 * alarm) + ")"; x.beginPath(); x.arc(476, h - 53, 19, 0, 7); x.fill();
+    // Marquages au sol, bandes de sécurité et ombres des barreaux.
+    for (let q = 0; q < 8; q++) fr(BX + 18 + q * 20, h - 20, 12, 5, q & 1 ? "#252b34" : "#d0a849");
+    x.strokeStyle = "rgba(10,14,20,.22)"; x.lineWidth = 2; x.beginPath();
+    for (let q = 0; q < 7; q++) { x.moveTo(18 + q * 15, 120); x.lineTo(34 + q * 15, 190); } x.stroke();
+    // Lumières localisées et ambiance froide.
+    pool(260, 148, 78, "rgba(210,225,255,.10)");
+    pool(410, 170, 105, "rgba(190,215,255,.12)");
+    pool(476, h - 46, 48, "rgba(255,65,55,.10)");
+    labels.push(
+      ["CELLULE 04", 64, 64, "#d7e0e9", 10],
+      ["LIT", 76, 132, "#aebdca", 9],
+      ["SANITAIRES", 254, 150, "#aebdca", 9],
+      ["GARDIEN", 414, 140 + 25 * Math.sin(now / 1900), sp && sp.k === "guard" ? "#ffe14d" : "#c4d6eb", 10],
+      ["MUR FRAGILE", 58, 270, sp && sp.k === "dig" ? "#ffe14d" : "#d0d7df", 10],
+      ["POSTE DE GARDE", 410, 250, "#c4d6eb", 9]
+    );
   }
   function repairDo(sl) {
     const g = sl === 2 ? me.gcar2 : me.gcar; if (!g) { toast("Aucune voiture rangée"); return; }

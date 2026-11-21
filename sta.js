@@ -1037,11 +1037,31 @@ export function createStaClient(env) {
     x.strokeStyle = "rgba(20,22,27,.8)"; x.lineWidth = 2; x.beginPath();
     x.moveTo(35, 280); x.lineTo(43, 290); x.lineTo(38, 299); x.lineTo(53, 308); x.lineTo(49, 320); x.stroke();
     if (dg > 0) {
-      fr(27, 292, 8 + dg * 5, 22, "#111317");
-      x.strokeStyle = "#17191d"; x.lineWidth = 2; x.beginPath();
-      for (let q = 0; q < dg; q++) { x.moveTo(27 + q * 6, 288); x.lineTo(34 + q * 6, 300 + (q % 2) * 4); }
-      x.stroke();
-      for (let q = 0; q < Math.min(dg, 7); q++) fr(22 + (q * 19) % 72, 320, 4, 3, "#8b765d");
+      // Ouverture creusée : terre visible en profondeur, bords irréguliers et pierres, sans aplat noir.
+      const holeW = 12 + Math.min(dg, 8) * 6, holeH = 10 + Math.min(dg, 8) * 2;
+      x.save();
+      x.beginPath();
+      x.moveTo(29, 293); x.lineTo(35, 289); x.lineTo(43, 291); x.lineTo(49, 288);
+      x.lineTo(55 + holeW * .35, 292); x.lineTo(53 + holeW, 298);
+      x.lineTo(51 + holeW, 306); x.lineTo(44 + holeW * .7, 310);
+      x.lineTo(35, 307); x.lineTo(27, 302); x.closePath(); x.clip();
+      fr(24, 286, 82, 30, "#6a5140");
+      fr(28, 290, 72, 24, "#493a32");
+      fr(31, 293, 62, 19, "#302c2b");
+      fr(36, 295, 48, 14, "#24272b");
+      const depth = x.createRadialGradient(56 + holeW * .45, 301, 2, 56 + holeW * .45, 301, 36);
+      depth.addColorStop(0, "#20252b"); depth.addColorStop(.55, "#303034"); depth.addColorStop(1, "#5a4335");
+      x.fillStyle = depth; x.fillRect(25, 286, 82, 30);
+      x.restore();
+      // Éclats de pierre autour du trou, qui augmentent avec la progression.
+      for (let q = 0; q < Math.min(dg + 2, 9); q++) {
+        const px = 23 + (q * 17) % 76, py = 289 + (q * 11) % 29;
+        fr(px, py, 3 + (q % 2), 2, q & 1 ? "#b18a62" : "#8b765d");
+        fr(px + 1, py - 2, 2, 2, "#c4a078");
+      }
+      x.strokeStyle = "rgba(25,22,20,.8)"; x.lineWidth = 1.5; x.beginPath();
+      x.moveTo(31, 291); x.lineTo(39, 296); x.lineTo(35, 301);
+      x.moveTo(53, 289); x.lineTo(49, 296); x.lineTo(57, 302); x.stroke();
     }
     // Barreaux épais, porte coulissante et verrou central.
     fr(BX - 5, 56, 13, h - 70, "#202630");

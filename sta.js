@@ -96,7 +96,7 @@ export function createStaClient(env) {
   // --- simulation de l'hôte ---
   let cops = [], helis = [], heliCd = 0, hostOn = false, peds = [], cars = [], nid = 1, evs = [], evId = 0, lastHs = {}, spawnCd = 0, streamCd = 0, pubAt = 0, hostT = 0, cleanCd = 0, lastGn = {};
   // --- moi ---
-  const me = { x: 0, y: 0, a: 0, v: 0, vid: 0, hp: 100, cash: 0, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, msg: "", hurt: 0, bust: 0, carT: 99, wpn: 0, ammo: [0, 0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100, rpgParts: [], rpgQuest: 0, ammoTags: [], ammoQuest: 0, rpgAmmoUnlocked: 0 };
+  const me = { x: 0, y: 0, a: 0, v: 0, vid: 0, hp: 100, cash: 0, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, msg: "", hurt: 0, bust: 0, carT: 99, wpn: 0, ammo: [0, 0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100, rpgParts: [], rpgQuest: 0, ammoQuest: 0, rpgAmmoUnlocked: 0 };
   let keys = new Set(), stick = null, useReq = 0, job = null, myCol = 0, cam = { x: 0, y: 0, z: 1.2 }, sentAt = 0, sentStr = "", savedCash = -1, saveAt = 0, tNow = 0, hitDone = new Set(), gLoaded = false, savedG = "";
   let inn = null, mis = null, tgt = null, lastMk = "", shop = "", mmBase = null;   // mission en cours, cible à éliminer, boutique ouverte
   let ejected = [], splats = [], floats = [], pendingPedHits = new Map(), brakeId = null, fireKey = false, fireId = null, killQ = [], carQ = [], killAt = 0, tracers = [], rockets = [], sparks = [], booms = [], wrecks = [], pickT = new Map(), lastFc = {}, lastCs = {};
@@ -364,7 +364,8 @@ export function createStaClient(env) {
       const dd = dP.get(u); if (dd) dd.flash = tNow; SND.shot(p.fw, dv(p.x, p.y, 520) * .8);
       for (let sh = 0; sh < k; sh++) for (let q = 0; q < W.pel; q++) {
         const ang = p.a + rr(-W.spr, W.spr), dx = Math.cos(ang), dy = Math.sin(ang), ox = p.x + dx * (p.vid ? 24 : 11), oy = p.y + dy * (p.vid ? 24 : 11), e = wallEnd(ox, oy, ang, W.rng);
-        tracers.push({ x0: ox, y0: oy, x1: ox + dx * e, y1: oy + dy * e, t: tNow });
+        if (p.fw === 4) rockets.push({ x0: ox, y0: oy, x1: ox + dx * e, y1: oy + dy * e, t: tNow, dur: Math.max(260, e / 620 * 1000), impact: 0 });
+        else tracers.push({ x0: ox, y0: oy, x1: ox + dx * e, y1: oy + dy * e, t: tNow });
         if (me.dead > 0) continue;
         const rx = me.x - ox, ry = me.y - oy, f = rx * dx + ry * dy;
         if (f > 0 && f < e && Math.abs(-rx * dy + ry * dx) < (me.vid ? 15 : 8)) { if (me.vid === HELI) me.hh -= W.pvp * .6; else me.hp -= W.pvp * (me.vid ? .6 : 1); beep(150, .05, "square", .04, 50); if (me.vid && Math.random() < .3) dent(ang + Math.PI, 1); }
@@ -375,8 +376,8 @@ export function createStaClient(env) {
   // ================= MOI =================
   const col = i => CCOL[(i | 0) % 8];
   function spawnAt(p) { me.hz = 0; me.land = 0; me.x = p[0] + rr(-30, 30); me.y = p[1]; me.vid = 0; me.v = 0; me.hp = 100; me.dead = 0; me.heat = 0; me.bust = 0; job = null; cam.x = me.x; cam.y = me.y; }
-  function die(why, loss, where) { me.hz = 0; me.land = 0; shop = ""; if (mis) missionFail("tu es tombé"); me.dead = 2.2; me.msg = why; me.wpn = 0; me.ammo = [0, 0, 0, 0, 0]; me.vid = 0; me.v = 0; me.heat = 0; me.cash = Math.floor(me.cash * (1 - loss)); me.where = where; SND.wasted(); }
-  const gStr = () => JSON.stringify({ g: me.g, c: me.gcar, g2: me.g2 ? 1 : 0, c2: me.gcar2, a: me.ammo.slice(1), w: me.wpn, h: me.hu ? 1 : 0, hh: Math.round(clamp(me.hh, 0, 100)), rp: me.rpgParts, rq: me.rpgQuest, at: me.ammoTags, aq: me.ammoQuest, rau: me.rpgAmmoUnlocked });
+  function die(why, loss, where) { pwFail("tu es tombé"); me.hz = 0; me.land = 0; shop = ""; if (mis) missionFail("tu es tombé"); me.dead = 2.2; me.msg = why; me.wpn = 0; me.ammo = [0, 0, 0, 0, 0]; me.vid = 0; me.v = 0; me.heat = 0; me.cash = Math.floor(me.cash * (1 - loss)); me.where = where; SND.wasted(); }
+  const gStr = () => JSON.stringify({ g: me.g, c: me.gcar, g2: me.g2 ? 1 : 0, c2: me.gcar2, a: me.ammo.slice(1), w: me.wpn, h: me.hu ? 1 : 0, hh: Math.round(clamp(me.hh, 0, 100)), rp: me.rpgParts, rq: me.rpgQuest, aq: me.ammoQuest, rau: me.rpgAmmoUnlocked });
   function persist(force) {                                               // argent (users/<uid>/sta) + garage, voiture rangée, armes et munitions (users/<uid>/sta2)
     const cash = Math.round(me.cash);
     if (force || cash !== savedCash) { savedCash = cash; set(RF(`users/${myUid}/sta`), cash).catch(() => { }); }
@@ -498,7 +499,7 @@ export function createStaClient(env) {
   function useKey() {
     if (me.dead > 0) return;
     if (shop) { shop = ""; return; }
-    if (inn) { if (inn.k === "arms" && me.rpgParts.length >= 3 && me.ammoQuest && !me.rpgAmmoUnlocked) { if(me.ammoTags.length>=3){me.rpgAmmoUnlocked=1;persist(true);floats.push({x:me.x,y:me.y-25,t:tNow,s:"MUNITIONS RPG DÉBLOQUÉES",c:"#ffd23f"});toast("Quête réussie ! Les munitions de RPG sont maintenant achetables.");beep(880,.16,"triangle",.06);}else toast(`ARMURIER : « Il manque ${3-me.ammoTags.length} badge(s) ! »`);return;} innUse(); return; }
+    if (inn) { innUse(); return; }
     if (me.vid === HELI) { heliLand(); return; }
     if (!me.vid) {
       const z = shopAt(); if (z) { if (z === "heal") healDo(); else enterInn(z); return; }
@@ -839,8 +840,14 @@ export function createStaClient(env) {
   //     Comme les autres missions elle est personnelle (chez toi) ; seule la réussite est sauvegardée (me.hu).
   const nearPilot = () => (me.vid || me.dead > 0 || inn) ? null : (Math.hypot(PILOT.x - me.x, PILOT.y - me.y) < 52 ? PILOT : null);
   // Objets de quête cachés sur des trottoirs éloignés, sans marqueur sur la carte.
-  const RPG_PART_SPOTS = (() => { const out=[]; for(let i=1;i<N-1&&out.length<3;i++) for(let j=1;j<N-1&&out.length<3;j++){if(isPark(i,j)||isSpecial(i,j))continue;const q={x:lo(i)+SW/2,y:lo(j)+BL/2};if(Math.hypot(q.x-GIVERS[0].x,q.y-GIVERS[0].y)<900||Math.hypot(q.x-PILOT.x,q.y-PILOT.y)<700)continue;if(out.every(p=>Math.hypot(p.x-q.x,p.y-q.y)>850))out.push(q);}return out;})();
-  const AMMO_TAG_SPOTS = (() => { const out=[]; for(let j=N-2;j>0&&out.length<3;j--) for(let i=N-2;i>0&&out.length<3;i--){if(isPark(i,j)||isSpecial(i,j))continue;const q={x:lo(i)+SW/2,y:lo(j)+BL/2};if(Math.hypot(q.x-ZONES.arms.x,q.y-ZONES.arms.y)<800)continue;if(out.every(p=>Math.hypot(p.x-q.x,p.y-q.y)>650))out.push(q);}return out;})();
+  // Quête 1 : 3 pièces de RPG aux quatre coins de la ville (cases fixes, loin du boss, du pilote et du mécano).
+  const cellSpot = (ci, cj) => { for (let r = 0; r < 3; r++) for (let di = -r; di <= r; di++) for (let dj = -r; dj <= r; dj++) { const i = ci + di, j = cj + dj; if (i < 0 || j < 0 || i >= N || j >= N || isPark(i, j) || isSpecial(i, j)) continue; return { x: lo(i) + SW / 2, y: lo(j) + BL / 2 }; } return { x: lo(ci) + SW / 2, y: lo(cj) + BL / 2 }; };
+  const RPG_PART_SPOTS = [cellSpot(1, 1), cellSpot(8, 3), cellSpot(3, 7)];
+  // Quête 2 : livraison de poudre. On la récupère dans un entrepôt isolé, la police est alertée, puis on la livre à l'armurerie à temps.
+  const POWDER_SPOT = cellSpot(0, 7), POWDER_TIME = 170;
+  let pw = 0, pwT = 0;                                                    // 0 = rien · 1 = aller chercher la poudre · 2 = livrer (chrono)
+  const nearMech = () => (!me.vid && !me.dead && !inn && Math.hypot(RPG_CONTACT.x - me.x, RPG_CONTACT.y - me.y) < 58);
+  const pwFail = (why) => { if (pw === 2) { pw = 1; toast(`🧨 Livraison ratée (${why}) : retourne chercher la poudre.`); } };
   const PARTS = 5, PART_TIME = 480;                                      // difficulté de la quête : nombre de caisses · temps (s)
   function partSpots() {
     const out = [];
@@ -869,9 +876,10 @@ export function createStaClient(env) {
     if (!me.vid && !inn && Math.hypot(RPG_CONTACT.x-me.x,RPG_CONTACT.y-me.y)<58) {
       if (!me.rpgQuest) { me.rpgQuest=1; persist(true); toast("MÉCANO : « Retrouve les 3 pièces du lance-roquettes que j’ai cachées en ville. »"); }
       else if (me.rpgParts.length<3) toast(`MÉCANO : « Il te manque encore ${3-me.rpgParts.length} pièce(s) RPG. »`);
-      else if (!me.ammoQuest) { me.ammoQuest=1; persist(true); toast("MÉCANO : « Parfait ! Maintenant retrouve mes 3 badges cachés pour débloquer les munitions. »"); }
-      else if (me.ammoTags.length<3) toast(`MÉCANO : « Il te manque encore ${3-me.ammoTags.length} badge(s). »`);
-      else toast("MÉCANO : « Tout est prêt ! Va à l’armurerie pour récupérer l’accès aux munitions RPG. »");
+      else if (me.rpgAmmoUnlocked) toast("MÉCANO : « Les munitions RPG sont à toi. Fais-en bon usage ! »");
+      else if (!me.ammoQuest) { me.ammoQuest=1; pw=1; persist(true); toast("MÉCANO : « Pièces OK ! Il me faut de la poudre : va à l’entrepôt (marqueur orange), puis livre-la à l’armurerie en véhicule avant la fin du chrono. »"); }
+      else if (pw===2) toast("MÉCANO : « Fonce livrer la poudre à l’armurerie ! »");
+      else { pw=1; toast("MÉCANO : « La poudre t’attend à l’entrepôt (marqueur orange sur la carte). »"); }
       beep(620,.12,"triangle",.06); return true;
     }
     const g = nearGiver(); if (!g) return false;
@@ -974,7 +982,16 @@ export function createStaClient(env) {
       if (me.vid && me.vid !== HELI && Math.abs(me.v) > 80 && Math.hypot(tgt.x - me.x, tgt.y - me.y) < 22) hitTgt(999);
     }
     if (me.rpgQuest && me.rpgParts.length < 3) RPG_PART_SPOTS.forEach((q,i)=>{if(!me.rpgParts.includes(i)&&Math.hypot(q.x-me.x,q.y-me.y)<22){me.rpgParts.push(i);persist(true);floats.push({x:q.x,y:q.y-18,t:tNow,s:`PIÈCE RPG ${me.rpgParts.length}/3`,c:"#ffd23f"});beep(880,.12,"triangle",.06);if(me.rpgParts.length===3)toast("Les 3 pièces sont réunies ! Le RPG est débloqué. Va à l’armurerie.");}});
-    if (me.ammoQuest && !me.rpgAmmoUnlocked) AMMO_TAG_SPOTS.forEach((q,i)=>{if(!me.ammoTags.includes(i)&&Math.hypot(q.x-me.x,q.y-me.y)<22){me.ammoTags.push(i);persist(true);floats.push({x:q.x,y:q.y-18,t:tNow,s:`BADGE ${me.ammoTags.length}/3`,c:"#7ae582"});beep(760,.1,"triangle",.06);if(me.ammoTags.length===3)toast("Tu as les 3 badges ! Retourne à l’armurerie.");}});
+    if (me.ammoQuest && !me.rpgAmmoUnlocked && me.rpgParts.length >= 3) {
+      if (pw === 0) pw = 1;
+      if (pw === 1 && Math.hypot(POWDER_SPOT.x - me.x, POWDER_SPOT.y - me.y) < 34) { pw = 2; pwT = POWDER_TIME; me.heat = Math.min(5, Math.max(me.heat, 2.2)); me.wl = Math.max(me.wl, 2); floats.push({ x: POWDER_SPOT.x, y: POWDER_SPOT.y - 18, t: tNow, s: "🧨 POUDRE RÉCUPÉRÉE", c: "#ff9a3d" }); toast("🚨 La police est alertée ! Livre la poudre à l’armurerie en véhicule."); beep(520, .14, "square", .05); }
+      else if (pw === 2) {
+        pwT -= dt;
+        if (pwT <= 0) pwFail("temps écoulé");
+        else if (me.vid && me.vid !== HELI && Math.hypot(ZONES.arms.x - me.x, ZONES.arms.y - me.y) < 90) { pw = 0; me.rpgAmmoUnlocked = 1; me.cash += 500; persist(true); floats.push({ x: me.x, y: me.y - 24, t: tNow, s: "🚀 MUNITIONS RPG DÉBLOQUÉES +$500", c: "#7ae582" }); toast("Livraison réussie ! Tu peux acheter des munitions RPG à l’armurerie."); beep(880, .12, "triangle", .06); setTimeout(() => beep(1175, .16, "triangle", .06), 130); }
+        else if (!me.vid && Math.hypot(ZONES.arms.x - me.x, ZONES.arms.y - me.y) < 90 && Math.floor(tNow / 4000) !== Math.floor((tNow - dt * 1000) / 4000)) toast("Livre la poudre EN VÉHICULE !");
+      }
+    }
     if (!mis) return;
     mis.t -= dt; if (mis.t <= 0) { missionFail("temps écoulé"); return; }
     mis.el = (mis.el || 0) + dt;
@@ -1640,7 +1657,7 @@ function frame(now) {
   cam.z += (tz - cam.z) * Math.min(1, 3 * dt);
   cam.x += (me.x + (me.vid ? Math.cos(me.a) * me.v * .12 : 0) - cam.x) * Math.min(1, 9 * dt); cam.y += (me.y + (me.vid ? Math.sin(me.a) * me.v * .12 : 0) - cam.y) * Math.min(1, 9 * dt);
   const S = cv.width / W, z = cam.z, vw = W / z, vh = H / z, vx0 = cam.x - vw / 2, vy0 = cam.y - vh / 2, vx1 = vx0 + vw, vy1 = vy0 + vh;
-  const boomPower = booms.reduce((v,b)=>{const age=now-b.t,dist=Math.hypot(b.x-me.x,b.y-me.y),power=b.rpg?1.65:1;return age>=0&&age<(b.rpg?680:420)?Math.max(v,(1-age/(b.rpg?680:420))*Math.max(0,1-dist/(b.rpg?1250:1000))*power):v;},0), shake=boomPower*8;
+  const boomPower = booms.reduce((v,b)=>{const age=now-b.t,dist=Math.hypot(b.x-me.x,b.y-me.y),power=1.65;return age>=0&&age<680?Math.max(v,(1-age/680)*Math.max(0,1-dist/1250)*power):v;},0), shake=boomPower*8;
    const tx = Math.round((W / 2 - cam.x * z) / LR + (shake?Math.sin(now*.12)*shake:0)), ty = Math.round((H / 2 - cam.y * z) / LR + (shake?Math.cos(now*.15)*shake*.7:0)), sxy = (wx, wy) => [wx * z + tx * LR, wy * z + ty * LR];
   const labels = [];
   x = lx; x.setTransform(z / LR, 0, 0, z / LR, tx, ty);                              // le monde est dessiné en basse résolution…
@@ -1649,10 +1666,6 @@ function frame(now) {
   splats.forEach(s => { const a = 1 - (now - s.t) / 30000; if (a > 0 && inV(s.x, s.y)) drawSplat(s, a); });
   splats = splats.filter(s => now - s.t < 30000);
   for (const p of PICKS) if (inV(p.x, p.y) && !(pickT.has(p.id) && now - pickT.get(p.id) < 45000)) drawPick(p, now);
-   RPG_PART_SPOTS.forEach((q,i)=>{if(me.rpgQuest&&!me.rpgParts.includes(i)&&Math.hypot(q.x-me.x,q.y-me.y)<75){x.fillStyle="rgba(255,210,63,.25)";x.beginPath();x.arc(q.x,q.y,9+Math.sin(now/120)*2,0,7);x.fill();labels.push(["✦",q.x,q.y-8,"#ffd23f",13]);}});
-   AMMO_TAG_SPOTS.forEach((q,i)=>{if(me.ammoQuest&&!me.ammoTags.includes(i)&&Math.hypot(q.x-me.x,q.y-me.y)<75){x.fillStyle="rgba(62,230,196,.22)";x.beginPath();x.arc(q.x,q.y,8+Math.sin(now/140)*2,0,7);x.fill();labels.push(["✦",q.x,q.y-8,"#3ee6c4",12]);}});
-   RPG_PART_SPOTS.forEach((q,i)=>{if(me.rpgQuest&&!me.rpgParts.includes(i)&&Math.hypot(q.x-me.x,q.y-me.y)<75){x.fillStyle="rgba(255,210,63,.25)";x.beginPath();x.arc(q.x,q.y,9+Math.sin(now/120)*2,0,7);x.fill();labels.push(["✦",q.x,q.y-8,"#ffd23f",13]);}});
-   AMMO_TAG_SPOTS.forEach((q,i)=>{if(me.ammoQuest&&!me.ammoTags.includes(i)&&Math.hypot(q.x-me.x,q.y-me.y)<75){x.fillStyle="rgba(62,230,196,.22)";x.beginPath();x.arc(q.x,q.y,8+Math.sin(now/140)*2,0,7);x.fill();labels.push(["✦",q.x,q.y-8,"#3ee6c4",12]);}});
   wrecks = wrecks.filter(w => now - w.t < 25000); wrecks.forEach(w => { if (inV(w.x, w.y)) drawWreck(w, now); });
   for (const [cid, d] of dCops) if (!hitDone.has(cid) && inV(d.x, d.y)) drawWalker(d.x, d.y, d.a, "#2a46a8", "#f1c27d", Math.hypot(d.tx - d.x, d.ty - d.y) > 1.2 ? now / 85 : null, 1, now - (d.flash || -1e9) < 70, true);
   ejected = ejected.filter(q => now - q.t < 6300); ejected.forEach(q => { if (inV(q.x, q.y)) drawEjected(q, now); });
@@ -1662,11 +1675,11 @@ function frame(now) {
     x.fillStyle="#ffd23f"; x.strokeStyle="#4b3100"; x.lineWidth=2.5; x.beginPath(); x.arc(q.x,q.y,10,0,7); x.fill(); x.stroke();
     x.fillStyle="#fff6bd"; x.fillRect(q.x-2,q.y-6,4,12); x.fillRect(q.x-6,q.y-2,12,4); x.restore();
   }});
-  if (me.ammoQuest && !me.rpgAmmoUnlocked) AMMO_TAG_SPOTS.forEach((q,i)=>{ if(!me.ammoTags.includes(i)&&inV(q.x,q.y)){
-    const pulse=.7+.3*Math.sin(now/150); x.save(); x.globalAlpha=pulse; x.fillStyle="rgba(60,220,255,.3)"; x.beginPath(); x.arc(q.x,q.y,19,0,7); x.fill();
-    x.fillStyle="#42dcff"; x.strokeStyle="#063d54"; x.lineWidth=2.5; x.beginPath(); x.arc(q.x,q.y,10,0,7); x.fill(); x.stroke();
-    x.fillStyle="#fff"; x.fillRect(q.x-5,q.y-2,10,4); x.restore();
-  }});
+  if (me.ammoQuest && !me.rpgAmmoUnlocked && pw === 1 && inV(POWDER_SPOT.x, POWDER_SPOT.y)) {
+    const q = POWDER_SPOT, pulse = .7 + .3 * Math.sin(now / 150); x.save(); x.globalAlpha = pulse; x.fillStyle = "rgba(255,140,40,.3)"; x.beginPath(); x.arc(q.x, q.y, 22, 0, 7); x.fill();
+    x.fillStyle = "#ff9a3d"; x.strokeStyle = "#4b2200"; x.lineWidth = 2.5; x.fillRect(q.x - 8, q.y - 8, 16, 16); x.strokeRect(q.x - 8, q.y - 8, 16, 16); x.fillStyle = "#fff"; x.fillRect(q.x - 5, q.y - 1, 10, 3); x.restore();
+    labels.push(["🧨", q.x, q.y - 22 + Math.sin(now / 200) * 3, "#ff9a3d", 18]);
+  }
   for (const [pid, d] of dPeds) if (!hitDone.has(pid) && inV(d.x, d.y)) drawWalker(d.x, d.y, d.a, SHIRT[d.sk % 6], SKIN[d.sk % 6], now / 85 + d.tx);
   for (const g of GIVERS) if (inV(g.x, g.y)) {
     const dd = Math.hypot(g.x - me.x, g.y - me.y); drawWalker(g.x, g.y, dd < 170 ? Math.atan2(me.y - g.y, me.x - g.x) : g.a, g.sh, SKIN[g.sk], null, 0, false);
@@ -1775,6 +1788,9 @@ function frame(now) {
   for (const d of dHelis.values()) { const fl = Math.floor(now / 200) % 2; dot(d.x, d.y, fl ? "#ff2a2a" : "#2a5bff", 3.6); }
   for (const d of dP.values()) if (!d.ib) arrow(d.x, d.y, d.a, "#ff3b30");                                         // les autres joueurs : flèches rouges
   if (job) dot(job.x, job.y, "#ffd23f", 3.5);
+  if (me.rpgQuest && me.rpgParts.length < 3) RPG_PART_SPOTS.forEach((q, i) => { if (!me.rpgParts.includes(i)) { ping(q.x, q.y, "#ffd23f", 3); dot(q.x, q.y, "#ffd23f", 3); } });
+  if (me.ammoQuest && !me.rpgAmmoUnlocked && pw === 1) { ping(POWDER_SPOT.x, POWDER_SPOT.y, "#ff9a3d", 4); dot(POWDER_SPOT.x, POWDER_SPOT.y, "#ff9a3d", 4); }
+  if (pw === 2) { ping(ZONES.arms.x, ZONES.arms.y, "#ff9a3d", 5); }
   { const mp = misPt(); if (mp && !mp.nm) { ping(mp.x, mp.y, mp.c, 4); dot(mp.x, mp.y, mp.c, 4); } }
   if (me.wl > 0 && Math.floor(now / 250) % 2) { x.strokeStyle = "rgba(255,60,60,.9)"; x.lineWidth = 2; rrect(mx + 1, my + 1, mm - 2, mm - 2, 11); x.stroke(); }   // recherché : le cadre clignote
   ping(me.x, me.y, "#fff", 3);
@@ -1787,10 +1803,14 @@ function frame(now) {
   if (me.dead <= 0 && !shop) {
     let h = "", hc = "#ffe14d"; const sa = shopAt();
     if (sa) { if (me.vid) h = `DESCENDS (E) POUR ${sa === "heal" ? "TE SOIGNER" : "ACHETER DES ARMES"}`; else if (sa === "heal") { const p = healPrice(); h = me.hp >= 99 ? "TU ES EN PLEINE FORME" : `E : TE SOIGNER ($${p})`; if (me.hp < 99 && p > me.cash) hc = "#ff9f43"; } else h = "E : ENTRER DANS L'ARMURERIE"; }
-    else { const g = nearGiver(); if (g) h = mis ? `${g.n} : TU AS DÉJÀ UNE MISSION` : `E : PARLER À ${g.n} (${g.l})`; else if (nearPilot()) h = me.hu ? "E : PARLER AU PILOTE" : mis && mis.k === "heli" ? (mis.st === 1 ? "E : RENDRE LES PIÈCES AU PILOTE" : "E : PARLER AU PILOTE") : mis ? "LE PILOTE : TU AS DÉJÀ UNE MISSION" : "E : PARLER AU PILOTE (QUÊTE SPÉCIALE 🚁)"; }
+    else { const g = nearGiver(); if (g) h = mis ? `${g.n} : TU AS DÉJÀ UNE MISSION` : `E : PARLER À ${g.n} (${g.l})`; else if (nearMech()) h = pw === 2 ? `🧨 LIVRE LA POUDRE À L’ARMURERIE : ${Math.max(0, Math.ceil(pwT))}s` : "E : PARLER AU MÉCANO (QUÊTE RPG 🧩)"; else if (nearPilot()) h = me.hu ? "E : PARLER AU PILOTE" : mis && mis.k === "heli" ? (mis.st === 1 ? "E : RENDRE LES PIÈCES AU PILOTE" : "E : PARLER AU PILOTE") : mis ? "LE PILOTE : TU AS DÉJÀ UNE MISSION" : "E : PARLER AU PILOTE (QUÊTE SPÉCIALE 🚁)"; }
     if (h) txt(h, W / 2, H - 60, 15, hc);
   }
   drawMis(now);
+  if (pw === 2) { const tm = Math.max(0, Math.ceil(pwT)), tt = `${Math.floor(tm / 60)}:${String(tm % 60).padStart(2, "0")}`, yy = mis ? 196 : 120;
+    x.fillStyle = "rgba(0,0,0,.55)"; x.fillRect(10, yy, 276, 50); txt("QUÊTE RPG · LIVRAISON", 18, yy + 16, 11, "#ff9a3d", "left"); txt(`🧨 ARMURERIE · ⏱ ${tt}`, 18, yy + 38, 13, tm < 30 && Math.floor(now / 300) % 2 ? "#ff5a4d" : "#fff", "left");
+    const a = Math.atan2(ZONES.arms.y - me.y, ZONES.arms.x - me.x), d = Math.hypot(ZONES.arms.x - me.x, ZONES.arms.y - me.y);
+    if (d > 120) { const ax = W / 2 + Math.cos(a) * 96, ay = H / 2 + Math.sin(a) * 78; x.save(); x.translate(ax, ay); x.rotate(a); x.fillStyle = "#ff9a3d"; x.strokeStyle = "#000"; x.lineWidth = 2; x.beginPath(); x.moveTo(15, 0); x.lineTo(-9, -9); x.lineTo(-9, 9); x.closePath(); x.fill(); x.stroke(); x.restore(); } }
   if (shop) drawShop(now);
   if (me.vid && TOUCH) { const bb = brakeId !== null; x.fillStyle = bb ? "#ff5a4d" : "#b3261e"; x.beginPath(); x.arc(W - 140, H - 48, 34, 0, 7); x.fill(); x.stroke(); txt("FREIN", W - 140, H - 44, 13); x.fillStyle = "#2f4f9f"; x.beginPath(); x.arc(W - 224, H - 48, 28, 0, 7); x.fill(); x.stroke(); txt("RADIO", W - 224, H - 44, 11); x.fillStyle = hornId !== null ? "#ffd23f" : "#8a6d1a"; x.beginPath(); x.arc(W - 196, H - 106, 28, 0, 7); x.fill(); x.stroke(); txt("KLAXON", W - 196, H - 102, 10); }
   if (!me.vid && me.dead <= 0 && me.pg && isOwner() && Math.hypot(me.pg.x - me.x, me.pg.y - me.y) < 52) txt("E : REMONTER DANS LE FANTÔME 👻", W / 2, H - 44, 14, "#9ad8ff");
@@ -1859,8 +1879,8 @@ function frame(now) {
     enter(code) {
       active = true; c = code; myUid = getMe().uid; ls = null; lastT = 0; lastH = ""; lastEv = 0; pd = {}; hostOn = false; keys = new Set(); stick = null; brakeId = null; useReq = 0;
       dPeds.clear(); dCars.clear(); dCops.clear(); dHelis.clear(); helis = []; dP.clear(); ejected = []; sPrevCash = 0; sPrevWl = 0; sAmbT = performance.now() + 8000; hornKey = false; hornId = null; me.pg = null; splats = []; floats = []; hitDone = new Set(); lastHs = {}; sentStr = ""; sentAt = 0; savedCash = -1; saveAt = performance.now(); gLoaded = false; savedG = ""; lastGn = {};
-      Object.assign(me, { vid: 0, hp: 100, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, bust: 0, hurt: 0, v: 0, a: 0, cash: 0, cop: 0, wpn: 0, ammo: [0, 0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100, rpgParts: [], rpgQuest: 0, ammoTags: [], ammoQuest: 0, rpgAmmoUnlocked: 0 });
-      inn = null; mis = null; tgt = null; shop = ""; killQ = []; carQ = []; pendingPedHits = new Map(); tracers = []; rockets = []; sparks = []; booms = []; wrecks = []; pickT = new Map(); lastFc = {}; lastCs = {}; fireKey = false; fireId = null;
+      Object.assign(me, { vid: 0, hp: 100, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, bust: 0, hurt: 0, v: 0, a: 0, cash: 0, cop: 0, wpn: 0, ammo: [0, 0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100, rpgParts: [], rpgQuest: 0, ammoQuest: 0, rpgAmmoUnlocked: 0 });
+      inn = null; mis = null; tgt = null; pw = 0; pwT = 0; shop = ""; killQ = []; carQ = []; pendingPedHits = new Map(); tracers = []; rockets = []; sparks = []; booms = []; wrecks = []; pickT = new Map(); lastFc = {}; lastCs = {}; fireKey = false; fireId = null;
       const ix = 2 + Math.floor(Math.random() * 5), iy = 2 + Math.floor(Math.random() * 5); spawnAt([ix * CELL, iy * CELL]);
       $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : monter / descendre d'une voiture · en voiture ↑ accélère, ↓ freine, ←→ tourne · livre les colis 📦, écrase des piétons, évite la police ! · Sans arme tu frappes avec tes poings 👊 (F : 3 coups pour un piéton) ; ramasse les armes au sol : F tirer, X changer d'arme (0 = poings, 1-2-3) · en hélico : mitraillette à munitions infinies (F) · les voitures se cabossent ! · garage ($3500 ; à l'intérieur, un 2e emplacement pour une voiture de plus : $2500) : va sur la zone jaune et appuie sur E (owners : voiture fantôme 👻 invincible qui traverse les bâtiments, tu peux en descendre : elle reste garée et seuls les owners peuvent y remonter (E) ; au garage : ranger le fantôme (E), G pour en sortir un) · R : changer de radio (4 stations), H : klaxon · missions : parle au BOSS ❗ au bord ouest de la carte (E) : missions aléatoires (voitures, cavale, contrat, camion blindé 🚚), M pour abandonner · armurerie et distributeur de soins (hôpital) : va sur leur zone et appuie sur E · 🏎️ des voitures de sport (Supercar, Roadster) roulent en ville : bien plus rapides, vole-les et range-les au garage ! · 🚁 hélicoptère : un pilote mystérieux traîne quelque part en ville (il n'est PAS sur la carte) : trouve-le et réussis sa quête pour débloquer un hélico, rangé sur le toit de ton garage (échelle dans le garage) ; E pour te poser sur la zone 🅷 du toit · à 5★ la police envoie des hélicos : abats-les !";
       get(RF(`users/${myUid}/sta`)).then(s => { const v = +s.val(); if (v > 0 && me.cash === 0) { me.cash = v; savedCash = v; sPrevCash = v; } }).catch(() => { });
@@ -1869,7 +1889,7 @@ function frame(now) {
           const v = JSON.parse(String(s.val() || "null"));
           if (v && typeof v === "object") {
             me.g = v.g ? 1 : 0; me.hu = v.h ? 1 : 0; me.hh = v.hh === undefined ? 100 : clamp(Math.round(+v.hh) || 0, 0, 100); const gc = v.c; const rdCar = q => q && Number.isFinite(+q.t) ? { c: (+q.c | 0) & 7, t: clamp(+q.t | 0, 0, 4), d: (+q.d | 0) & 255, p: q.p ? 1 : 0 } : null; me.gcar = rdCar(gc); me.g2 = v.g2 ? 1 : 0; me.gcar2 = me.g2 ? rdCar(v.c2) : null;
-            if (Array.isArray(v.a)) { for (let n = 1; n <= 4; n++) me.ammo[n] = clamp(Math.floor(+v.a[n - 1]) || 0, 0, WPN[n].max); const w = +v.w | 0; me.wpn = w >= 1 && w <= 4 && me.ammo[w] > 0 ? w : 0; if (!me.wpn) cycleWpn(); } me.rpgParts = Array.isArray(v.rp) ? v.rp.filter(n=>Number.isInteger(n)&&n>=0&&n<3) : []; me.rpgQuest = v.rq ? 1 : 0; me.ammoTags = Array.isArray(v.at) ? v.at.filter(n=>Number.isInteger(n)&&n>=0&&n<3) : []; me.ammoQuest = v.aq ? 1 : 0; me.rpgAmmoUnlocked = v.rau ? 1 : 0;
+            if (Array.isArray(v.a)) { for (let n = 1; n <= 4; n++) me.ammo[n] = clamp(Math.floor(+v.a[n - 1]) || 0, 0, WPN[n].max); const w = +v.w | 0; me.wpn = w >= 1 && w <= 4 && me.ammo[w] > 0 ? w : 0; if (!me.wpn) cycleWpn(); } me.rpgParts = Array.isArray(v.rp) ? v.rp.filter(n=>Number.isInteger(n)&&n>=0&&n<3) : []; me.rpgQuest = v.rq ? 1 : 0; me.ammoQuest = v.aq ? 1 : 0; me.rpgAmmoUnlocked = v.rau ? 1 : 0; if (me.rpgAmmoUnlocked && me.rpgParts.length < 3) me.rpgParts = [0, 1, 2]; pw = me.ammoQuest && !me.rpgAmmoUnlocked ? 1 : 0;
           }
         } catch { }
         gLoaded = true; savedG = gStr();

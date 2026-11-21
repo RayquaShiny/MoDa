@@ -165,7 +165,7 @@ const visitorIPPromise=(async()=>{try{
 }catch(e){console.warn('IP lookup unavailable',e);return null}})();
 function showIPDenied(){if(ipDenied)return;ipDenied=true;document.querySelector('header')?.setAttribute('hidden','');document.querySelector('main')?.setAttribute('hidden','');document.querySelector('#side')?.setAttribute('hidden','');
  let p=document.getElementById('ipDeniedPage');if(!p){p=document.createElement('div');p.id='ipDeniedPage';p.style.cssText='position:fixed;inset:0;z-index:99999;display:grid;place-items:center;background:#090914;color:white;padding:24px;text-align:center;font:700 22px system-ui';p.textContent='Désolé, mais vous n’avez pas réussi à atteindre ce site';document.body.append(p)}
- if(auth.currentUser)signOut(auth).catch(()=>{});}
+ const uid=me?.uid||auth.currentUser?.uid;if(uid)set(R(`presence/${uid}`),false).catch(()=>{});\n if(auth.currentUser)signOut(auth).catch(()=>{});}
 async function checkVisitorIP(){const x=await visitorIPPromise;if(!x)return false;try{return (await get(R('ipBanHashes/'+x.hash))).exists()}catch(e){console.warn(e);return false}}
 async function checkDeviceBan(){if(!deviceId)return false;try{return (await get(R('deviceBans/'+deviceId))).exists()}catch(e){console.warn('Device ban check',e);return false}}
 const unboot=()=>$('boot').classList.add('off');

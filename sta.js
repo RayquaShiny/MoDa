@@ -36,7 +36,7 @@ const PILOT = (() => { const [i, j] = gcell(8, 7); return { n: "LE PILOTE", x: l
 const RPG_CONTACT = (() => { const [i,j] = gcell(6,8); return { n:"MÉCANO", x:lo(i)+SW/2, y:lo(j)+BL/2, a:Math.PI, sh:"#d18a35", sk:5 }; })();
 const RP = { x: lo(GARAGE[0]) + BL / 2, y: lo(GARAGE[1]) + BL / 2 + 10 };   // héliport sur le toit du garage
 const CNAME = ["rouge", "orange", "turquoise", "bleue", "jaune", "violette", "grise", "blanche"];   // même ordre que CCOL
-const SHOP_ARMS = [{ n: 1, p: 120 }, { n: 2, p: 400 }, { n: 3, p: 360 }, { n: 4, p: 650 }];
+const SHOP_ARMS = [{ n: 1, p: 120 }, { n: 2, p: 400 }, { n: 3, p: 360 }], SHOP_BM = [{ n: 4, p: 900 }];
 const angLerp = (a, b, k) => { let d = (b - a) % 6.283185; if (d > 3.141593) d -= 6.283185; if (d < -3.141593) d += 6.283185; return a + d * k; };
 const WPN = [null,
   { n: "PISTOLET", rate: .34, rng: 340, pel: 1, spr: .02, car: 12, pvp: 14, heat: .05, max: 99, ammo: 30, snd: [330, .07, "square", .05, 140] },
@@ -505,6 +505,7 @@ export function createStaClient(env) {
     if (inn) { innUse(); return; }
     if (me.vid === HELI) { heliLand(); return; }
     if (!me.vid) {
+      if (nearBM()) { shop = "bm"; beep(660, .06, "triangle", .05); return; }
       const z = shopAt(); if (z) { if (z === "heal") healDo(); else enterInn(z); return; }
       if (talkDo()) return;
     }
@@ -612,7 +613,7 @@ export function createStaClient(env) {
     me.cash -= p; me.hp = 100; me.hurt = 0; floats.push({ x: me.x, y: me.y - 22, t: tNow, s: `❤️ SOIGNÉ −$${p}`, c: "#7ae582" }); beep(660, .12, "triangle", .06); persist(true);
   }
   function buyArm(a) {
-    if (a.n === 4 && (!me.rpgAmmoUnlocked || me.rpgParts.length < 3)) { toast("Les munitions RPG sont verrouillées : termine les deux quêtes."); return; }
+    if (a.n === 4 && (!me.rpgAmmoUnlocked || me.rpgParts.length < 3)) { toast("Le vendeur ne te connaît pas : termine d’abord les quêtes du mécano."); return; }
     const WP = WPN[a.n];
     if (me.ammo[a.n] >= WP.max) { toast("Munitions déjà au maximum"); return; }
     if (me.cash < a.p) { toast(`Il te faut $${a.p}`); return; }
@@ -620,7 +621,7 @@ export function createStaClient(env) {
     floats.push({ x: me.x, y: me.y - 22, t: tNow, s: `🔫 ${WP.n} +${WP.ammo} −$${a.p}`, c: "#ffe14d" }); beep(880, .1, "triangle", .06); persist(true);
   }
   const shopItems = () => {
-    if (shop === "arms") return SHOP_ARMS.map(a => { const WP = WPN[a.n], full = me.ammo[a.n] >= WP.max, locked = a.n === 4 && (!me.rpgAmmoUnlocked || me.rpgParts.length < 3); return { l: `${a.n} · ${WP.n} +${WP.ammo}`, r: locked ? "VERROUILLÉ" : full ? "PLEIN" : `${a.p}`, ok: !locked && !full && me.cash >= a.p, f: () => buyArm(a) }; });
+    if (shop === "arms" || shop === "bm") return (shop === "bm" ? SHOP_BM : SHOP_ARMS).map(a => { const WP = WPN[a.n], full = me.ammo[a.n] >= WP.max, locked = a.n === 4 && (!me.rpgAmmoUnlocked || me.rpgParts.length < 3); return { l: `${a.n} · ${WP.n} +${WP.ammo}`, r: locked ? "VERROUILLÉ" : full ? "PLEIN" : `${a.p}`, ok: !locked && !full && me.cash >= a.p, f: () => buyArm(a) }; });
     if (shop === "garage") {
       const hp2 = Math.ceil((100 - clamp(me.hh, 0, 100)) * 10), out = [];
       [[1, me.gcar], [2, me.gcar2]].forEach(([sl, g]) => {
@@ -645,9 +646,9 @@ export function createStaClient(env) {
     return -3;
   }
   function drawShop(now) {
-    const items = shopItems(), pw = SH.pw, py = SH.py, ph = 84 + items.length * 46, px = W / 2 - pw / 2, zc = (ZONES[shop] || ROOMS[shop]).c;
+    const items = shopItems(), pw = SH.pw, py = SH.py, ph = 84 + items.length * 46, px = W / 2 - pw / 2, zc = shop === "bm" ? "#b07bff" : (ZONES[shop] || ROOMS[shop]).c;
     x.fillStyle = "rgba(10,10,16,.9)"; x.fillRect(px, py, pw, ph); x.strokeStyle = zc; x.lineWidth = 3; x.strokeRect(px, py, pw, ph);
-    txt(shop === "garage" ? "🔧 ATELIER DE RICO" : "🔫 ARMURERIE", W / 2, py + 30, 20, zc); txt("✖", px + pw - 22, py + 28, 18, "#fff");
+    txt(shop === "garage" ? "🔧 ATELIER DE RICO" : shop === "bm" ? "🚚 LE CAMION" : "🔫 ARMURERIE", W / 2, py + 30, 20, zc); txt("✖", px + pw - 22, py + 28, 18, "#fff");
     items.forEach((it, i) => {
       const ry = py + 46 + i * 46; x.fillStyle = it.ok ? "rgba(255,255,255,.14)" : "rgba(255,255,255,.05)"; x.fillRect(px + 14, ry, pw - 28, 38); x.strokeStyle = it.ok ? zc : "#555"; x.lineWidth = 1.5; x.strokeRect(px + 14, ry, pw - 28, 38);
       txt(it.l, px + 26, ry + 25, 14, it.ok ? "#fff" : "#8a8a95", "left"); txt(it.r, px + pw - 26, ry + 25, 14, it.ok ? "#ffe14d" : "#8a8a95", "right");
@@ -855,6 +856,10 @@ export function createStaClient(env) {
   const DAY_S = 180, NIGHT_S = 165, CYC_S = DAY_S + NIGHT_S, FADE_S = 12; let clockOff = null;
   const cycT = () => (((Date.now() + (clockOff || 0)) / 1000) % CYC_S + CYC_S) % CYC_S;
   const darkness = (t) => t < DAY_S - FADE_S ? 0 : t < DAY_S ? (t - (DAY_S - FADE_S)) / FADE_S : t < CYC_S - FADE_S ? 1 : (CYC_S - t) / FADE_S;
+  // Camion noir : chaque nuit, il se gare à un endroit différent (même pour tout le monde, calculé depuis l'horloge commune). Aucune annonce, aucun marqueur.
+  const bmPos = () => { const n = Math.floor((Date.now() + (clockOff || 0)) / 1000 / CYC_S), h = hs(n, 77), i = 1 + h % (N - 2), j = 1 + (h >>> 8) % (N - 2); return { x: i * CELL, y: j * CELL + CELL / 2 }; };
+  const bmOn = () => darkness(cycT()) > .5;
+  const nearBM = () => { if (me.vid || me.dead > 0 || inn || !bmOn()) return null; const q = bmPos(); return Math.abs(me.x - q.x) < 62 && Math.abs(me.y - q.y) < 74 ? q : null; };
   const PARTS = 5, PART_TIME = 480;                                      // difficulté de la quête : nombre de caisses · temps (s)
   function partSpots() {
     const out = [];
@@ -981,7 +986,7 @@ export function createStaClient(env) {
     return null;
   }
   function missions(dt) {
-    if (shop && !inn && (me.vid || shopAt() !== shop)) shop = "";
+    if (shop && !inn && (me.vid || (shop === "bm" ? !nearBM() : shopAt() !== shop))) shop = "";
     if (tgt && tgt.hp > 0) {                                              // la cible se balade, et fuit quand elle est touchée
       tgt.tm -= dt; let sp = 34;
       if (tgt.fl > 0) { tgt.fl -= dt; sp = 100; } else if (tgt.tm <= 0) { tgt.h = rr(0, 6.283); tgt.tm = rr(2, 5); }
@@ -995,7 +1000,7 @@ export function createStaClient(env) {
       else if (pw === 2) {
         pwT -= dt;
         if (pwT <= 0) pwFail("temps écoulé");
-        else if (me.vid && me.vid !== HELI && Math.hypot(ZONES.arms.x - me.x, ZONES.arms.y - me.y) < 90) { pw = 0; me.rpgAmmoUnlocked = 1; me.cash += 500; persist(true); floats.push({ x: me.x, y: me.y - 24, t: tNow, s: "🚀 MUNITIONS RPG DÉBLOQUÉES +$500", c: "#7ae582" }); toast("Livraison réussie ! Tu peux acheter des munitions RPG à l’armurerie."); beep(880, .12, "triangle", .06); setTimeout(() => beep(1175, .16, "triangle", .06), 130); }
+        else if (me.vid && me.vid !== HELI && Math.hypot(ZONES.arms.x - me.x, ZONES.arms.y - me.y) < 90) { pw = 0; me.rpgAmmoUnlocked = 1; me.cash += 500; persist(true); floats.push({ x: me.x, y: me.y - 24, t: tNow, s: "🚀 MUNITIONS RPG DÉBLOQUÉES +$500", c: "#7ae582" }); toast("Livraison réussie ! Tu es maintenant digne de confiance pour acheter des munitions RPG… si tu trouves qui en vend."); beep(880, .12, "triangle", .06); setTimeout(() => beep(1175, .16, "triangle", .06), 130); }
         else if (!me.vid && Math.hypot(ZONES.arms.x - me.x, ZONES.arms.y - me.y) < 90 && Math.floor(tNow / 4000) !== Math.floor((tNow - dt * 1000) / 4000)) toast("Livre la poudre EN VÉHICULE !");
       }
     }
@@ -1698,6 +1703,22 @@ function frame(now) {
     x.save(); x.translate(RPG_CONTACT.x,RPG_CONTACT.y); x.fillStyle="#30343b"; x.fillRect(-5,-10,10,4); x.fillStyle="#ffd23f"; x.fillRect(-3,-12,6,2); x.restore();
     if(dd<245){ labels.push([RPG_CONTACT.n,RPG_CONTACT.x,RPG_CONTACT.y-20,"#fff"]); labels.push(["🧩",RPG_CONTACT.x,RPG_CONTACT.y-38+Math.sin(now/200)*3,"#ffd23f",19]); }
   }
+  if (bmOn()) { const q = bmPos(); if (inV(q.x, q.y)) {
+    const L = 104, Wd = 40, t0 = q.y - L / 2;
+    x.save(); x.fillStyle = "rgba(0,0,0,.4)"; rrect(q.x - Wd / 2 + 5, t0 + 5, Wd, L, 5); x.fill();
+    x.fillStyle = "#0b0b10"; x.strokeStyle = "#000"; x.lineWidth = 1.5; rrect(q.x - Wd / 2, t0, Wd, L, 5); x.fill(); x.stroke();      // remorque
+    x.fillStyle = "#15151c"; x.fillRect(q.x - Wd / 2 + 4, t0 + 6, Wd - 8, 58);
+    x.fillStyle = "#1c1c26"; x.fillRect(q.x - 1, t0 + 6, 2, 58);
+    x.fillStyle = "#08080c"; rrect(q.x - Wd / 2 + 2, t0 + 68, Wd - 4, 34, 4); x.fill();                                              // cabine
+    x.fillStyle = "#2a3646"; x.fillRect(q.x - Wd / 2 + 6, t0 + 90, Wd - 12, 8);                                                       // pare-brise
+    x.fillStyle = "#fff4a3"; x.fillRect(q.x - Wd / 2 + 4, t0 + 100, 6, 3); x.fillRect(q.x + Wd / 2 - 10, t0 + 100, 6, 3);
+    x.fillStyle = "#c01818"; x.fillRect(q.x - Wd / 2 + 3, t0 + 1, 6, 3); x.fillRect(q.x + Wd / 2 - 9, t0 + 1, 6, 3);
+    x.fillStyle = "#050507"; [t0 + 10, t0 + 40, t0 + 80].forEach(wy => { x.fillRect(q.x - Wd / 2 - 3, wy, 4, 14); x.fillRect(q.x + Wd / 2 - 1, wy, 4, 14); });
+    x.restore();
+    const dx2 = q.x + 36, dy2 = q.y + 14, dd = Math.hypot(dx2 - me.x, dy2 - me.y);
+    drawWalker(dx2, dy2, dd < 200 ? Math.atan2(me.y - dy2, me.x - dx2) : Math.PI, "#1a1a22", SKIN[3], null, 0, false, 1);
+    if (dd < 200) labels.push(["CHAUFFEUR", dx2, dy2 - 20, "#cdb8ff"]); if (dd < 130) labels.push(["💬", dx2, dy2 - 36 + Math.sin(now / 200) * 3, "#fff", 16]);
+  } }
   if (inV(PILOT.x, PILOT.y)) {                                                                      // le pilote (quête de l'hélico) : casquette de cuir + lunettes
     const dd = Math.hypot(PILOT.x - me.x, PILOT.y - me.y), pa = dd < 170 ? Math.atan2(me.y - PILOT.y, me.x - PILOT.x) : PILOT.a;
     drawWalker(PILOT.x, PILOT.y, pa, "#6b4a22", SKIN[1], null, 0, false);
@@ -1814,7 +1835,7 @@ function frame(now) {
   if (me.dead <= 0 && !shop) {
     let h = "", hc = "#ffe14d"; const sa = shopAt();
     if (sa) { if (me.vid) h = `DESCENDS (E) POUR ${sa === "heal" ? "TE SOIGNER" : "ACHETER DES ARMES"}`; else if (sa === "heal") { const p = healPrice(); h = me.hp >= 99 ? "TU ES EN PLEINE FORME" : `E : TE SOIGNER ($${p})`; if (me.hp < 99 && p > me.cash) hc = "#ff9f43"; } else h = "E : ENTRER DANS L'ARMURERIE"; }
-    else { const g = nearGiver(); if (g) h = mis ? `${g.n} : TU AS DÉJÀ UNE MISSION` : `E : PARLER À ${g.n} (${g.l})`; else if (nearMech()) h = pw === 2 ? `🧨 LIVRE LA POUDRE À L’ARMURERIE : ${Math.max(0, Math.ceil(pwT))}s` : "E : PARLER AU MÉCANO (QUÊTE RPG 🧩)"; else if (nearPilot()) h = me.hu ? "E : PARLER AU PILOTE" : mis && mis.k === "heli" ? (mis.st === 1 ? "E : RENDRE LES PIÈCES AU PILOTE" : "E : PARLER AU PILOTE") : mis ? "LE PILOTE : TU AS DÉJÀ UNE MISSION" : "E : PARLER AU PILOTE (QUÊTE SPÉCIALE 🚁)"; }
+    else { const g = nearGiver(); if (g) h = mis ? `${g.n} : TU AS DÉJÀ UNE MISSION` : `E : PARLER À ${g.n} (${g.l})`; else if (nearBM()) h = "E : PARLER AU CHAUFFEUR 🚚"; else if (nearMech()) h = pw === 2 ? `🧨 LIVRE LA POUDRE À L’ARMURERIE : ${Math.max(0, Math.ceil(pwT))}s` : "E : PARLER AU MÉCANO (QUÊTE RPG 🧩)"; else if (nearPilot()) h = me.hu ? "E : PARLER AU PILOTE" : mis && mis.k === "heli" ? (mis.st === 1 ? "E : RENDRE LES PIÈCES AU PILOTE" : "E : PARLER AU PILOTE") : mis ? "LE PILOTE : TU AS DÉJÀ UNE MISSION" : "E : PARLER AU PILOTE (QUÊTE SPÉCIALE 🚁)"; }
     if (h) txt(h, W / 2, H - 60, 15, hc);
   }
   drawMis(now);

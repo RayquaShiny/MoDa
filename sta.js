@@ -100,6 +100,7 @@ const parseP = s => { const a = String(s).split(","); return { x: +a[0] || 0, y:
 
 export function createStaClient(env) {
   const { R: RF, set, get, remove, onValue, $, beep, getMe, getCode, getLobby, toast } = env;
+  try { document.fonts.load('700 20px "Pricedown Bl"'); } catch (e) { }   // police GTA (Pricedown) : à charger explicitement pour le canvas
   const cv = $("cv"), mx2 = cv.getContext("2d"), LR = 2, lc = document.createElement("canvas"), lx = lc.getContext("2d");
   lc.width = W / LR; lc.height = H / LR; let x = mx2;
   const mkPat = (base, sp, n) => { const c2 = document.createElement("canvas"); c2.width = c2.height = 128; const g = c2.getContext("2d"); g.fillStyle = base; g.fillRect(0, 0, 128, 128); let seed = 7; const r = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff; for (let i = 0; i < n; i++) { g.fillStyle = sp[Math.floor(r() * sp.length)]; g.fillRect(Math.floor(r() * 64) * 2, Math.floor(r() * 64) * 2, 2, 2); } return lx.createPattern(c2, "repeat") || base; };
@@ -120,7 +121,7 @@ export function createStaClient(env) {
   const VEST = [{ n: "GILET −10%", r: .10, p: 250 }, { n: "GILET −25%", r: .25, p: 600 }, { n: "GILET −50%", r: .50, p: 1200 }];
   const armK = () => 1 - (me.arm ? VEST[me.arm - 1].r : 0);
   let keys = new Set(), stick = null, useReq = 0, job = null, myCol = 0, cam = { x: 0, y: 0, z: 1.2 }, sentAt = 0, sentStr = "", savedCash = -1, saveAt = 0, tNow = 0, hitDone = new Set(), gLoaded = false, savedG = "";
-  let inn = null, jail = null, mis = null, tgt = null, lastMk = "", shop = "", mmBase = null;   // mission en cours, cible à éliminer, boutique ouverte
+  let tvOn = false, inn = null, jail = null, mis = null, tgt = null, lastMk = "", shop = "", mmBase = null;   // mission en cours, cible à éliminer, boutique ouverte
   let ejected = [], splats = [], floats = [], pendingPedHits = new Map(), brakeId = null, fireKey = false, fireId = null, killQ = [], carQ = [], killAt = 0, tracers = [], rockets = [], sparks = [], booms = [], wrecks = [], pickT = new Map(), lastFc = {}, lastCs = {};
 
   const lobbyP = () => (getLobby() || {}).players || {};
@@ -278,7 +279,7 @@ export function createStaClient(env) {
   // --- hélicoptères de police (hôte) : à 5★ ils arrivent du ciel, tournent autour de toi, te mitraillent et t'éclairent.
   //     Ils volent au-dessus des bâtiments. À 3★ ou moins ils repartent. On les abat avec les armes (PV : HEL_HP).
   function heliDown(h) {
-    helis = helis.filter(o => o !== h); evs.push([++evId, Math.round(h.x), Math.round(h.y), 6, +h.a.toFixed(2), h.id]);
+    helis = helis.filter(o => o !== h); heliCd = rr(5, 10); evs.push([++evId, Math.round(h.x), Math.round(h.y), 6, +h.a.toFixed(2), h.id]);   // détruit : le prochain hélico de police ne repart qu'après 5 à 10 s
     cops.slice().forEach(q => { if (Math.hypot(q.x - h.x, q.y - h.y) < 70) { q.hp -= 60; if (q.hp <= 0) copDown(q); } });
   }
   function heliSim(dt, wanted) {
@@ -768,7 +769,7 @@ export function createStaClient(env) {
     x.globalAlpha = near ? .34 : .2; x.fillStyle = z.c; x.fillRect(z.x - 46, z.y - 9, 92, 36); x.globalAlpha = 1;
     x.strokeStyle = z.c; x.lineWidth = 2; x.setLineDash([8, 6]); x.strokeRect(z.x - 46, z.y - 9, 92, 36); x.setLineDash([]);
     if (z === ZONES.heal) { x.fillStyle = "#e9edf0"; x.fillRect(z.x - 11, z.y - 8, 22, 15); x.fillStyle = "#d62828"; x.fillRect(z.x - 2, z.y - 6, 4, 11); x.fillRect(z.x - 6, z.y - 2, 12, 4); }   // le distributeur
-    x.font = "700 11px \"Courier New\",monospace"; x.textAlign = "center"; x.fillStyle = "#000"; x.fillText(z.l, z.x + 1, z.y + 22); x.fillStyle = "#fff"; x.fillText(z.l, z.x, z.y + 21);
+    x.font = "700 11px 'Pricedown Bl',Pricedown,Impact,sans-serif"; x.textAlign = "center"; x.fillStyle = "#000"; x.fillText(z.l, z.x + 1, z.y + 22); x.fillStyle = "#fff"; x.fillText(z.l, z.x, z.y + 21);
   }
 
   // ================= INTÉRIEURS (armurerie, garage) =================
@@ -780,10 +781,10 @@ export function createStaClient(env) {
     garage: { w: 580, h: 300, name: "GARAGE", c: "#ffd23f", door: { x: 220, hw: 50 },
       obs: [[18, 56, 160, 26], [86, 92, 20, 14], [136, 166, 28, 48], [436, 166, 28, 48], [516, 60, 42, 36], [18, 236, 26, 26], [48, 246, 22, 22], [526, 206, 32, 44]] }
   };
-  ROOMS.house = { w: 420, h: 300, name: "MA MAISON", c: "#7ae582", door: { x: 210, hw: 30 },
-    obs: [[18, 64, 84, 52], [304, 66, 84, 44], [150, 176, 120, 34]] };
-  ROOMS.jail = { w: 420, h: 300, name: "PRISON", c: "#ff6b6b", door: { x: -999, hw: 0 },          // pas de porte : on ne sort que par les moyens prévus
-    obs: [[22, 66, 86, 40], [236, 70, 26, 30], [268, 56, 8, 244]] };
+  ROOMS.house = { w: 520, h: 340, name: "MA MAISON", c: "#7ae582", door: { x: 260, hw: 30 },
+    obs: [[20, 64, 104, 64], [128, 68, 24, 26], [172, 60, 70, 30], [300, 60, 204, 30], [332, 112, 104, 60], [486, 100, 18, 92], [436, 206, 68, 46], [16, 160, 30, 84], [100, 166, 36, 72], [56, 192, 34, 32], [24, 294, 24, 24], [468, 294, 24, 24]] };
+  ROOMS.jail = { w: 520, h: 340, name: "PRISON", c: "#ff6b6b", door: { x: -999, hw: 0 },          // pas de porte : on ne sort que par les moyens prévus
+    obs: [[22, 66, 100, 46], [250, 68, 44, 38], [172, 200, 46, 32], [298, 56, 8, 270]] };
   function enterInn(k, hk) {
     if (me.wl > 0 || me.bust > 0) { toast("La police te colle : impossible d'entrer !"); return; }
     const R = ROOMS[k]; inn = { k, hk: hk | 0, x: R.door.x, y: R.h - 34, a: -Math.PI / 2, t0: tNow, hp: me.hp, mv: false };
@@ -815,13 +816,14 @@ export function createStaClient(env) {
     if (!inn) return null; const R = ROOMS[inn.k], p = inn;
     if (Math.hypot(p.x - R.door.x, p.y - (R.h - 20)) < 46) return { k: "door", h: "E : SORTIR" };
     if (inn.k === "house") {
-      if (Math.hypot(p.x - 346, p.y - 108) < 58) return { k: "chest", h: "E : OUVRIR TON COFFRE (ARGENT, ARMES, GILET)" };
-      if (Math.hypot(p.x - 62, p.y - 128) < 56) return { k: "bed", h: me.hsp === inn.hk ? "🛏️ POINT DE RÉAPPARITION : ICI ✔" : "E : DORMIR ICI = POINT DE RÉAPPARITION" };
+      if (Math.hypot(p.x - 470, p.y - 226) < 58) return { k: "chest", h: "E : OUVRIR TON COFFRE (ARGENT, ARMES, GILET)" };
+      if (p.x < 100 && p.y > 150 && p.y < 262) return { k: "tv", h: tvOn ? "E : ÉTEINDRE LA TÉLÉ" : "E : ALLUMER LA TÉLÉ 📺" };
+      if (p.x < 170 && p.y < 150) return { k: "bed", h: me.hsp === inn.hk ? "🛏️ POINT DE RÉAPPARITION : ICI ✔" : "E : DORMIR ICI = POINT DE RÉAPPARITION" };
       return null;
     }
     if (inn.k === "jail") {
-      if (jail && p.x > 205 && Math.abs(p.y - 170) < 62) return { k: "guard", h: `E : CORROMPRE LE GARDIEN ($${bribeCost()})` };
-      if (jail && p.x < 96 && p.y > 224) return { k: "dig", h: `E : CREUSER LE MUR (${jail.dig}/${DIG_NEED}) · RISQUE D'ÊTRE ENTENDU` };
+      if (jail && p.x > 240 && p.y > 120 && p.y < 262) return { k: "guard", h: `E : CORROMPRE LE GARDIEN ($${bribeCost()})` };
+      if (jail && p.x < 100 && p.y > 252) return { k: "dig", h: `E : CREUSER LE MUR (${jail.dig}/${DIG_NEED}) · RISQUE D'ÊTRE ENTENDU` };
       return null;
     }
     if (inn.k === "arms") { if (p.y > 134 && p.y < 180 && p.x > 60 && p.x < 340) return { k: "counter", h: "E : ACHETER DES ARMES" }; return null; }
@@ -837,6 +839,7 @@ export function createStaClient(env) {
     if (sp.k === "door") leaveInn();
     else if (sp.k === "chest") { shop = "chest"; beep(880, .06, "triangle", .05); }
     else if (sp.k === "bed") { if (me.hsp !== inn.hk) { me.hsp = inn.hk; persist(true); floats.push({ x: me.x, y: me.y - 22, t: tNow, s: "🛏️ POINT DE RÉAPPARITION", c: "#7ae582" }); beep(660, .1, "triangle", .06); } }
+    else if (sp.k === "tv") { tvOn = !tvOn; beep(tvOn ? 560 : 300, .07, "square", .04, tvOn ? 700 : 200); }
     else if (sp.k === "guard") bribeDo();
     else if (sp.k === "dig") digDo();
     else if (sp.k === "counter") { shop = "arms"; beep(880, .06, "triangle", .05); }
@@ -860,7 +863,7 @@ export function createStaClient(env) {
   function startJail() {
     const t = me.jT || JAIL_BASE + JAIL_STAR;
     spawnAt(SPAWN.jail); shop = ""; me.heat = 0; me.wl = 0; me.v = 0;
-    jail = { t, dig: 0 }; inn = { k: "jail", hk: 0, x: 90, y: 200, a: 0, t0: tNow, hp: me.hp, mv: false };
+    jail = { t, dig: 0 }; inn = { k: "jail", hk: 0, x: 130, y: 190, a: 0, t0: tNow, hp: me.hp, mv: false };
     toast(`🔒 En cellule pour ${Math.round(t)} s : attends, corromps le gardien, creuse le mur… ou un ami peut te faire évader`); SND.door();
   }
   function jailOut(p, heat, msg) {
@@ -945,35 +948,100 @@ export function createStaClient(env) {
   }
   function drawHouseZone(k) { const o = owns(k); drawZone({ x: HZ[k].x, y: HZ[k].y, c: o ? "#7ae582" : me.hou ? "#8a8f9a" : "#ffd23f", l: o ? `MAISON ${k + 1}` : me.hou ? "—" : `$${HOUSES[k].p}` }); }
   function drawHouseRoom(now, labels) {
-    const R = ROOMS.house, w = R.w, h = R.h, H = HOUSES[inn.hk | 0], dx = R.door.x, hw = R.door.hw, sp = innSpot(), nc = !!(sp && sp.k === "chest");
-    for (let y = 56, n = 0; y < h; y += 12, n++) { fr(0, y, w, 12, n & 1 ? "#8a6240" : "#80593a"); fr(0, y + 11, w, 1, "rgba(0,0,0,.3)"); for (let k = 0; k < 4; k++) fr((n * 83 + k * 109) % (w - 6), y, 1, 11, "rgba(0,0,0,.22)"); }
-    fr(0, 0, w, 58, H.w); for (let tx = 0; tx < w; tx += 14) fr(tx, 0, 1, 58, "rgba(0,0,0,.08)"); fr(0, 46, w, 6, H.r[0]); fr(0, 52, w, 6, "rgba(0,0,0,.35)");
-    fr(150, 8, 120, 34, "#6b4a2b"); fr(154, 12, 112, 26, "#9fd3ee"); fr(208, 12, 4, 26, "#6b4a2b"); fr(154, 23, 112, 3, "#6b4a2b");
+    const R = ROOMS.house, w = R.w, h = R.h, H = HOUSES[inn.hk | 0], dx = R.door.x, hw = R.door.hw, sp = innSpot(), nc = !!(sp && sp.k === "chest"), spk = sp ? sp.k : "";
+    const wd = H.r[0], wl = H.r[1], wk = H.r[2], ws = (Math.floor(now / 600) % 3);
+    // sol : parquet · carrelage damier dans le coin cuisine
+    for (let y = 58, n = 0; y < h; y += 14, n++) { fr(0, y, w, 14, n & 1 ? "#8d6643" : "#835d3d"); fr(0, y + 13, w, 1, "rgba(0,0,0,.28)"); for (let k = 0; k < 6; k++) fr((n * 97 + k * 89) % (w - 8), y, 1, 13, "rgba(0,0,0,.2)"); }
+    for (let a = 0; a < 13; a++) for (let b = 0; b < 8; b++) fr(296 + a * 16, 58 + b * 16, 16, 16, (a + b) & 1 ? "#e8e4d8" : "#cfcabb");
+    fr(296, 186, 208, 3, "rgba(0,0,0,.35)");
+    // mur du fond : papier peint rayé, plinthe, fenêtres avec rideaux, tableau, horloge
+    fr(0, 0, w, 58, H.w); for (let tx = 0; tx < w; tx += 16) fr(tx, 0, 1, 58, "rgba(0,0,0,.07)"); for (let tx = 8; tx < w; tx += 32) fr(tx, 0, 8, 44, "rgba(255,255,255,.12)");
+    fr(0, 44, w, 3, wl); fr(0, 47, w, 7, wd); fr(0, 54, w, 4, "rgba(0,0,0,.38)");
+    [58, 352].forEach(wx => {
+      fr(wx - 2, 6, 68, 38, "#6b4a2b"); fr(wx + 2, 10, 60, 30, "#9fd3ee"); fr(wx + 2, 10, 60, 10, "#c5e6f6"); fr(wx + 30, 10, 3, 30, "#6b4a2b"); fr(wx + 2, 24, 60, 3, "#6b4a2b"); fr(wx - 4, 42, 72, 4, "#caa77a");
+      fr(wx - 12, 5, 14, 40, wd); fr(wx + 66, 5, 14, 40, wd); for (let k = 0; k < 3; k++) { fr(wx - 10 + k * 4, 5, 1, 40, "rgba(0,0,0,.22)"); fr(wx + 68 + k * 4, 5, 1, 40, "rgba(0,0,0,.22)"); } fr(wx - 14, 3, 96, 3, "#3a2a1a");
+    });
+    fr(182, 10, 44, 30, "#c9a227"); fr(185, 13, 38, 24, "#a6d8ee"); fr(185, 26, 38, 11, "#58a34d"); x.fillStyle = "#e8e8f0"; x.beginPath(); x.moveTo(185, 26); x.lineTo(199, 15); x.lineTo(212, 26); x.fill(); fr(205, 15, 5, 5, "#ffe14d");   // tableau : montagne et soleil
+    { const d = new Date(), ma = d.getMinutes() / 60 * 6.283 - 1.5708, ha = (d.getHours() % 12 + d.getMinutes() / 60) / 12 * 6.283 - 1.5708;
+      x.fillStyle = "#3a2a1a"; x.beginPath(); x.arc(272, 24, 14, 0, 7); x.fill(); x.fillStyle = "#f4f0e4"; x.beginPath(); x.arc(272, 24, 12, 0, 7); x.fill();
+      x.strokeStyle = "#222"; x.lineWidth = 1.5; x.beginPath(); x.moveTo(272, 24); x.lineTo(272 + Math.cos(ma) * 10, 24 + Math.sin(ma) * 10); x.stroke(); x.lineWidth = 2; x.beginPath(); x.moveTo(272, 24); x.lineTo(272 + Math.cos(ha) * 6, 24 + Math.sin(ha) * 6); x.stroke(); }
+    // murs latéraux et bas (avec la porte)
     fr(0, 56, 16, h - 56, "#6e5a44"); fr(w - 16, 56, 16, h - 56, "#6e5a44"); fr(0, h - 14, dx - hw, 14, "#6e5a44"); fr(dx + hw, h - 14, w - dx - hw, 14, "#6e5a44");
-    fr(dx - hw, h - 40, hw * 2, 26, "#7a2626"); fr(dx - hw, h - 40, hw * 2, 2, "#c9a227");                       // paillasson
-    fr(120, 224 - 70, 180, 8, "rgba(0,0,0,0)"); fr(130, 150, 160, 100, "#5b3b73"); fr(130, 150, 160, 3, "#c9a227"); fr(130, 247, 160, 3, "#c9a227"); fr(130, 150, 3, 100, "#c9a227"); fr(287, 150, 3, 100, "#c9a227");   // tapis
-    fr(150, 176, 120, 34, "#3b5b7a"); fr(150, 170, 120, 10, "#2f4a64"); fr(150, 176, 6, 34, "#2f4a64"); fr(264, 176, 6, 34, "#2f4a64");                // canapé
-    fr(18, 64, 84, 52, "#4a3320"); fr(22, 68, 76, 44, "#e8e8ee"); fr(26, 72, 24, 16, "#ffffff"); fr(22, 92, 76, 20, H.r[0]); fr(22, 92, 76, 3, H.r[1]);   // lit
-    fr(304, 76, 84, 34, "#6b4a22"); fr(304, 66, 84, 14, "#8a5f2b"); fr(322, 66, 6, 44, "#c9a227"); fr(364, 66, 6, 44, "#c9a227"); fr(342, 78, 10, 10, "#ffd23f"); fr(344, 80, 6, 6, "#7a5a10");   // coffre
-    if (nc) pool(346, 92, 80, "rgba(255,215,80,.3)");
-    labels.push(["COFFRE", 346, 126, nc ? "#ffe14d" : "#fff", 10], ["LIT", 60, 134, me.hsp === inn.hk ? "#7ae582" : "#fff", 10], ["SORTIE", dx, h - 24, "#fff", 10]);
-    pool(60, 95, 70, "rgba(255,230,180,.12)"); pool(210, 30, 90, "rgba(190,225,255,.14)"); pool(dx, h - 10, 70, "rgba(190,225,255,.2)");
+    fr(16, 56, 2, h - 70, "rgba(0,0,0,.3)"); fr(w - 18, 56, 2, h - 70, "rgba(0,0,0,.3)");
+    fr(dx - hw, h - 40, hw * 2, 26, "#7a2626"); fr(dx - hw, h - 40, hw * 2, 2, "#c9a227"); fr(dx - hw, h - 16, hw * 2, 2, "#c9a227");   // paillasson
+    // tapis rond au centre
+    x.fillStyle = "rgba(0,0,0,.2)"; x.beginPath(); x.ellipse(262, 252, 74, 34, 0, 0, 7); x.fill(); x.fillStyle = wl; x.beginPath(); x.ellipse(260, 250, 72, 32, 0, 0, 7); x.fill(); x.fillStyle = "#f1e8d2"; x.beginPath(); x.ellipse(260, 250, 60, 25, 0, 0, 7); x.fill(); x.strokeStyle = wd; x.lineWidth = 2; x.beginPath(); x.ellipse(260, 250, 48, 18, 0, 0, 7); x.stroke();
+    // coin salon : tapis, télé sur meuble, canapé, table basse
+    fr(48, 152, 120, 112, "#e3d8bf"); fr(48, 152, 120, 3, wd); fr(48, 261, 120, 3, wd); fr(48, 152, 3, 112, wd); fr(165, 152, 3, 112, wd); fr(56, 160, 104, 96, "rgba(0,0,0,.05)");
+    fr(16, 160, 30, 84, "#3a2a1a"); fr(16, 160, 30, 3, "#5a3d22"); fr(18, 172, 10, 60, "#0b0b0f");
+    if (tvOn) { const cs = ["#3b6fe0", "#e0a43b", "#3bd0a0"]; fr(19, 174, 8, 56, cs[ws]); fr(19, 174 + 14 * ((Math.floor(now / 300)) % 4), 8, 10, cs[(ws + 1) % 3]); pool(80, 202, 90, "rgba(120,160,255,.22)"); }
+    else fr(19, 174, 8, 56, "#16181d");
+    fr(32, 192, 8, 20, "#222"); fr(36, 200, 6, 4, "#7a7f8a");
+    fr(100, 166, 36, 72, shade(wd, .85)); fr(126, 166, 10, 72, shade(wd, .6)); fr(102, 174, 24, 28, wd); fr(102, 204, 24, 28, wd); fr(102, 174, 24, 3, wl); fr(102, 204, 24, 3, wl); fr(100, 166, 36, 8, shade(wd, .7)); fr(100, 230, 36, 8, shade(wd, .7));
+    fr(56, 192, 34, 32, "#4a3320"); fr(58, 194, 30, 28, "#8a5f2b"); fr(62, 198, 14, 10, "#e8e8ee"); fr(78, 210, 6, 6, "#fff"); fr(79, 211, 4, 4, "#6b3a1e");
+    // chambre : lit, table de chevet avec lampe, armoire
+    fr(20, 64, 104, 64, "#3a2a1a"); fr(20, 64, 104, 8, "#5a3d22"); fr(24, 72, 96, 52, "#eceef3"); fr(30, 76, 32, 18, "#fff"); fr(68, 76, 32, 18, "#fff"); fr(30, 92, 32, 2, "rgba(0,0,0,.12)"); fr(68, 92, 32, 2, "rgba(0,0,0,.12)");
+    fr(24, 98, 96, 26, wd); fr(24, 98, 96, 4, wl); for (let k = 0; k < 6; k++) fr(30 + k * 16, 104, 8, 20, "rgba(255,255,255,.12)"); fr(24, 120, 96, 4, "rgba(0,0,0,.25)");
+    fr(128, 68, 24, 26, "#6b4a2b"); fr(128, 68, 24, 3, "#8a5f2b"); x.fillStyle = "#f4d98a"; x.beginPath(); x.arc(140, 80, 8, 0, 7); x.fill(); x.fillStyle = "#fff6c8"; x.beginPath(); x.arc(140, 80, 4, 0, 7); x.fill();
+    fr(172, 60, 70, 30, "#5a3d22"); fr(174, 62, 32, 26, "#7a5530"); fr(208, 62, 32, 26, "#7a5530"); fr(204, 62, 4, 26, "#3a2a1a"); fr(200, 72, 3, 8, "#c9a227"); fr(209, 72, 3, 8, "#c9a227");
+    // cuisine : plan de travail, évier, cuisinière, frigo · table à manger avec 4 chaises
+    fr(300, 60, 204, 30, "#6b4a2b"); fr(300, 60, 204, 24, "#d9d6cf"); fr(300, 84, 204, 6, "#4a3320");
+    fr(312, 64, 40, 18, "#9aa8b5"); fr(316, 67, 32, 12, "#cfd9e2"); fr(330, 62, 5, 6, "#555");
+    fr(366, 64, 40, 18, "#2a2a30"); x.strokeStyle = "#777"; x.lineWidth = 1.5; [[376, 70], [396, 70], [376, 78], [396, 78]].forEach(([bx, by]) => { x.beginPath(); x.arc(bx, by, 4, 0, 7); x.stroke(); });
+    fr(416, 66, 22, 14, "#b3261e"); fr(418, 62, 18, 4, "#8a1b14");
+    fr(462, 58, 42, 38, "#e9eef2"); fr(462, 58, 42, 3, "#fff"); fr(462, 76, 42, 2, "#9aa4ad"); fr(498, 64, 3, 10, "#8a949d"); fr(498, 82, 3, 10, "#8a949d");
+    [[346, 114], [398, 114], [346, 160], [398, 160]].forEach(([cx2, cy2]) => { fr(cx2 - 8, cy2, 20, 12, "#8a5f2b"); fr(cx2 - 8, cy2, 20, 3, "#a97a3d"); });
+    fr(338, 124, 92, 38, "#4a3320"); fr(340, 126, 88, 34, "#9a6a35"); fr(340, 126, 88, 3, "#b5813f"); fr(346, 134, 76, 18, wd); fr(346, 134, 76, 2, wl);
+    fr(380, 138, 8, 10, "#e8e8ee"); fr(382, 130, 4, 8, "#3f9a38"); x.fillStyle = "#ff6b6b"; x.beginPath(); x.arc(384, 130, 3, 0, 7); x.fill(); fr(356, 140, 12, 8, "#fff"); fr(402, 140, 12, 8, "#fff");
+    // bibliothèque, coffre, plantes
+    fr(486, 100, 18, 92, "#5a3d22"); for (let k = 0; k < 7; k++) { fr(488, 102 + k * 13, 14, 11, "#2b1c10"); for (let b = 0; b < 4; b++) fr(488 + b * 3.5, 103 + k * 13, 3, 9, ["#c0392b", "#2e86c1", "#27ae60", "#f1c40f", "#8e44ad", "#e67e22"][(k * 3 + b * 5) % 6]); }
+    fr(436, 226, 68, 26, "#6b4a22"); fr(436, 206, 68, 22, "#8a5f2b"); fr(436, 206, 68, 4, "#a97a3d"); fr(454, 206, 6, 46, "#c9a227"); fr(480, 206, 6, 46, "#c9a227"); fr(466, 220, 12, 12, "#ffd23f"); fr(470, 223, 4, 6, "#7a5a10"); fr(436, 250, 68, 2, "rgba(0,0,0,.3)");
+    if (nc) pool(470, 228, 80, "rgba(255,215,80,.3)");
+    [[24, 294], [468, 294]].forEach(([px2, py2]) => { fr(px2 + 4, py2 + 12, 16, 12, "#a0522d"); fr(px2 + 4, py2 + 12, 16, 3, "#c0703f"); [[12, 8, 9], [5, 12, 7], [19, 12, 7], [12, 3, 6]].forEach(([lx, ly, r2]) => { x.fillStyle = "#2f7a28"; x.beginPath(); x.arc(px2 + lx, py2 + ly, r2, 0, 7); x.fill(); }); x.fillStyle = "#43963a"; x.beginPath(); x.arc(px2 + 10, py2 + 6, 5, 0, 7); x.fill(); });
+    labels.push(["COFFRE", 470, 268, nc ? "#ffe14d" : "#fff", 10], ["LIT", 72, 142, me.hsp === inn.hk ? "#7ae582" : (spk === "bed" ? "#ffe14d" : "#fff"), 10], ["TÉLÉ", 31, 254, spk === "tv" ? "#ffe14d" : "#fff", 10], ["SORTIE", dx, h - 24, "#fff", 10]);
+    pool(72, 96, 80, "rgba(255,225,160," + (.13 + .02 * Math.sin(now / 700)) + ")"); pool(92, 64, 90, "rgba(190,225,255,.14)"); pool(386, 64, 90, "rgba(190,225,255,.14)"); pool(260, 150, 150, "rgba(255,236,200,.07)"); pool(dx, h - 10, 70, "rgba(190,225,255,.2)");
   }
   function drawJailRoom(now, labels) {
-    const R = ROOMS.jail, w = R.w, h = R.h, sp = innSpot(), dg = jail ? jail.dig : 0;
-    for (let ty = 56; ty < h; ty += 20) for (let tx = 0; tx < w; tx += 20) fr(tx, ty, 20, 20, ((tx + ty) / 20) & 1 ? "#4a4d55" : "#43464e");
-    fr(276, 56, w - 292, h - 70, "#5f636e");                                                                       // couloir du gardien
+    const R = ROOMS.jail, w = R.w, h = R.h, sp = innSpot(), dg = jail ? jail.dig : 0, BX = 298, spk = sp ? sp.k : "", fl = .85 + .15 * Math.sin(now / 90) * Math.sin(now / 370 + 1);
+    // sol : dalles de béton fissurées (cellule) · lino gris (couloir du gardien) avec ligne de sécurité
+    for (let a = 0; a < 15; a++) for (let b = 0; b < 14; b++) fr(a * 20, 56 + b * 20, 20, 20, (a + b) & 1 ? "#4a4d55" : "#43464e");
+    for (let a = 0; a < 11; a++) for (let b = 0; b < 14; b++) fr(BX + 8 + a * 20, 56 + b * 20, 20, 20, (a + b) & 1 ? "#6d727c" : "#656a74");
+    for (let n = 0; n < 16; n++) fr(10 + hs(n, 1) % (BX - 40), 70 + hs(n, 2) % (h - 110), 6 + hs(n, 3) % 16, 1.5, "rgba(0,0,0,.28)");
+    x.fillStyle = "rgba(20,40,60,.35)"; x.beginPath(); x.ellipse(262, 112, 16, 7, 0, 0, 7); x.fill();                  // flaque près des toilettes
+    x.fillStyle = "#2a2c33"; x.beginPath(); x.arc(150, 296, 8, 0, 7); x.fill(); x.strokeStyle = "#5a5e68"; x.lineWidth = 1; for (let k = -4; k <= 4; k += 4) { x.beginPath(); x.moveTo(150 + k, 289); x.lineTo(150 + k, 303); x.stroke(); }   // bonde
+    fr(BX + 26, 58, 3, h - 72, "#c9a227");
+    // mur du fond : briques, fenêtre à barreaux avec lune, traits de jours comptés, casiers + clés + affiches côté gardien
     fr(0, 0, w, 58, "#2c2e36"); for (let ty = 0; ty < 58; ty += 10) for (let tx = ((ty / 10) & 1) * 12; tx < w; tx += 24) fr(tx, ty, 22, 8, "#383b45");
+    fr(150, 8, 58, 36, "#1a1b20"); fr(154, 12, 50, 28, "#1b2a4a"); x.fillStyle = "#ecebc8"; x.beginPath(); x.arc(190, 24, 6, 0, 7); x.fill(); x.fillStyle = "#1b2a4a"; x.beginPath(); x.arc(192, 22, 5, 0, 7); x.fill();
+    for (let k = 0; k < 5; k++) fr(160 + k * 9, 12, 3, 28, "#8c93a2"); fr(154, 24, 50, 2, "#8c93a2");
+    x.strokeStyle = "#b9bdc6"; x.lineWidth = 1.5; x.beginPath(); for (let g = 0; g < 3; g++) { for (let k = 0; k < 4; k++) { x.moveTo(34 + g * 24 + k * 4, 16); x.lineTo(34 + g * 24 + k * 4, 34); } x.moveTo(32 + g * 24, 32); x.lineTo(50 + g * 24, 18); } x.stroke();
+    fr(322, 10, 56, 32, "#3a2a1a"); fr(324, 12, 52, 28, "#4a3623"); for (let k = 0; k < 6; k++) { fr(330 + k * 8, 18, 3, 3, "#ffd23f"); fr(330 + k * 8, 20, 1, 8, "#ffd23f"); fr(330 + k * 8, 30, 3, 3, "#c9a227"); }
+    fr(396, 8, 42, 34, "#e8e4d0"); for (let k = 0; k < 5; k++) fr(402, 14 + k * 6, 30, 2, "#9a9684"); fr(402, 10, 30, 3, "#b3261e");
+    fr(450, 8, 34, 38, "#d9cfa8"); x.fillStyle = "#8a7a5a"; x.beginPath(); x.arc(467, 26, 8, 0, 7); x.fill(); fr(458, 36, 18, 6, "#8a7a5a"); fr(454, 11, 26, 3, "#b3261e");
     fr(0, 52, w, 6, "rgba(0,0,0,.45)"); fr(0, 56, 16, h - 56, "#1f2026"); fr(w - 16, 56, 16, h - 56, "#1f2026"); fr(0, h - 14, w, 14, "#1f2026");
-    fr(22, 66, 86, 40, "#3a3d46"); fr(26, 70, 78, 14, "#9aa3b2"); fr(26, 86, 78, 14, "#b0b8c5"); fr(26, 70, 20, 14, "#e8e8ee");   // lit superposé
-    fr(236, 70, 26, 30, "#cfd5da"); fr(240, 74, 18, 14, "#8fa0ad");                                                   // toilettes
-    fr(316, 192, 72, 30, "#6b4a2b"); fr(320, 196, 64, 22, "#7d5a36"); fr(334, 200, 14, 10, "#222"); fr(336, 202, 10, 6, "#6fc3ff");   // bureau + écran
-    drawWalker(350, 168, Math.PI, "#1c2f6b", "#e0ac69", null, 0, false);                                              // le gardien
-    for (let by = 58; by < h - 14; by += 12) { fr(267, by, 10, 6, "#9097a6"); fr(267, by, 10, 1, "#d6dbe8"); fr(267, by + 5, 10, 1, "#4b5060"); }   // barreaux
-    fr(18, 246, 66, 40, "#5a4a3a"); for (let r = 0; r < 4; r++) for (let c2 = 0; c2 < 4; c2++) fr(20 + c2 * 16 + (r & 1) * 6, 248 + r * 9, 13, 7, "#6d5b49");   // briques descellées
-    if (dg > 0) { fr(26, 256, 4 + dg * 4, 20, "#0c0a08"); x.strokeStyle = "#0c0a08"; x.lineWidth = 1; x.beginPath(); for (let k = 0; k < dg; k++) { x.moveTo(24 + k * 6, 250); x.lineTo(30 + k * 6, 262); } x.stroke(); }
-    labels.push(["CELLULE", 140, 88, "#c9ced8", 10], ["GARDIEN", 350, 150, sp && sp.k === "guard" ? "#ffe14d" : "#9fb4ff", 10], ["MUR FRAGILE", 52, 240, sp && sp.k === "dig" ? "#ffe14d" : "#c9ced8", 10]);
-    pool(140, 170, 120, "rgba(255,240,200,.1)"); pool(350, 170, 80, "rgba(200,220,255,.12)");
+    // faisceau de lune sur le sol de la cellule
+    x.fillStyle = "rgba(190,205,255," + (.07 + .01 * Math.sin(now / 900)) + ")"; x.beginPath(); x.moveTo(154, 58); x.lineTo(204, 58); x.lineTo(248, 196); x.lineTo(178, 196); x.closePath(); x.fill();
+    // cellule : lit superposé, toilettes + lavabo, petite table en fer
+    fr(22, 66, 100, 46, "#2f3138"); fr(26, 70, 92, 18, "#9aa3b2"); fr(26, 90, 92, 18, "#b0b8c5"); fr(26, 70, 22, 18, "#e8e8ee"); fr(26, 90, 22, 18, "#e8e8ee"); fr(50, 72, 66, 14, "#6b5a3a"); fr(50, 92, 66, 14, "#7d6a45"); fr(112, 66, 6, 46, "#3a3d46"); for (let k = 0; k < 4; k++) fr(112, 70 + k * 10, 6, 2, "#8c93a2");
+    fr(252, 70, 16, 12, "#cfd5da"); fr(250, 82, 20, 20, "#e6eaee"); x.fillStyle = "#9aa6b0"; x.beginPath(); x.ellipse(260, 92, 6, 7, 0, 0, 7); x.fill(); fr(274, 72, 18, 16, "#cfd5da"); fr(277, 75, 12, 10, "#a9b8c4"); fr(281, 70, 4, 5, "#555");
+    fr(172, 200, 46, 28, "#7a6a50"); fr(172, 200, 46, 3, "#9a8a6a"); fr(174, 228, 4, 4, "#3a3d46"); fr(212, 228, 4, 4, "#3a3d46"); fr(180, 208, 8, 8, "#e8e8ee"); fr(200, 206, 10, 10, "#5a6a7a"); fr(202, 208, 6, 6, "#c9d3dd");
+    // barreaux + porte de cellule avec cadenas
+    fr(BX - 1, 56, 10, h - 70, "#2b2d34"); for (let by = 58; by < h - 14; by += 10) { fr(BX + 1, by, 6, 7, "#9097a6"); fr(BX + 1, by, 6, 1, "#d6dbe8"); fr(BX + 1, by + 6, 6, 1, "#4b5060"); }
+    fr(BX - 4, 198, 16, 40, "#3d4049"); fr(BX - 4, 198, 16, 3, "#6a6e7a"); fr(BX - 4, 235, 16, 3, "#6a6e7a"); fr(BX, 214, 8, 8, "#c9a227"); fr(BX + 2, 210, 4, 5, "#8a6f18"); fr(BX - 6, 226, 4, 6, "#1b1c20");
+    // côté gardien : bureau avec 2 écrans, clavier, tasse · casiers · porte blindée SORTIE
+    fr(350, 200, 112, 36, "#5a3d22"); fr(350, 200, 112, 28, "#7d5a36"); fr(350, 226, 112, 3, "#3a2a1a");
+    fr(366, 204, 28, 18, "#111"); fr(398, 204, 28, 18, "#111"); const gl = .55 + .25 * Math.sin(now / 250); x.globalAlpha = gl; fr(368, 206, 24, 14, "#2fd36a"); fr(400, 206, 24, 14, "#2fd36a"); x.globalAlpha = 1; fr(372, 211, 6, 6, "#0b3a1c"); fr(408, 209, 8, 8, "#0b3a1c");
+    fr(372, 226, 40, 6, "#2a2a30"); fr(432, 210, 9, 9, "#fff"); fr(434, 212, 5, 5, "#6b3a1e"); fr(444, 208, 12, 10, "#2a2a30");
+    fr(480, 70, 24, 112, "#5d6b7a"); fr(480, 70, 24, 3, "#8896a6"); for (let k = 0; k < 3; k++) { fr(482, 76 + k * 36, 20, 32, "#6e7d8d"); for (let v = 0; v < 4; v++) fr(485, 80 + k * 36 + v * 4, 14, 1.5, "#3a4450"); fr(497, 92 + k * 36, 3, 6, "#c9a227"); }
+    fr(436, h - 20, 54, 6, "#2a2f36"); fr(440, h - 34, 46, 20, "#4a525c"); fr(444, h - 30, 38, 12, "#2f353d"); fr(446, h - 28, 34, 8, "#7fc4d9"); x.fillStyle = Math.floor(now / 500) % 2 ? "#ff3b30" : "#7a1a16"; x.beginPath(); x.arc(463, h - 40, 3, 0, 7); x.fill();
+    // gardien en patrouille devant les barreaux
+    { const gy = 168 + 26 * Math.sin(now / 1900); drawWalker(410, gy, Math.PI, "#1c2f6b", "#e0ac69", now / 110, 0, false, true); }
+    // trou creusé dans le coin du mur fragile
+    fr(18, 282, 70, 40, "#5a4a3a"); for (let r = 0; r < 4; r++) for (let c2 = 0; c2 < 4; c2++) fr(20 + c2 * 16 + (r & 1) * 6, 284 + r * 9, 13, 7, "#6d5b49");
+    if (dg > 0) { fr(26, 292, 4 + dg * 5, 22, "#0c0a08"); x.strokeStyle = "#0c0a08"; x.lineWidth = 1; x.beginPath(); for (let k = 0; k < dg; k++) { x.moveTo(24 + k * 6, 286); x.lineTo(30 + k * 6, 298); } x.stroke(); for (let k = 0; k < Math.min(dg, 6); k++) fr(22 + (k * 23) % 60, 318, 4, 3, "#6d5b49"); }
+    labels.push(["CELLULE", 150, 104, "#c9ced8", 10], ["TOILETTES", 270, 120, "#9aa3b2", 9], ["GARDIEN", 410, 140 + 26 * Math.sin(now / 1900), spk === "guard" ? "#ffe14d" : "#9fb4ff", 10], ["MUR FRAGILE", 52, 274, spk === "dig" ? "#ffe14d" : "#c9ced8", 10], ["SORTIE", 463, h - 46, "#9fe6a8", 9]);
+    pool(150, 190, 160, "rgba(255,240,200," + (.1 * fl) + ")"); pool(410, 170, 110, "rgba(200,220,255,.12)"); pool(463, h - 30, 40, "rgba(140,230,255,.12)");
+    if (dg > 0 && Math.floor(now / 400) % 2) pool(60, 300, 70, "rgba(255,60,50,.12)");
   }
   function repairDo(sl) {
     const g = sl === 2 ? me.gcar2 : me.gcar; if (!g) { toast("Aucune voiture rangée"); return; }
@@ -1432,7 +1500,7 @@ export function createStaClient(env) {
       g.fillStyle = sp ? sp[1] : pk ? "#2f6b2c" : hs(i, j) % 3 ? "#4b5066" : "#575d75"; g.fillRect(bx, by, bs, bs);
       g.strokeStyle = sp ? "#fff" : pk ? "#4f9a45" : "#7a8099"; g.lineWidth = sp ? 1.5 : 1; g.strokeRect(bx + .5, by + .5, bs - 1, bs - 1);
       if (pk) { g.fillStyle = "#245a22"; for (let t = 0; t < 4; t++) { g.beginPath(); g.arc(bx + 8 + hs(i + t, j) % (bs - 16), by + 8 + hs(j + t, i + 9) % (bs - 16), 3, 0, 7); g.fill(); } }
-      if (sp) { g.font = "bold 18px 'Courier New',monospace"; g.textAlign = "center"; g.fillStyle = sp[0] === HOSP ? "#d62828" : "#fff"; g.fillText(sp[2], bx + bs / 2, by + bs / 2 + 6); }
+      if (sp) { g.font = "bold 18px 'Pricedown Bl',Pricedown,Impact,sans-serif"; g.textAlign = "center"; g.fillStyle = sp[0] === HOSP ? "#d62828" : "#fff"; g.fillText(sp[2], bx + bs / 2, by + bs / 2 + 6); }
     }
     return c2;
   }
@@ -1697,7 +1765,7 @@ export function createStaClient(env) {
 const ROOF = [["#8b5a3c", "#a8714b", "#5e3a25"], ["#7d7d86", "#9a9aa5", "#55555d"], ["#a33b3b", "#c25353", "#6e2424"], ["#c9b27c", "#dcc794", "#8f7c4f"], ["#3d5a80", "#5577a3", "#27394f"], ["#6b7a3a", "#8a9a50", "#444f22"], ["#b0663a", "#cf8352", "#7a4222"], ["#9b9b9b", "#bdbdbd", "#666666"]];
 const shadeC = new Map();
 const shade = (hex, f) => { const k = hex + f; let v = shadeC.get(k); if (!v) { const n = parseInt(hex.slice(1), 16) || 0; v = `rgb(${Math.round((n >> 16 & 255) * f)},${Math.round((n >> 8 & 255) * f)},${Math.round((n & 255) * f)})`; shadeC.set(k, v); } return v; };
-const txt = (s, px, py, size, color, al) => { x.font = `700 ${size}px "Courier New",monospace`; x.textAlign = al || "center"; x.fillStyle = "#000"; x.fillText(s, px + 1.5, py + 1.5); x.fillStyle = color || "#fff"; x.fillText(s, px, py); };
+const txt = (s, px, py, size, color, al) => { x.font = `700 ${(size * .95).toFixed(1)}px 'Pricedown Bl',Pricedown,Impact,sans-serif`; x.textAlign = al || "center"; x.fillStyle = "#000"; x.fillText(s, px + 1.5, py + 1.5); x.fillStyle = color || "#fff"; x.fillText(s, px, py); };
 const WALL = ["#b07a35", "#8b8d99", "#b5523c", "#c9a867", "#5f7fa8", "#8a8f4c", "#c27a3e", "#a9a49a"];
 const rrect = (px, py, w, h, r) => { x.beginPath(); x.moveTo(px + r, py); x.arcTo(px + w, py, px + w, py + h, r); x.arcTo(px + w, py + h, px, py + h, r); x.arcTo(px, py + h, px, py, r); x.arcTo(px, py, px + w, py, r); x.closePath(); };
 function drawCar(px, py, a, color, cop, now, id, dm) {
@@ -1853,7 +1921,7 @@ function drawRoofPad(cx, cy, sc) {                                              
   x.strokeStyle = "#ffd23f"; x.lineWidth = 3 * sc; x.beginPath(); x.arc(cx, cy, 45 * sc, 0, 7); x.stroke();
   for (let k = 0; k < 8; k++) { const an = k * Math.PI / 4 + .39; x.fillStyle = Math.floor(now / 500 + k) % 2 ? "#ff3b30" : "#5a1410"; x.fillRect(cx + Math.cos(an) * 50 * sc - 2, cy + Math.sin(an) * 50 * sc - 2, 4, 4); }
   if (me.hu && me.vid !== HELI) drawHeli(cx, cy, -Math.PI / 2, { alt: 0, still: 1, rot: .5, s: .92 * sc, accent: (lobbyP()[myUid] || {}).color || "#ffd23f", now });
-  else { x.font = `bold ${Math.round(40 * sc)}px "Courier New",monospace`; x.textAlign = "center"; x.fillStyle = "#ffd23f"; x.fillText("H", cx, cy + 14 * sc); }
+  else { x.font = `bold ${Math.round(40 * sc)}px 'Pricedown Bl',Pricedown,Impact,sans-serif`; x.textAlign = "center"; x.fillStyle = "#ffd23f"; x.fillText("H", cx, cy + 14 * sc); }
 }
 function drawPart(q, now, labels) {                                                                 // caisse de pièces (quête du pilote)
   const b = Math.sin(now / 260) * 1.5;
@@ -1914,7 +1982,7 @@ function drawGarageZone(now) {                                                  
   const gx = GZ.x, gy = GZ.y, near = inGarage();
   x.fillStyle = near ? "rgba(255,210,63,.32)" : "rgba(255,210,63,.18)"; x.fillRect(gx - 46, gy - 9, 92, 36);
   x.strokeStyle = "#ffd23f"; x.lineWidth = 2; x.setLineDash([8, 6]); x.strokeRect(gx - 46, gy - 9, 92, 36); x.setLineDash([]);
-  x.font = "700 11px \"Courier New\",monospace"; x.textAlign = "center"; const t = me.g ? "GARAGE" : `$${GPRICE}`;
+  x.font = "700 11px 'Pricedown Bl',Pricedown,Impact,sans-serif"; x.textAlign = "center"; const t = me.g ? "GARAGE" : `$${GPRICE}`;
   x.fillStyle = "#000"; x.fillText(t, gx + 1, gy + 15); x.fillStyle = me.g ? "#fff" : "#ffe14d"; x.fillText(t, gx, gy + 14);
 }
 function drawLot(i, j) {                                                         // parcelle d'une maison : pelouse, clôture blanche, allée en dalles, arbres, buissons, panneau
@@ -1937,8 +2005,8 @@ function drawLot(i, j) {                                                        
   for (let n = 0; n < 8; n++) { x.fillStyle = [H.r[1], "#ffd23f", "#fff", "#ff8fa3"][n & 3]; x.fillRect(hx + 10 + (n * 37) % (hz - 20), hy + hz + 16 + (n % 3) * 4, 3, 3); }   // plate-bande fleurie
   const sx = cx + 46, sy = ly0 + sd - 44;                                          // panneau devant la maison
   x.fillStyle = "#5a3a22"; x.fillRect(sx - 1.5, sy, 3, 20);
-  x.fillStyle = o ? "#2e7d3a" : me.hou ? "#6b7080" : "#c9302c"; x.fillRect(sx - 25, sy - 24, 50, 25); x.strokeStyle = "#fff"; x.lineWidth = 1.5; x.strokeRect(sx - 24, sy - 23, 48, 23);
-  x.font = "bold 9px 'Courier New',monospace"; x.textAlign = "center"; x.fillStyle = "#fff";
+  x.fillStyle = o ? "#2e7d3a" : me.hou ? "#6b7080" : "#c9302c"; x.fillRect(sx - 30, sy - 24, 60, 25); x.strokeStyle = "#fff"; x.lineWidth = 1.5; x.strokeRect(sx - 29, sy - 23, 58, 23);
+  x.font = "bold 9px 'Pricedown Bl',Pricedown,Impact,sans-serif"; x.textAlign = "center"; x.fillStyle = "#fff";
   x.fillText(o ? "MA MAISON" : me.hou ? "NON DISPO" : "À VENDRE", sx, sy - 13); x.fillText(o ? "✔" : me.hou ? "(1 MAX)" : "$" + H.p, sx, sy - 3);
 }
 function drawWorld(vx0, vy0, vx1, vy1) {
@@ -2035,16 +2103,16 @@ function drawWorld(vx0, vy0, vx1, vy1) {
     x.fillStyle = pal[1]; x.fillRect(rx, ry, rw, 3); x.fillRect(rx, ry, 3, rw);
     x.fillStyle = pal[2]; x.fillRect(rx, ry + rw - 5, rw, 5); x.fillRect(rx + rw - 5, ry, 5, rw);
     x.strokeStyle = pal[2]; x.lineWidth = 2; x.strokeRect(rx + 14 * sc, ry + 14 * sc, rw - 28 * sc, rw - 28 * sc);
-    if (pol) { x.fillStyle = "#fff"; x.fillRect(rx + 14 * sc, ry + rw / 2 - 26 * sc, rw - 28 * sc, 3); x.fillRect(rx + 14 * sc, ry + rw / 2 + 24 * sc, rw - 28 * sc, 3); x.font = `bold ${Math.round(28 * sc)}px "Courier New",monospace`; x.textAlign = "center"; x.fillText("POLICE", rx + rw / 2, ry + rw / 2 + 9 * sc); }
+    if (pol) { x.fillStyle = "#fff"; x.fillRect(rx + 14 * sc, ry + rw / 2 - 26 * sc, rw - 28 * sc, 3); x.fillRect(rx + 14 * sc, ry + rw / 2 + 24 * sc, rw - 28 * sc, 3); x.font = `bold ${Math.round(28 * sc)}px 'Pricedown Bl',Pricedown,Impact,sans-serif`; x.textAlign = "center"; x.fillText("POLICE", rx + rw / 2, ry + rw / 2 + 9 * sc); }
     else if (hos) { x.strokeStyle = "#d62828"; x.lineWidth = 4; x.beginPath(); x.arc(rx + rw / 2, ry + rw / 2, 46 * sc, 0, 7); x.stroke(); x.fillStyle = "#d62828"; x.fillRect(rx + rw / 2 - 8 * sc, ry + rw / 2 - 26 * sc, 16 * sc, 52 * sc); x.fillRect(rx + rw / 2 - 26 * sc, ry + rw / 2 - 8 * sc, 52 * sc, 16 * sc); }
-    else if (gar) { x.fillStyle = "#ffd23f"; x.fillRect(rx + 14 * sc, ry + 22 * sc, rw - 28 * sc, 3); x.fillRect(rx + 14 * sc, ry + rw - 25 * sc, rw - 28 * sc, 3); x.font = `bold ${Math.round(24 * sc)}px "Courier New",monospace`; x.textAlign = "center"; x.fillStyle = "#fff"; x.fillText("GARAGE", rx + rw / 2, ry + 52 * sc); drawRoofPad(rx + rw / 2, ry + rw / 2 + 10 * sc, sc); }
-    else if (arm) { x.strokeStyle = "#ffb4a8"; x.lineWidth = 3; const cx2 = rx + rw / 2, cy2 = ry + rw / 2 - 8 * sc; x.beginPath(); x.arc(cx2, cy2, 38 * sc, 0, 7); x.stroke(); x.beginPath(); x.moveTo(cx2 - 52 * sc, cy2); x.lineTo(cx2 + 52 * sc, cy2); x.moveTo(cx2, cy2 - 52 * sc); x.lineTo(cx2, cy2 + 52 * sc); x.stroke(); x.font = `bold ${Math.round(24 * sc)}px "Courier New",monospace`; x.textAlign = "center"; x.fillStyle = "#fff"; x.fillText("ARMURERIE", rx + rw / 2, ry + rw / 2 + 74 * sc); }
+    else if (gar) { x.fillStyle = "#ffd23f"; x.fillRect(rx + 14 * sc, ry + 22 * sc, rw - 28 * sc, 3); x.fillRect(rx + 14 * sc, ry + rw - 25 * sc, rw - 28 * sc, 3); x.font = `bold ${Math.round(24 * sc)}px 'Pricedown Bl',Pricedown,Impact,sans-serif`; x.textAlign = "center"; x.fillStyle = "#fff"; x.fillText("GARAGE", rx + rw / 2, ry + 52 * sc); drawRoofPad(rx + rw / 2, ry + rw / 2 + 10 * sc, sc); }
+    else if (arm) { x.strokeStyle = "#ffb4a8"; x.lineWidth = 3; const cx2 = rx + rw / 2, cy2 = ry + rw / 2 - 8 * sc; x.beginPath(); x.arc(cx2, cy2, 38 * sc, 0, 7); x.stroke(); x.beginPath(); x.moveTo(cx2 - 52 * sc, cy2); x.lineTo(cx2 + 52 * sc, cy2); x.moveTo(cx2, cy2 - 52 * sc); x.lineTo(cx2, cy2 + 52 * sc); x.stroke(); x.font = `bold ${Math.round(24 * sc)}px 'Pricedown Bl',Pricedown,Impact,sans-serif`; x.textAlign = "center"; x.fillStyle = "#fff"; x.fillText("ARMURERIE", rx + rw / 2, ry + rw / 2 + 74 * sc); }
     else if (jl) {                                                                                       // prison : toit béton, grillage, barbelés, 4 miradors à lumière rouge, plaque PRISON
       x.fillStyle = "#4b5159"; x.fillRect(rx + 10 * sc, ry + 10 * sc, rw - 20 * sc, rw - 20 * sc);
       x.strokeStyle = "#9aa1ad"; x.lineWidth = 1; x.beginPath(); for (let t = 10 * sc; t < rw - 10 * sc; t += 8 * sc) { x.moveTo(rx + t, ry + 10 * sc); x.lineTo(rx + t, ry + rw - 10 * sc); x.moveTo(rx + 10 * sc, ry + t); x.lineTo(rx + rw - 10 * sc, ry + t); } x.stroke();
       x.strokeStyle = "#d9dde4"; x.lineWidth = 2; x.setLineDash([3, 3]); x.strokeRect(rx + 10 * sc, ry + 10 * sc, rw - 20 * sc, rw - 20 * sc); x.setLineDash([]);
       [[0, 0], [1, 0], [0, 1], [1, 1]].forEach(([a2, b2]) => { const tx = rx + (a2 ? rw - 40 * sc : 4 * sc), ty = ry + (b2 ? rw - 40 * sc : 4 * sc); x.fillStyle = "rgba(0,0,0,.35)"; x.fillRect(tx + 4, ty + 4, 36 * sc, 36 * sc); x.fillStyle = pal[2]; x.fillRect(tx, ty, 36 * sc, 36 * sc); x.fillStyle = pal[1]; x.fillRect(tx + 3 * sc, ty + 3 * sc, 30 * sc, 30 * sc); x.fillStyle = Math.floor(tNow / 400) % 2 ? "#ff3b30" : "#7a1a16"; x.beginPath(); x.arc(tx + 18 * sc, ty + 18 * sc, 6 * sc, 0, 7); x.fill(); });
-      x.fillStyle = "#1c1e23"; x.fillRect(rx + rw / 2 - 52 * sc, ry + rw / 2 - 16 * sc, 104 * sc, 32 * sc); x.font = `bold ${Math.round(22 * sc)}px "Courier New",monospace`; x.textAlign = "center"; x.fillStyle = "#ff6b6b"; x.fillText("PRISON", rx + rw / 2, ry + rw / 2 + 8 * sc); }
+      x.fillStyle = "#1c1e23"; x.fillRect(rx + rw / 2 - 52 * sc, ry + rw / 2 - 16 * sc, 104 * sc, 32 * sc); x.font = `bold ${Math.round(22 * sc)}px 'Pricedown Bl',Pricedown,Impact,sans-serif`; x.textAlign = "center"; x.fillStyle = "#ff6b6b"; x.fillText("PRISON", rx + rw / 2, ry + rw / 2 + 8 * sc); }
     else if (hk >= 0) {                                                                                  // maison : toit à deux pentes (nord clair, sud sombre), faîtage, tuiles, cheminée, lucarne
       x.fillStyle = pal[1]; x.fillRect(rx, ry, rw, rw / 2); x.fillStyle = pal[0]; x.fillRect(rx, ry + rw / 2, rw, rw / 2);
       x.strokeStyle = "rgba(0,0,0,.2)"; x.lineWidth = 1; x.beginPath(); for (let t = 9 * sc; t < rw / 2 - 2; t += 9 * sc) { x.moveTo(rx, ry + t); x.lineTo(rx + rw, ry + t); x.moveTo(rx, ry + rw - t); x.lineTo(rx + rw, ry + rw - t); } x.stroke();
@@ -2063,7 +2131,7 @@ function drawTruck(q, now, labels) {
   x.fillStyle = "#0c0c10"; rrect(-hl - 1, -hw - 1, L + 2, Wd + 2, 5); x.fill();
   x.fillStyle = q.hit > 0 ? "#fff" : "#5f6f7d"; rrect(-hl, -hw, L, Wd, 4); x.fill();                       // caisse blindée
   x.fillStyle = "#47545f"; x.fillRect(-hl + 3, -hw + 3, L * .62, Wd - 6);
-  x.fillStyle = "#ffd23f"; x.font = "bold 15px 'Courier New',monospace"; x.textAlign = "center"; x.fillText("$", -hl + 3 + L * .31, 5);
+  x.fillStyle = "#ffd23f"; x.font = "bold 15px 'Pricedown Bl',Pricedown,Impact,sans-serif"; x.textAlign = "center"; x.fillText("$", -hl + 3 + L * .31, 5);
   x.fillStyle = "#8fc7ea"; x.fillRect(hl - 15, -hw + 3, 9, Wd - 6);                                       // cabine + pare-brise
   x.fillStyle = "#e9edf0"; x.fillRect(hl - 3, -hw + 2, 2, 4); x.fillRect(hl - 3, hw - 6, 2, 4);             // phares
   x.restore();

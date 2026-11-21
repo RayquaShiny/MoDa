@@ -5,7 +5,7 @@
 <meta name="theme-color" content="var(--bg)">
 <!-- ⚠️ À CONSERVER À CHAQUE MISE À JOUR : à chaque nouvelle version (chaque modification), la version affichée doit faire +1.
      Changer le numéro aux 3 endroits, toujours identique : ce <meta name="moda-v">, `const VER` dans app.js, et `VERSION` dans sw.js. -->
-<meta name="moda-v" content="98"/>
+<meta name="moda-v" content="101"/>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -16,6 +16,8 @@
 <title>MoDa – jeux entre potes</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;800&family=DM+Sans:wght@400;600&display=swap">
 <style>
+/* Police de Sta I : Pricedown (celle de GTA). Elle est prise si elle est installée sur l'appareil, sinon dans pricedown.otf à côté de index.html (voir la licence) ; à défaut, Impact. */
+@font-face{font-family:"Pricedown Bl";src:local("Pricedown Black"),local("Pricedown Bl"),local("Pricedown"),url("pricedown.otf") format("opentype");font-weight:100 900;font-style:normal;font-display:swap}
 :root{--bg:#14102b;--card:#211a44;--s1:#2c2358;--s2:#3a3068;--deep:#0e0a22;--ink:#f3f0ff;--mute:#9d94c9;--a:#ffd23f;--b:#3ee6c4;--on-a:#241a00;--on-b:#06231d;--r:14px}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 'DM Sans',sans-serif}
 h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0}

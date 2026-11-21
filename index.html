@@ -5,7 +5,7 @@
 <meta name="theme-color" content="var(--bg)">
 <!-- ⚠️ À CONSERVER À CHAQUE MISE À JOUR : à chaque nouvelle version (chaque modification), la version affichée doit faire +1.
      Changer le numéro aux 3 endroits, toujours identique : ce <meta name="moda-v">, `const VER` dans app.js, et `VERSION` dans sw.js. -->
-<meta name="moda-v" content="109"/>
+<meta name="moda-v" content="110"/>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -295,6 +295,110 @@ html.neon .panel{background-image:none}
 .thm .thb{display:flex;gap:6px;margin-top:6px}.thm .thb i{font-style:normal;font-weight:700;font-size:11px;padding:3px 8px;border-radius:7px;background:var(--a);color:var(--on-a)}.thm .thb i+i{background:var(--b);color:var(--on-b)}
 .thm .thsc{position:absolute;left:0;right:0;bottom:0;height:60px;background-repeat:repeat-x;background-position:center bottom;background-size:auto 60px}
 .thcard .thn{display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:700}
+
+
+/* ---- Direction artistique saisonnière : paysages, lumière et profondeur ---- */
+html[data-season]:not(.neon) body{
+  background:
+    radial-gradient(ellipse at 50% -12%,color-mix(in srgb,var(--a) 18%,transparent),transparent 58%),
+    linear-gradient(180deg,color-mix(in srgb,var(--deep) 25%,transparent),transparent 42%);
+}
+html[data-season]:not(.neon) main{position:relative;z-index:1}
+html[data-season]:not(.neon) header{
+  min-height:76px;
+  border-bottom:1px solid color-mix(in srgb,var(--edge) 42%,transparent);
+}
+html[data-season]:not(.neon) header::after{
+  height:3px;top:auto;bottom:0;left:7%;right:7%;width:auto;
+  background:linear-gradient(90deg,transparent,var(--a),var(--b),transparent);
+  opacity:.8;filter:drop-shadow(0 0 7px var(--edge));
+}
+html[data-season]:not(.neon) .panel{
+  border-radius:22px;
+  box-shadow:0 18px 42px #0004,0 1px 0 #ffffff18 inset;
+}
+html[data-season]:not(.neon) .panel::after{
+  content:"";position:absolute;right:-42px;top:-52px;width:130px;height:130px;
+  border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,color-mix(in srgb,var(--a) 16%,transparent),transparent 68%);
+}
+html[data-season]:not(.neon) .tile{
+  position:relative;isolation:isolate;overflow:hidden;
+  box-shadow:0 14px 28px #0003,0 1px 0 #ffffff25 inset;
+  transition:transform .2s ease,box-shadow .2s ease,filter .2s ease;
+}
+html[data-season]:not(.neon) .tile::before{
+  content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:linear-gradient(145deg,#ffffff25,transparent 42%,#0002);
+}
+html[data-season]:not(.neon) .tile::after{
+  content:"";position:absolute;right:-24px;top:-28px;width:88px;height:88px;
+  border:1px solid #ffffff24;border-radius:28px;transform:rotate(28deg);
+  pointer-events:none;
+}
+html[data-season]:not(.neon) .stat{
+  background:linear-gradient(145deg,color-mix(in srgb,var(--s1) 94%,white 6%),var(--card));
+}
+html[data-season]:not(.neon) button:not(.alt){
+  background-image:linear-gradient(145deg,#ffffff22,transparent 55%);
+}
+html[data-season]:not(.neon) #seasonbg{height:170px;background-size:auto 170px;opacity:.92}
+html[data-season=autumn]:not(.neon){
+  background-image:
+    radial-gradient(ellipse at 12% 8%,#ff9f1c2b,transparent 33%),
+    radial-gradient(ellipse at 88% 36%,#e4572e24,transparent 36%),
+    linear-gradient(160deg,#21110d,#3a1d12 62%,#170c08);
+}
+html[data-season=autumn]:not(.neon) body::after{
+  opacity:.22;
+  background-image:radial-gradient(ellipse,#ffb347 0 3px,transparent 4px),radial-gradient(ellipse,#e4572e 0 2px,transparent 4px),radial-gradient(ellipse,#f6d08a 0 1px,transparent 3px);
+  background-size:137px 161px,191px 203px,83px 97px;
+  background-position:8px 12px,55px 31px,27px 66px;
+}
+html[data-season=winter]:not(.neon){
+  background-image:
+    radial-gradient(ellipse at 18% 0%,#7fd6ff30,transparent 36%),
+    radial-gradient(ellipse at 90% 30%,#ffffff18,transparent 35%),
+    linear-gradient(155deg,#0b192d,#1b385b 65%,#091322);
+}
+html[data-season=winter]:not(.neon) body::after{
+  opacity:.58;
+  background-image:radial-gradient(circle,#fff 0 1.3px,transparent 2px),radial-gradient(circle,#bde8ff 0 2px,transparent 3px),radial-gradient(circle,#fff9 0 1px,transparent 2px);
+  background-size:47px 53px,109px 127px,71px 83px;
+  background-position:0 0,29px 17px,12px 41px;
+}
+html[data-season=spring]:not(.neon){
+  background-image:
+    radial-gradient(ellipse at 10% 8%,#b8f06a27,transparent 36%),
+    radial-gradient(ellipse at 92% 25%,#ff8fc72b,transparent 38%),
+    linear-gradient(155deg,#14251b,#294833 65%,#102019);
+}
+html[data-season=spring]:not(.neon) body::after{
+  opacity:.34;
+  background-image:radial-gradient(circle,#ffb8d8 0 2px,transparent 3px),radial-gradient(circle,#fff1a8 0 1.5px,transparent 3px),radial-gradient(circle,#b8f06a 0 1.5px,transparent 3px);
+  background-size:113px 127px,157px 139px,89px 101px;
+  background-position:8px 14px,44px 37px,23px 61px;
+}
+html[data-season=summer]:not(.neon){
+  background-image:
+    radial-gradient(ellipse at 15% 0%,#ffd23f30,transparent 34%),
+    radial-gradient(ellipse at 88% 24%,#3ec6ff2c,transparent 40%),
+    linear-gradient(155deg,#082536,#105879 62%,#071b29);
+}
+html[data-season=summer]:not(.neon) body::after{
+  opacity:.32;
+  background-image:radial-gradient(circle,#fff4b0 0 2px,transparent 3px),radial-gradient(ellipse,#7be7ff 0 2px,transparent 3px);
+  background-size:127px 113px,173px 149px;
+  background-position:16px 21px,63px 47px;
+}
+@media(hover:hover){
+ html[data-season]:not(.neon) .tile:hover{transform:translateY(-4px) scale(1.012);box-shadow:0 20px 34px #0005,0 0 0 1px color-mix(in srgb,var(--edge) 35%,transparent)}
+}
+@media(max-width:500px){
+ html[data-season]:not(.neon) .panel{border-radius:18px}
+ html[data-season]:not(.neon) .tile{border-radius:17px}
+ html[data-season]:not(.neon) #seasonbg{height:118px;background-size:auto 118px}
+}
 
 /* ---- Thème noir-rouge néon (actif quand l'interrupteur Stats est sur ON) ---- */
 html.neon{--bg:#050204;--card:#12060a;--ink:#ffeef0;--mute:#ff8a9b;--a:#ff1f4b;--b:#ff4d6d}

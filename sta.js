@@ -782,7 +782,7 @@ export function createStaClient(env) {
       obs: [[18, 56, 160, 26], [86, 92, 20, 14], [136, 166, 28, 48], [436, 166, 28, 48], [516, 60, 42, 36], [18, 236, 26, 26], [48, 246, 22, 22], [526, 206, 32, 44]] }
   };
   ROOMS.house = { w: 520, h: 340, name: "MA MAISON", c: "#7ae582", door: { x: 260, hw: 30 },
-    obs: [[20, 64, 104, 64], [128, 68, 24, 26], [172, 60, 70, 30], [300, 60, 204, 30], [332, 112, 104, 60], [486, 100, 18, 92], [436, 206, 68, 46], [16, 160, 30, 84], [100, 166, 36, 72], [56, 192, 34, 32], [24, 294, 24, 24], [468, 294, 24, 24]] };
+    obs: [[20,70,108,66],[142,76,26,28],[184,68,76,34],[300,62,182,34],[464,98,40,68],[18,182,34,80],[70,180,104,58],[82,250,72,26],[310,210,92,48],[442,210,64,48],[470,120,34,70]] };
   ROOMS.jail = { w: 520, h: 340, name: "PRISON", c: "#ff6b6b", door: { x: -999, hw: 0 },          // pas de porte : on ne sort que par les moyens prévus
     obs: [[22, 66, 100, 46], [250, 68, 44, 38], [172, 200, 46, 32], [298, 56, 8, 270]] };
   function enterInn(k, hk) {
@@ -948,81 +948,34 @@ export function createStaClient(env) {
   }
   function drawHouseZone(k) { const o = owns(k); drawZone({ x: HZ[k].x, y: HZ[k].y, c: o ? "#7ae582" : me.hou ? "#8a8f9a" : "#ffd23f", l: o ? `MAISON ${k + 1}` : me.hou ? "—" : `$${HOUSES[k].p}` }); }
   function drawHouseRoom(now, labels) {
-    const R = ROOMS.house, w = R.w, h = R.h, H = HOUSES[inn.hk | 0], dx = R.door.x, hw = R.door.hw, sp = innSpot(), nc = !!(sp && sp.k === "chest"), spk = sp ? sp.k : "";
-    const wd = H.r[0], wl = H.r[1], wk = H.r[2], ws = (Math.floor(now / 600) % 3);
-    // sol : parquet · carrelage damier dans le coin cuisine
-    for (let y = 58, n = 0; y < h; y += 14, n++) { fr(0, y, w, 14, n & 1 ? "#8d6643" : "#835d3d"); fr(0, y + 13, w, 1, "rgba(0,0,0,.28)"); for (let k = 0; k < 6; k++) fr((n * 97 + k * 89) % (w - 8), y, 1, 13, "rgba(0,0,0,.2)"); }
-    for (let a = 0; a < 13; a++) for (let b = 0; b < 8; b++) fr(296 + a * 16, 58 + b * 16, 16, 16, (a + b) & 1 ? "#e8e4d8" : "#cfcabb");
-    fr(296, 186, 208, 3, "rgba(0,0,0,.35)");
-    // mur du fond : papier peint rayé, plinthe, fenêtres avec rideaux, tableau, horloge
-    fr(0, 0, w, 58, H.w); for (let tx = 0; tx < w; tx += 16) fr(tx, 0, 1, 58, "rgba(0,0,0,.07)"); for (let tx = 8; tx < w; tx += 32) fr(tx, 0, 8, 44, "rgba(255,255,255,.12)");
-    fr(0, 44, w, 3, wl); fr(0, 47, w, 7, wd); fr(0, 54, w, 4, "rgba(0,0,0,.38)");
-    [58, 352].forEach(wx => {
-      fr(wx - 2, 6, 68, 38, "#6b4a2b"); fr(wx + 2, 10, 60, 30, "#9fd3ee"); fr(wx + 2, 10, 60, 10, "#c5e6f6"); fr(wx + 30, 10, 3, 30, "#6b4a2b"); fr(wx + 2, 24, 60, 3, "#6b4a2b"); fr(wx - 4, 42, 72, 4, "#caa77a");
-      fr(wx - 12, 5, 14, 40, wd); fr(wx + 66, 5, 14, 40, wd); for (let k = 0; k < 3; k++) { fr(wx - 10 + k * 4, 5, 1, 40, "rgba(0,0,0,.22)"); fr(wx + 68 + k * 4, 5, 1, 40, "rgba(0,0,0,.22)"); } fr(wx - 14, 3, 96, 3, "#3a2a1a");
-    });
-    fr(182, 10, 44, 30, "#c9a227"); fr(185, 13, 38, 24, "#a6d8ee"); fr(185, 26, 38, 11, "#58a34d"); x.fillStyle = "#e8e8f0"; x.beginPath(); x.moveTo(185, 26); x.lineTo(199, 15); x.lineTo(212, 26); x.fill(); fr(205, 15, 5, 5, "#ffe14d");   // tableau : montagne et soleil
-    { const d = new Date(), ma = d.getMinutes() / 60 * 6.283 - 1.5708, ha = (d.getHours() % 12 + d.getMinutes() / 60) / 12 * 6.283 - 1.5708;
-      x.fillStyle = "#3a2a1a"; x.beginPath(); x.arc(272, 24, 14, 0, 7); x.fill(); x.fillStyle = "#f4f0e4"; x.beginPath(); x.arc(272, 24, 12, 0, 7); x.fill();
-      x.strokeStyle = "#222"; x.lineWidth = 1.5; x.beginPath(); x.moveTo(272, 24); x.lineTo(272 + Math.cos(ma) * 10, 24 + Math.sin(ma) * 10); x.stroke(); x.lineWidth = 2; x.beginPath(); x.moveTo(272, 24); x.lineTo(272 + Math.cos(ha) * 6, 24 + Math.sin(ha) * 6); x.stroke(); }
-    // murs latéraux et bas (avec la porte)
-    fr(0, 56, 16, h - 56, "#6e5a44"); fr(w - 16, 56, 16, h - 56, "#6e5a44"); fr(0, h - 14, dx - hw, 14, "#6e5a44"); fr(dx + hw, h - 14, w - dx - hw, 14, "#6e5a44");
-    fr(16, 56, 2, h - 70, "rgba(0,0,0,.3)"); fr(w - 18, 56, 2, h - 70, "rgba(0,0,0,.3)");
-    fr(dx - hw, h - 40, hw * 2, 26, "#7a2626"); fr(dx - hw, h - 40, hw * 2, 2, "#c9a227"); fr(dx - hw, h - 16, hw * 2, 2, "#c9a227");   // paillasson
-    // tapis rond au centre
-    x.fillStyle = "rgba(0,0,0,.2)"; x.beginPath(); x.ellipse(262, 252, 74, 34, 0, 0, 7); x.fill(); x.fillStyle = wl; x.beginPath(); x.ellipse(260, 250, 72, 32, 0, 0, 7); x.fill(); x.fillStyle = "#f1e8d2"; x.beginPath(); x.ellipse(260, 250, 60, 25, 0, 0, 7); x.fill(); x.strokeStyle = wd; x.lineWidth = 2; x.beginPath(); x.ellipse(260, 250, 48, 18, 0, 0, 7); x.stroke();
-    // coin salon : tapis, télé sur meuble, canapé, table basse
-    fr(48, 152, 120, 112, "#e3d8bf"); fr(48, 152, 120, 3, wd); fr(48, 261, 120, 3, wd); fr(48, 152, 3, 112, wd); fr(165, 152, 3, 112, wd); fr(56, 160, 104, 96, "rgba(0,0,0,.05)");
-    fr(16, 160, 30, 84, "#3a2a1a"); fr(16, 160, 30, 3, "#5a3d22"); fr(18, 172, 10, 60, "#0b0b0f");
-    if (tvOn) { const cs = ["#3b6fe0", "#e0a43b", "#3bd0a0"]; fr(19, 174, 8, 56, cs[ws]); fr(19, 174 + 14 * ((Math.floor(now / 300)) % 4), 8, 10, cs[(ws + 1) % 3]); pool(80, 202, 90, "rgba(120,160,255,.22)"); }
-    else fr(19, 174, 8, 56, "#16181d");
-    fr(32, 192, 8, 20, "#222"); fr(36, 200, 6, 4, "#7a7f8a");
-    fr(100, 166, 36, 72, shade(wd, .85)); fr(126, 166, 10, 72, shade(wd, .6)); fr(102, 174, 24, 28, wd); fr(102, 204, 24, 28, wd); fr(102, 174, 24, 3, wl); fr(102, 204, 24, 3, wl); fr(100, 166, 36, 8, shade(wd, .7)); fr(100, 230, 36, 8, shade(wd, .7));
-    fr(56, 192, 34, 32, "#4a3320"); fr(58, 194, 30, 28, "#8a5f2b"); fr(62, 198, 14, 10, "#e8e8ee"); fr(78, 210, 6, 6, "#fff"); fr(79, 211, 4, 4, "#6b3a1e");
-    // chambre : lit, table de chevet avec lampe, armoire
-    fr(20, 64, 104, 64, "#3a2a1a"); fr(20, 64, 104, 8, "#5a3d22"); fr(24, 72, 96, 52, "#eceef3"); fr(30, 76, 32, 18, "#fff"); fr(68, 76, 32, 18, "#fff"); fr(30, 92, 32, 2, "rgba(0,0,0,.12)"); fr(68, 92, 32, 2, "rgba(0,0,0,.12)");
-    fr(24, 98, 96, 26, wd); fr(24, 98, 96, 4, wl); for (let k = 0; k < 6; k++) fr(30 + k * 16, 104, 8, 20, "rgba(255,255,255,.12)"); fr(24, 120, 96, 4, "rgba(0,0,0,.25)");
-    fr(128, 68, 24, 26, "#6b4a2b"); fr(128, 68, 24, 3, "#8a5f2b"); x.fillStyle = "#f4d98a"; x.beginPath(); x.arc(140, 80, 8, 0, 7); x.fill(); x.fillStyle = "#fff6c8"; x.beginPath(); x.arc(140, 80, 4, 0, 7); x.fill();
-    fr(172, 60, 70, 30, "#5a3d22"); fr(174, 62, 32, 26, "#7a5530"); fr(208, 62, 32, 26, "#7a5530"); fr(204, 62, 4, 26, "#3a2a1a"); fr(200, 72, 3, 8, "#c9a227"); fr(209, 72, 3, 8, "#c9a227");
-    // cuisine : plan de travail, évier, cuisinière, frigo · table à manger avec 4 chaises
-    fr(300, 60, 204, 30, "#6b4a2b"); fr(300, 60, 204, 24, "#d9d6cf"); fr(300, 84, 204, 6, "#4a3320");
-    fr(312, 64, 40, 18, "#9aa8b5"); fr(316, 67, 32, 12, "#cfd9e2"); fr(330, 62, 5, 6, "#555");
-    fr(366, 64, 40, 18, "#2a2a30"); x.strokeStyle = "#777"; x.lineWidth = 1.5; [[376, 70], [396, 70], [376, 78], [396, 78]].forEach(([bx, by]) => { x.beginPath(); x.arc(bx, by, 4, 0, 7); x.stroke(); });
-    fr(416, 66, 22, 14, "#b3261e"); fr(418, 62, 18, 4, "#8a1b14");
-    fr(462, 58, 42, 38, "#e9eef2"); fr(462, 58, 42, 3, "#fff"); fr(462, 76, 42, 2, "#9aa4ad"); fr(498, 64, 3, 10, "#8a949d"); fr(498, 82, 3, 10, "#8a949d");
-    [[346, 114], [398, 114], [346, 160], [398, 160]].forEach(([cx2, cy2]) => { fr(cx2 - 8, cy2, 20, 12, "#8a5f2b"); fr(cx2 - 8, cy2, 20, 3, "#a97a3d"); });
-    fr(338, 124, 92, 38, "#4a3320"); fr(340, 126, 88, 34, "#9a6a35"); fr(340, 126, 88, 3, "#b5813f"); fr(346, 134, 76, 18, wd); fr(346, 134, 76, 2, wl);
-    fr(380, 138, 8, 10, "#e8e8ee"); fr(382, 130, 4, 8, "#3f9a38"); x.fillStyle = "#ff6b6b"; x.beginPath(); x.arc(384, 130, 3, 0, 7); x.fill(); fr(356, 140, 12, 8, "#fff"); fr(402, 140, 12, 8, "#fff");
-    // bibliothèque, coffre, plantes
-    fr(486, 100, 18, 92, "#5a3d22"); for (let k = 0; k < 7; k++) { fr(488, 102 + k * 13, 14, 11, "#2b1c10"); for (let b = 0; b < 4; b++) fr(488 + b * 3.5, 103 + k * 13, 3, 9, ["#c0392b", "#2e86c1", "#27ae60", "#f1c40f", "#8e44ad", "#e67e22"][(k * 3 + b * 5) % 6]); }
-    fr(436, 226, 68, 26, "#6b4a22"); fr(436, 206, 68, 22, "#8a5f2b"); fr(436, 206, 68, 4, "#a97a3d"); fr(454, 206, 6, 46, "#c9a227"); fr(480, 206, 6, 46, "#c9a227"); fr(466, 220, 12, 12, "#ffd23f"); fr(470, 223, 4, 6, "#7a5a10"); fr(436, 250, 68, 2, "rgba(0,0,0,.3)");
-    if (nc) pool(470, 228, 80, "rgba(255,215,80,.3)");
-    [[24, 294], [468, 294]].forEach(([px2, py2]) => { fr(px2 + 4, py2 + 12, 16, 12, "#a0522d"); fr(px2 + 4, py2 + 12, 16, 3, "#c0703f"); [[12, 8, 9], [5, 12, 7], [19, 12, 7], [12, 3, 6]].forEach(([lx, ly, r2]) => { x.fillStyle = "#2f7a28"; x.beginPath(); x.arc(px2 + lx, py2 + ly, r2, 0, 7); x.fill(); }); x.fillStyle = "#43963a"; x.beginPath(); x.arc(px2 + 10, py2 + 6, 5, 0, 7); x.fill(); });
-    labels.push(["COFFRE", 470, 268, nc ? "#ffe14d" : "#fff", 10], ["LIT", 72, 142, me.hsp === inn.hk ? "#7ae582" : (spk === "bed" ? "#ffe14d" : "#fff"), 10], ["TÉLÉ", 31, 254, spk === "tv" ? "#ffe14d" : "#fff", 10], ["SORTIE", dx, h - 24, "#fff", 10]);
-    pool(72, 96, 80, "rgba(255,225,160," + (.13 + .02 * Math.sin(now / 700)) + ")"); pool(92, 64, 90, "rgba(190,225,255,.14)"); pool(386, 64, 90, "rgba(190,225,255,.14)"); pool(260, 150, 150, "rgba(255,236,200,.07)"); pool(dx, h - 10, 70, "rgba(190,225,255,.2)");
-    // Finition premium : moulures, cadres, éclairage chaud et petits détails de vie (décor uniquement).
-    x.save();
-    fr(16, 56, w - 32, 3, "rgba(255,238,205,.55)"); fr(16, h - 20, w - 32, 2, "rgba(255,238,205,.18)");
-    // crédence carrelée et hotte de cuisine
-    for (let yy = 94; yy < 112; yy += 9) for (let xx = 302; xx < 502; xx += 18) { fr(xx, yy, 16, 7, (xx + yy) % 3 ? "#d7d1c4" : "#b8c8c8"); fr(xx, yy + 6, 16, 1, "rgba(70,80,80,.22)"); }
-    fr(406, 58, 28, 5, "#777d83"); fr(412, 54, 16, 5, "#aab0b5"); fr(416, 48, 8, 7, "#777d83");
-    // coussins du canapé, couture et pieds
-    fr(104, 236, 7, 5, "#b9d3d0"); fr(124, 236, 7, 5, "#d7b78b");
-    fr(104, 244, 5, 3, "#6b4a2b"); fr(128, 244, 5, 3, "#6b4a2b");
-    // table basse avec magazine et tasse
-    fr(68, 210, 16, 8, "#e8dfc8"); fr(70, 211, 12, 5, "#4e83a0"); fr(142, 208, 5, 6, "#f1eee5"); fr(143, 207, 3, 2, "#c9a227");
-    // cadres et petites décorations murales
-    fr(238, 8, 30, 30, "#76502d"); fr(241, 11, 24, 24, "#e8d8b8"); fr(244, 14, 18, 18, "#9bc5d6");
-    x.fillStyle = "#4b8b52"; x.beginPath(); x.moveTo(244, 29); x.lineTo(253, 18); x.lineTo(262, 29); x.fill();
-    fr(250, 16, 2, 7, "#f5d36c");
-    // plantes en pot et ombres douces
-    [[178,286],[490,286]].forEach(([px,py])=>{ x.fillStyle="rgba(0,0,0,.2)"; x.beginPath(); x.ellipse(px+10,py+15,13,4,0,0,7); x.fill(); fr(px+3,py+8,14,10,"#a85f38"); fr(px+2,py+7,16,3,"#d28a55"); for(let q=0;q<5;q++){x.fillStyle=["#397d43","#4d9a55","#2d6e3b"][q%3];x.beginPath();x.ellipse(px+9+Math.sin(q*2)*6,py+q*2,4,8,q*.55,0,7);x.fill();}});
-    // tapis : motif central et petits points dorés
-    x.strokeStyle="rgba(122,70,42,.45)";x.lineWidth=1;x.beginPath();x.ellipse(260,250,54,20,0,0,7);x.stroke();
-    for(let q=0;q<8;q++){x.fillStyle="#c49a57";x.beginPath();x.arc(260+Math.cos(q*Math.PI/4)*48,250+Math.sin(q*Math.PI/4)*15,1.5,0,7);x.fill();}
-    // éclairage plafond chaleureux et halo du salon
-    pool(184, 62, 72, "rgba(255,224,160,.12)"); pool(390, 148, 92, "rgba(255,244,210,.10)");
-    x.restore();
+    const R=ROOMS.house,w=R.w,h=R.h,H=HOUSES[inn.hk|0],dx=R.door.x,hw=R.door.hw,sp=innSpot(),spk=sp?sp.k:"",nc=spk==="chest",wd=H.r[0],wl=H.r[1],wk=H.r[2];
+    // Sol en parquet, carrelage limité à la cuisine.
+    fr(0,58,w,h-72,"#876044");for(let yy=60,row=0;yy<h-14;yy+=18,row++){fr(0,yy,w,1,"rgba(42,27,17,.24)");for(let xx=(row%2)*20;xx<w;xx+=40)fr(xx,yy+1,1,16,"rgba(42,27,17,.12)");}
+    fr(292,58,212,124,"#d8d2c4");for(let yy=60;yy<180;yy+=16)for(let xx=294;xx<502;xx+=16)fr(xx,yy,15,15,((xx+yy)/16)%2?"#e8e3d8":"#d0cabc");
+    // Murs et porte.
+    fr(0,0,w,58,H.w);for(let xx=0;xx<w;xx+=18)fr(xx,0,1,44,"rgba(255,255,255,.1)");fr(0,44,w,3,wl);fr(0,47,w,7,wd);fr(0,54,w,4,"rgba(0,0,0,.28)");
+    [58,352].forEach(q=>{fr(q-2,7,68,35,"#65472e");fr(q+2,11,60,27,"#a9d8ee");fr(q+2,24,60,3,"#65472e");fr(q-5,40,74,4,"#caa77a");});
+    fr(0,56,16,h-70,"#6e5a44");fr(w-16,56,16,h-70,"#6e5a44");fr(0,h-14,dx-hw,14,"#6e5a44");fr(dx+hw,h-14,w-dx-hw,14,"#6e5a44");fr(dx-hw,h-40,hw*2,26,"#762f2b");fr(dx-hw,h-40,hw*2,2,"#d2ad60");fr(dx-hw,h-16,hw*2,2,"#d2ad60");
+    // Chambre : lit, chevet et armoire avec des espaces distincts.
+    fr(18,68,112,72,"rgba(0,0,0,.18)");fr(20,70,108,66,"#49301e");fr(24,74,100,58,"#e8e9e5");fr(28,78,92,18,"#f7f4ec");fr(32,80,36,15,"#fff");fr(72,80,36,15,"#fff");fr(24,98,100,32,wd);fr(24,98,100,4,wl);fr(24,128,100,4,"rgba(0,0,0,.2)");
+    fr(142,76,26,28,"#68482d");fr(144,78,22,22,"#a77a4e");fr(148,80,12,4,"#f0d9a2");fr(184,68,76,34,"#543923");fr(188,72,34,26,"#805b3a");fr(224,72,32,26,"#805b3a");fr(221,72,3,26,"#392819");
+    // Cuisine : plan de travail, évier, plaques et frigo sans chevauchement.
+    fr(298,60,188,38,"rgba(0,0,0,.15)");fr(300,62,182,32,"#65452d");fr(300,62,182,5,"#b99b76");fr(304,67,174,22,"#e1ddd4");fr(304,89,174,5,"#49311f");
+    fr(316,70,46,16,"#899ba5");fr(319,72,40,12,"#c8d9df");fr(378,70,42,16,"#30343a");x.strokeStyle="#aab0b4";x.lineWidth=1.5;[[388,78],[409,78],[388,85],[409,85]].forEach(([cx,cy])=>{x.beginPath();x.arc(cx,cy,3.5,0,7);x.stroke();});
+    fr(438,69,26,17,"#b9c7c9");fr(441,72,20,11,"#e9eeee");fr(464,98,40,68,"#dfe5e8");fr(464,98,40,5,"#fff");fr(464,130,40,2,"#a6b0b6");fr(497,108,3,12,"#84919a");fr(497,140,3,12,"#84919a");
+    // Salon : TV contre le mur, canapé et table basse séparés.
+    fr(18,182,30,78,"#4a3321");fr(21,185,24,72,"#191d24");fr(23,188,20,66,tvOn?["#315d9c","#b37b35","#327e68"][Math.floor(now/420)%3]:"#101318");if(tvOn){fr(24,204+(Math.floor(now/260)%4)*9,18,7,"#d7dce0");pool(58,220,64,"rgba(105,160,235,.16)");}
+    fr(68,180,108,62,"rgba(0,0,0,.18)");fr(70,180,104,58,"#57402f");fr(74,184,96,50,wd);fr(74,184,96,8,wl);fr(74,226,96,8,wk);fr(80,190,38,30,shade(wd,.9));fr(124,190,38,30,shade(wd,.9));fr(82,238,8,5,"#3b2a20");fr(154,238,8,5,"#3b2a20");
+    fr(82,250,72,26,"#4b3424");fr(85,250,66,20,"#b88d5e");fr(89,253,28,13,"#e8dfc8");fr(92,255,22,2,"#4e83a0");fr(133,254,7,9,"#eee9df");
+    // Table à manger et chaises regroupées dans leur propre zone.
+    [[322,194],[392,194],[322,260],[392,260]].forEach(([cx,cy])=>{fr(cx,cy,22,16,"#67472e");fr(cx+2,cy+2,18,12,"#a77a4d");});fr(326,210,84,48,"#503522");fr(329,213,78,42,"#bd9360");fr(333,217,70,34,"#e8dfc9");fr(346,225,18,12,"#fff");fr(348,227,14,8,"#8caaa8");
+    // Bibliothèque et coffre : deux meubles bien séparés.
+    fr(470,120,34,70,"#543923");fr(473,123,28,64,"#2c2119");for(let k=0;k<4;k++){fr(474,125+k*15,26,2,"#a77a4d");for(let q=0;q<4;q++)fr(476+q*6,127+k*15,4,11,["#b95b46","#4c83a1","#66945a","#d0a44f"][(k+q)%4]);}
+    fr(442,210,64,48,"rgba(0,0,0,.18)");fr(442,210,64,44,"#654323");fr(446,214,56,35,"#b47b3d");fr(446,214,56,5,"#e0b36b");fr(468,214,5,35,"#d8b15e");fr(456,230,14,12,"#e7c45f");if(nc)pool(474,230,62,"rgba(255,215,80,.24)");
+    // Décor discret : tableau, plante et éclairage doux.
+    fr(230,8,42,32,"#76502d");fr(233,11,36,26,"#a8c9d4");x.fillStyle="#4b8b52";x.beginPath();x.moveTo(237,33);x.lineTo(250,17);x.lineTo(265,33);x.fill();x.fillStyle="rgba(0,0,0,.16)";x.beginPath();x.ellipse(214,294,18,5,0,0,7);x.fill();fr(202,284,24,14,"#a85f38");for(let q=0;q<5;q++){x.fillStyle=["#397d43","#4d9a55","#2d6e3b"][q%3];x.beginPath();x.ellipse(214+Math.sin(q*2)*8,281-(q%3)*5,5,9,q*.45,0,7);x.fill();}
+    pool(72,98,66,"rgba(255,225,160,.1)");pool(380,150,88,"rgba(255,244,210,.08)");pool(dx,h-10,64,"rgba(190,225,255,.16)");
+    labels.push(["COFFRE",474,276,nc?"#ffe14d":"#fff",10],["LIT",72,150,me.hsp===inn.hk?"#7ae582":spk==="bed"?"#ffe14d":"#fff",10],["TÉLÉ",34,272,spk==="tv"?"#ffe14d":"#fff",10],["SORTIE",dx,h-24,"#fff",10]);
   }
   function drawJailRoom(now, labels) {
     const R = ROOMS.jail, w = R.w, h = R.h, sp = innSpot(), dg = jail ? jail.dig : 0, BX = 298, spk = sp ? sp.k : "", fl = .85 + .15 * Math.sin(now / 90) * Math.sin(now / 370 + 1);

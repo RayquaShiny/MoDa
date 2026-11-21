@@ -859,9 +859,63 @@ export function createStaClient(env) {
     if (target === null) { dnOff = 0; remove(RF(`games/${c}/dn`)).catch(() => { }); }
     else { const base = Date.now() + (clockOff || 0), off = Math.round(target * 1000 - (base % (CYC_S * 1000))); dnOff = off; set(RF(`games/${c}/dn`), off).catch(() => { }); }
   }
-  const ADM = { x: W - 176, y: 44, w: 166, h: 112 }, admBtns = [["☀️ JOUR", 0], ["🌙 NUIT", 1], ["⟲ AUTO", 2]];
-  const admHit = p => { if (!isOwner()) return 0; if (Math.hypot(p.x - (W - 24), p.y - 24) < 18) return -1; if (!admOpen || p.x < ADM.x || p.x > ADM.x + ADM.w || p.y < ADM.y || p.y > ADM.y + ADM.h) return 0; for (let i = 0; i < 3; i++) { const by = ADM.y + 34 + i * 25; if (p.y >= by && p.y <= by + 21) return i + 1; } return 0; };
-  function admDo(h) { if (h === -1) admOpen = !admOpen; else if (h === 1) setPhase(0); else if (h === 2) setPhase(DAY_S + 1); else if (h === 3) setPhase(null); }
+  // ----- Panneau admin (owners) : bouton ⚙ en haut à gauche (ou touche P) → fenêtre centrée, dessinée PAR-DESSUS tout le HUD -----
+  // La mise en page est calculée une seule fois à partir de ADM_SEC : le dessin et le clic utilisent exactement les mêmes rectangles.
+  const ADM_GEAR = { x: 214, y: 24, r: 16 }, ADM_W = 336;
+  const admMsg = m => { try { toast(m); } catch { } };
+  const admTp = (z, nm) => { if (me.dead > 0) return; me.x = z.x; me.y = z.y; me.v = 0; cam.x = me.x; cam.y = me.y; admMsg(`📍 ${nm}`); };
+  const admHeal = () => { if (me.dead > 0) return; me.hp = 100; me.hurt = 0; admMsg("❤️ Soigné"); };
+  const admCalm = () => { me.heat = 0; me.wl = 0; me.bust = 0; admMsg("⭐ Recherché : 0"); };
+  const admCash = n => { me.cash += n; persist(true); admMsg(`💰 +$${n}`); };
+  const admArms = () => { for (let n = 1; n <= 4; n++) me.ammo[n] = WPN[n].max; if (!me.wpn) me.wpn = 1; me.gunT = performance.now(); persist(true); admMsg("🔫 Toutes les armes, munitions au max"); };
+  const admFix = () => { me.dm = 0; me.hh = 100; persist(true); admMsg("🔧 Voiture / hélico réparés"); };
+  const ADM_SEC = [                                                     // [titre, colonnes, [[libellé, action, actif?], …]]
+    ["TEMPS", 3, [["☀️ JOUR", () => setPhase(0)], ["🌙 NUIT", () => setPhase(DAY_S + 1)], ["⟲ AUTO", () => setPhase(null), () => dnOff === 0]]],
+    ["JOUEUR", 2, [["❤️ SOIN", admHeal], ["⭐ POLICE → 0", admCalm], ["💰 +$1 000", () => admCash(1000)], ["💰 +$10 000", () => admCash(10000)], ["🔫 ARMES MAX", admArms], ["🔧 RÉPARER", admFix]]],
+    ["TÉLÉPORTATION", 3, [["🏠 GARAGE", () => admTp(GZ, "Garage")], ["🔫 ARMURERIE", () => admTp(ZONES.arms, "Armurerie")], ["🏥 HÔPITAL", () => admTp(ZONES.heal, "Hôpital")]]]
+  ];
+  const ADM_L = (() => {
+    let y = 34; const bt = [], labs = [];
+    ADM_SEC.forEach(([t, cols, bs]) => {
+      labs.push({ t, y }); y += 14; const bw = (ADM_W - 20 - 6 * (cols - 1)) / cols;
+      bs.forEach((b, i) => bt.push({ b, x: 10 + (i % cols) * (bw + 6), y: y + Math.floor(i / cols) * 28, w: bw, h: 24 }));
+      y += Math.ceil(bs.length / cols) * 28 + 6;
+    });
+    return { bt, labs, h: y + 20 };
+  })();
+  const ADM = { x: (W - ADM_W) / 2, y: Math.round((H - ADM_L.h) / 2), w: ADM_W, h: ADM_L.h };
+  let admFl = { i: -1, t: 0 };                                          // dernier bouton pressé (petit flash)
+  // retourne : null = pas touché · -1 = engrenage · -2 = fermer (✕ ou clic en dehors) · -3 = clic dans la fenêtre (absorbé) · 0… = bouton
+  const admHit = p => {
+    if (!isOwner() || inn) return null;
+    if (Math.hypot(p.x - ADM_GEAR.x, p.y - ADM_GEAR.y) < ADM_GEAR.r + 6) return -1;
+    if (!admOpen) return null;
+    if (p.x < ADM.x || p.x > ADM.x + ADM.w || p.y < ADM.y || p.y > ADM.y + ADM.h) return -2;
+    if (p.x > ADM.x + ADM.w - 34 && p.y < ADM.y + 30) return -2;
+    for (let i = 0; i < ADM_L.bt.length; i++) { const r = ADM_L.bt[i]; if (p.x >= ADM.x + r.x && p.x <= ADM.x + r.x + r.w && p.y >= ADM.y + r.y && p.y <= ADM.y + r.y + r.h) return i; }
+    return -3;
+  };
+  function admDo(h) {
+    if (h === -1) admOpen = !admOpen;
+    else if (h === -2) admOpen = false;
+    else if (h >= 0) { admFl = { i: h, t: performance.now() }; try { ADM_L.bt[h].b[1](); } catch (err) { admMsg("Action admin impossible"); } }
+  }
+  function drawAdm() {
+    if (!isOwner() || inn) return;
+    const g = ADM_GEAR, now = performance.now();
+    x.fillStyle = admOpen ? "#ffd23f" : "rgba(0,0,0,.55)"; x.beginPath(); x.arc(g.x, g.y, g.r, 0, 7); x.fill(); x.strokeStyle = "#ffd23f"; x.lineWidth = 1.5; x.stroke(); txt("⚙", g.x, g.y + 6, 18, admOpen ? "#000" : "#fff");
+    if (!admOpen) return;
+    x.fillStyle = "rgba(0,0,0,.45)"; x.fillRect(0, 0, W, H);
+    x.fillStyle = "rgba(10,10,16,.95)"; rrect(ADM.x, ADM.y, ADM.w, ADM.h, 10); x.fill(); x.strokeStyle = "#ffd23f"; x.lineWidth = 2; x.stroke();
+    txt("🛠️ ADMIN", ADM.x + ADM.w / 2, ADM.y + 22, 15, "#ffd23f"); txt("✕", ADM.x + ADM.w - 17, ADM.y + 22, 16, "#fff");
+    ADM_L.labs.forEach(l => txt(l.t, ADM.x + 12, ADM.y + l.y + 10, 11, "#9aa0b4", "left"));
+    ADM_L.bt.forEach((r, i) => {
+      const act = r.b[2] && r.b[2](), fl = admFl.i === i && now - admFl.t < 180;
+      x.fillStyle = fl ? "#ffd23f" : act ? "rgba(255,210,63,.38)" : "rgba(255,255,255,.14)"; rrect(ADM.x + r.x, ADM.y + r.y, r.w, r.h, 6); x.fill();
+      txt(r.b[0], ADM.x + r.x + r.w / 2, ADM.y + r.y + 17, 12, fl ? "#000" : "#fff");
+    });
+    const t = cycT(); txt(`${t < DAY_S ? "☀️ JOUR" : "🌙 NUIT"} · ${dnOff === 0 ? "AUTO" : "MANUEL"} · P ou Échap : fermer`, ADM.x + ADM.w / 2, ADM.y + ADM.h - 8, 10, "#9aa0b4");
+  }
   const darkness = (t) => t < DAY_S - FADE_S ? 0 : t < DAY_S ? (t - (DAY_S - FADE_S)) / FADE_S : t < CYC_S - FADE_S ? 1 : (CYC_S - t) / FADE_S;
   // Camion noir : chaque nuit, il se gare à un endroit différent (même pour tout le monde, calculé depuis l'horloge commune). Aucune annonce, aucun marqueur.
   const bmPos = () => { const n = Math.floor(gClk() / 1000 / CYC_S), h = hs(n, 77), i = 1 + h % (N - 2), j = 1 + (h >>> 8) % (N - 2); return { x: i * CELL, y: j * CELL + CELL / 2 }; };
@@ -1797,11 +1851,6 @@ function frame(now) {
   x = mx2; x.setTransform(1, 0, 0, 1, 0, 0); x.imageSmoothingEnabled = false; x.drawImage(lc, 0, 0, cv.width, cv.height);   // …puis agrandie sans lissage = look GTA 1
   x.setTransform(S, 0, 0, S, 0, 0);
   labels.forEach(([s, wx, wy, c2, sz]) => { const [px, py] = sxy(wx, wy); if (px > -50 && px < W + 50 && py > -30 && py < H + 30) txt(s, px, py, sz || 12, c2); });
-  if (isOwner() && !inn) {
-    x.fillStyle = "rgba(0,0,0,.55)"; x.beginPath(); x.arc(W - 24, 24, 15, 0, 7); x.fill(); txt("⚙", W - 24, 30, 18, "#fff");
-    if (admOpen) { x.fillStyle = "rgba(10,10,16,.88)"; x.fillRect(ADM.x, ADM.y, ADM.w, ADM.h); x.strokeStyle = "#ffd23f"; x.lineWidth = 2; x.strokeRect(ADM.x, ADM.y, ADM.w, ADM.h); txt("ADMIN · TEMPS", ADM.x + ADM.w / 2, ADM.y + 20, 12, "#ffd23f");
-      admBtns.forEach(([l], i) => { const by = ADM.y + 34 + i * 25; x.fillStyle = "rgba(255,255,255,.14)"; x.fillRect(ADM.x + 10, by, ADM.w - 20, 21); txt(l, ADM.x + ADM.w / 2, by + 16, 13, "#fff"); }); }
-  }
   { const t = cycT(), isDay = t < DAY_S, left = Math.ceil(isDay ? DAY_S - t : CYC_S - t); txt(`${isDay ? "☀️ JOUR" : "🌙 NUIT"} ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`, W - 14, H - 12, 12, isDay ? "#ffe14d" : "#9db8ff", "right"); }
   floats = floats.filter(f => now - f.t < 1400); floats.forEach(f => { const [px, py] = sxy(f.x, f.y); x.globalAlpha = 1 - (now - f.t) / 1400; txt(f.s, px, py - (now - f.t) / 25, 15, f.c); }); x.globalAlpha = 1;
   // ----- HUD -----
@@ -1874,6 +1923,7 @@ function frame(now) {
   if (me.bust > .1) { x.fillStyle = "#2a5bff"; x.fillRect(W / 2 - 60, H / 2 + 40, 120 * clamp(me.bust / .9, 0, 1), 8); txt("ARRESTATION…", W / 2, H / 2 + 34, 13, "#8fb0ff"); }
   if (me.dead > 0) { x.fillStyle = "rgba(0,0,0,.65)"; x.fillRect(0, 0, W, H); txt(me.msg, W / 2, H / 2, 30, "#fff"); }
   if (stick) { x.fillStyle = "rgba(255,255,255,.08)"; x.strokeStyle = "rgba(255,255,255,.28)"; x.lineWidth = 2; x.beginPath(); x.arc(stick.ox, stick.oy, 55, 0, 7); x.fill(); x.stroke(); x.fillStyle = "rgba(255,255,255,.65)"; x.beginPath(); x.arc(stick.ox + stick.dx * 55, stick.oy + stick.dy * 55, 22, 0, 7); x.fill(); }
+  drawAdm();
 }
 
 // ================= ENTRÉES =================
@@ -1884,6 +1934,7 @@ function frame(now) {
     if (e.key === "r" || e.key === "R") { if (!e.repeat) nextStation(); e.preventDefault(); return; }
     if (e.key === "h" || e.key === "H") { hornKey = true; e.preventDefault(); return; }
     if (inn && e.key === "Escape" && !shop) { leaveInn(); return; }
+    if (admOpen && e.key === "Escape") { admOpen = false; e.preventDefault(); return; }
     if ((e.key === "p" || e.key === "P") && !e.repeat && isOwner() && !inn) { admOpen = !admOpen; e.preventDefault(); return; }
     if ((e.key === "g" || e.key === "G") && !shop && !inn) { if (!e.repeat && me.g && isOwner() && inGarage() && !me.vid && me.dead <= 0) ghostTake(); e.preventDefault(); return; }
     if (shop) { const d2 = /^(Digit|Numpad)([1-9])$/.exec(e.code || ""); if (d2) { shopPick(+d2[2] - 1); e.preventDefault(); return; } if (e.key === "Escape") { shop = ""; return; } }
@@ -1898,7 +1949,7 @@ function frame(now) {
   const rel = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height }; };
   cv.addEventListener("pointerdown", e => {
     if (!active) return; e.preventDefault(); const p = rel(e);
-    { const ah = admHit(p); if (ah) { admDo(ah); return; } }
+    { const ah = admHit(p); if (ah !== null) { admDo(ah); return; } }
     if (shop) { const r = shopHit(p); if (r !== -1) { if (r === -2) shop = ""; else if (r >= 0) shopPick(r); return; } }
     if (mis && p.x > 10 && p.x < 286 && p.y > 160 && p.y < 188) { missionFail("", true); return; }
     if ((hasGun() || me.vid === HELI || !me.vid) && Math.hypot(p.x - (W - 56), p.y - (H - 142)) < 38) { fireId = e.pointerId; try { cv.setPointerCapture(e.pointerId); } catch { } return; }

@@ -8,11 +8,11 @@
      hormis users/<uid>/sta (ton argent) et users/<uid>/sta2 (garage, voiture rangée, armes et munitions : sauvegardés).
    - But : gagner de l'argent (courses en voiture, piétons écrasés), éviter la police (étoiles ★), finir premier du classement. */
 
-const W = 800, H = 560, CELL = 360, ROAD = 100, N = 9, WORLD = N * CELL, BL = CELL - ROAD, SW = 18;
-const POLICE = [6, 2], HOSP = [2, 6], GARAGE = [2, 2], GPRICE = 3500, ARMS = [6, 6];
+const W = 800, H = 560, CELL = 360, ROAD = 100, N = 12, WORLD = N * CELL, BL = CELL - ROAD, SW = 18;
+const POLICE = [6, 2], HOSP = [2, 6], GARAGE = [2, 2], GPRICE = 3500, ARMS = [6, 6], JAIL = [10, 8];   // JAIL : la PRISON, un vrai bâtiment (sud-est de la carte agrandie)
 const HELI = 4000002, HELI_V = 300, HEL_HP = 200;   // hélicoptère du joueur (id spécial) · vitesse max · PV des hélicos de police
 const GHOST = 4000001, GHOST_V = 560;   // voiture fantôme (owners ayant le garage) : id spécial, vitesse max (la normale est de 230)
-const SPAWN = { police: [6 * CELL + 180, 3 * CELL], hosp: [2 * CELL + 180, 7 * CELL] };
+const SPAWN = { police: [6 * CELL + 180, 3 * CELL], hosp: [2 * CELL + 180, 7 * CELL], jail: [JAIL[0] * CELL + 180, (JAIL[1] + 1) * CELL] };   // jail : devant la porte de la prison
 const CCOL = ["#e63946", "#f4a261", "#2a9d8f", "#457b9d", "#e9c46a", "#9b5de5", "#8d99ae", "#f1f1f1"];
 const SKIN = ["#f1c27d", "#e0ac69", "#c68642", "#8d5524", "#ffdbac", "#d9a066"], SHIRT = ["#e63946", "#3a86ff", "#06d6a0", "#ffbe0b", "#8338ec", "#fb5607"];
 const KEYS = { ArrowUp: "U", ArrowDown: "D", ArrowLeft: "L", ArrowRight: "R", z: "U", s: "D", q: "L", d: "R", w: "U", a: "L" };
@@ -23,25 +23,27 @@ const JAIL_BASE = 25, JAIL_STAR = 8, JAIL_LOSS = 0;      // prison : secondes de
 const BRIBE_BASE = 50, BRIBE_SEC = 6;                     // corrompre le gardien : $ de base + $ par seconde de peine restante
 const DIG_NEED = 10, DIG_RISK = .08, DIG_PENALTY = 10;    // évasion : appuis sur E au coin du mur · risque d'être entendu à chaque appui · secondes ajoutées si entendu
 const FREE_HEAT = 1.6, ESC_HEAT = 1.6;                    // chaleur gagnée en faisant évader un ami / en s'évadant (1.6 = 2 étoiles)
-const HOUSES = [                                          // quartier résidentiel (colonnes 7-8, lignes 3-5) : prix, nom, toit [base, clair, sombre], mur
-  { i: 7, j: 3, p: 3000, n: "MAISON 1", r: ["#b5483a", "#d36a58", "#7e2f25"], w: "#ecdcc0" },
-  { i: 8, j: 3, p: 3000, n: "MAISON 2", r: ["#3f6fb5", "#5e8fd6", "#2a4b80"], w: "#e4e0d2" },
-  { i: 7, j: 4, p: 4500, n: "MAISON 3", r: ["#4f8a52", "#6fae72", "#35603a"], w: "#f0e6cf" },
-  { i: 8, j: 4, p: 4500, n: "MAISON 4", r: ["#8a5aa8", "#a97ac8", "#5f3a78"], w: "#e9dcc8" },
-  { i: 7, j: 5, p: 7000, n: "MAISON 5", r: ["#c8903a", "#e6b25c", "#8c6120"], w: "#f2ead8" },
-  { i: 8, j: 5, p: 7000, n: "MAISON 6", r: ["#444b58", "#646d7e", "#2a2f39"], w: "#dcd8cc" }
+const HOUSES = [                                          // quartier résidentiel de la zone agrandie (colonnes 9-11, lignes 3-4) · UNE SEULE maison par joueur : prix, nom, toit [base, clair, sombre], mur
+  { i: 9, j: 3, p: 3000, n: "MAISON 1", r: ["#b5483a", "#d36a58", "#7e2f25"], w: "#ecdcc0" },
+  { i: 10, j: 3, p: 3000, n: "MAISON 2", r: ["#3f6fb5", "#5e8fd6", "#2a4b80"], w: "#e4e0d2" },
+  { i: 11, j: 3, p: 4500, n: "MAISON 3", r: ["#4f8a52", "#6fae72", "#35603a"], w: "#f0e6cf" },
+  { i: 9, j: 4, p: 4500, n: "MAISON 4", r: ["#8a5aa8", "#a97ac8", "#5f3a78"], w: "#e9dcc8" },
+  { i: 10, j: 4, p: 7000, n: "MAISON 5", r: ["#c8903a", "#e6b25c", "#8c6120"], w: "#f2ead8" },
+  { i: 11, j: 4, p: 7000, n: "MAISON 6", r: ["#444b58", "#646d7e", "#2a2f39"], w: "#dcd8cc" }
 ];
 const hIdx = (i, j) => HOUSES.findIndex(h => h.i === i && h.j === j);
 const newBox = () => ({ c: 0, a: [0, 0, 0, 0], v: 0 });  // coffre d'une maison : argent, munitions des 4 armes (= les armes), gilet
-const isSpecial = (i, j) => hIdx(i, j) >= 0 || (i === POLICE[0] && j === POLICE[1]) || (i === HOSP[0] && j === HOSP[1]) || (i === GARAGE[0] && j === GARAGE[1]) || (i === ARMS[0] && j === ARMS[1]);
+const isSpecial = (i, j) => hIdx(i, j) >= 0 || (i === POLICE[0] && j === POLICE[1]) || (i === HOSP[0] && j === HOSP[1]) || (i === GARAGE[0] && j === GARAGE[1]) || (i === ARMS[0] && j === ARMS[1]) || (i === JAIL[0] && j === JAIL[1]);
 const isPark = (i, j) => !isSpecial(i, j) && hs(i, j) % 6 === 0;
 const lo = i => i * CELL + ROAD / 2, rc = v => Math.round(v / CELL) * CELL;
+const HS = 140;   // côté de la maison elle-même (la parcelle fait 224 : pelouse tout autour, la maison est plus petite)
+const hbox = (i, j) => { const sd = BL - 2 * SW; return hIdx(i, j) >= 0 ? [lo(i) + SW + (sd - HS) / 2, lo(j) + SW + 22, HS] : [lo(i) + SW, lo(j) + SW, sd]; };   // [x, y, côté] de la partie solide d'un bloc
 const GZ = { x: lo(GARAGE[0]) + BL / 2, y: lo(GARAGE[1]) + BL - SW / 2 };   // zone du garage : sur le trottoir sud du bâtiment
 // zones des magasins (pastilles au sol, sur le trottoir sud du bâtiment) : armurerie, distributeur de soins (hôpital)
 const ZONES = {
   arms: { x: lo(ARMS[0]) + BL / 2, y: lo(ARMS[1]) + BL - SW / 2, c: "#ff5a4d", l: "ARMES" },
   heal: { x: lo(HOSP[0]) + 52, y: lo(HOSP[1]) + BL - SW / 2, c: "#7ae582", l: "SOINS" },
-  jail: { x: lo(POLICE[0]) + BL - 56, y: lo(POLICE[1]) + BL - SW / 2, c: "#ff6b6b", l: "PRISON" }   // sur le trottoir du commissariat : les amis libres peuvent y faire évader un détenu
+  jail: { x: lo(JAIL[0]) + BL / 2, y: lo(JAIL[1]) + BL - SW / 2, c: "#ff6b6b", l: "PRISON" }   // devant la porte de la prison : les amis libres peuvent y faire évader un détenu
 };
 const HZ = HOUSES.map(h => ({ x: lo(h.i) + BL / 2, y: lo(h.j) + BL - SW / 2 }));   // porte de chaque maison (trottoir sud)
 // donneurs de missions : fixes, les mêmes pour tout le monde (trottoir ouest d'un bâtiment ordinaire)
@@ -67,7 +69,7 @@ const G2PRICE = 2500;                                                           
 const wear = id => hs(id | 0, 99) % 100 < 40 ? 1 << ([1, 1, 3, 0, 2, 1][hs(id | 0, 5) % 6] * 2) : 0;
 const dmx = (a, b) => { let r = 0; for (let z = 0; z < 4; z++) r |= Math.max((a >> (z * 2)) & 3, (b >> (z * 2)) & 3) << (z * 2); return r; };
 const dmSum = d => { let t = 0; for (let z = 0; z < 4; z++) t += ((d | 0) >> (z * 2)) & 3; return t; };
-const inBld = (px, py) => { const i = Math.floor((px - ROAD / 2) / CELL), j = Math.floor((py - ROAD / 2) / CELL); if (i < 0 || j < 0 || i >= N || j >= N || isPark(i, j)) return false; const x0 = lo(i) + SW, y0 = lo(j) + SW; return px > x0 && px < x0 + BL - 2 * SW && py > y0 && py < y0 + BL - 2 * SW; };
+const inBld = (px, py) => { const i = Math.floor((px - ROAD / 2) / CELL), j = Math.floor((py - ROAD / 2) / CELL); if (i < 0 || j < 0 || i >= N || j >= N || isPark(i, j)) return false; const [x0, y0, bs] = hbox(i, j); return px > x0 && px < x0 + bs && py > y0 && py < y0 + bs; };
 const wallEnd = (ox, oy, ang, rng) => { const dx = Math.cos(ang), dy = Math.sin(ang); for (let t = 8; t <= rng; t += 6) if (inBld(ox + dx * t, oy + dy * t)) return t; return rng; };
 const PICKS = [];
 for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
@@ -83,7 +85,7 @@ function push(p, r) {
   const i0 = Math.floor((p.x - ROAD / 2) / CELL), j0 = Math.floor((p.y - ROAD / 2) / CELL);
   for (let i = i0 - 1; i <= i0 + 1; i++) for (let j = j0 - 1; j <= j0 + 1; j++) {
     if (i < 0 || j < 0 || i >= N || j >= N || isPark(i, j)) continue;
-    const x0 = lo(i) + SW, y0 = lo(j) + SW, x1 = x0 + BL - 2 * SW, y1 = y0 + BL - 2 * SW;
+    const [x0, y0, bs] = hbox(i, j), x1 = x0 + bs, y1 = y0 + bs;
     const cx = clamp(p.x, x0, x1), cy = clamp(p.y, y0, y1), dx = p.x - cx, dy = p.y - cy, d = Math.hypot(dx, dy);
     if (d < r) {
       if (d > .001) { p.x = cx + dx / d * r; p.y = cy + dy / d * r; }
@@ -857,7 +859,7 @@ export function createStaClient(env) {
   const bribeCost = () => BRIBE_BASE + BRIBE_SEC * Math.ceil(jail ? jail.t : 0);
   function startJail() {
     const t = me.jT || JAIL_BASE + JAIL_STAR;
-    spawnAt(SPAWN.police); shop = ""; me.heat = 0; me.wl = 0; me.v = 0;
+    spawnAt(SPAWN.jail); shop = ""; me.heat = 0; me.wl = 0; me.v = 0;
     jail = { t, dig: 0 }; inn = { k: "jail", hk: 0, x: 90, y: 200, a: 0, t0: tNow, hp: me.hp, mv: false };
     toast(`🔒 En cellule pour ${Math.round(t)} s : attends, corromps le gardien, creuse le mur… ou un ami peut te faire évader`); SND.door();
   }
@@ -869,20 +871,20 @@ export function createStaClient(env) {
     if (!jail) { leaveInn(); return true; }
     jail.t -= dt;
     for (const [u, p] of activeP()) if (u !== myUid && p.fu === myUid && Math.hypot(p.x - ZONES.jail.x, p.y - ZONES.jail.y) < 160) {
-      jailOut(SPAWN.police, 0, `🔓 ${(lobbyP()[u] || {}).name || "Un ami"} t'a fait évader !`); return true;
+      jailOut(SPAWN.jail, 0, `🔓 ${(lobbyP()[u] || {}).name || "Un ami"} t'a fait évader !`); return true;
     }
-    if (jail.t <= 0) { jailOut(SPAWN.police, 0, "Tu es libéré. Fais profil bas !"); return true; }
+    if (jail.t <= 0) { jailOut(SPAWN.jail, 0, "Tu es libéré. Fais profil bas !"); return true; }
     return false;
   }
   function bribeDo() {
     const p = bribeCost(); if (me.cash < p) { toast(`Il te faut $${p} pour corrompre le gardien`); return; }
-    me.cash -= p; jailOut(SPAWN.police, 0, `💸 Le gardien a fermé les yeux (−$${p})`);
+    me.cash -= p; jailOut(SPAWN.jail, 0, `💸 Le gardien a fermé les yeux (−$${p})`);
   }
   function digDo() {
     if (!jail) return;
     if (Math.random() < DIG_RISK) { jail.t += DIG_PENALTY; jail.dig = 0; toast(`🚨 Le gardien t'a entendu ! +${DIG_PENALTY} s et tout est à refaire`); beep(120, .2, "sawtooth", .07, 60); return; }
     jail.dig++; beep(300 + jail.dig * 30, .05, "square", .04, 200);
-    if (jail.dig >= DIG_NEED) jailOut([6 * CELL + 180, 2 * CELL], ESC_HEAT, "🏃 ÉVASION ! La police te recherche");
+    if (jail.dig >= DIG_NEED) jailOut([JAIL[0] * CELL + 180, JAIL[1] * CELL], ESC_HEAT, "🏃 ÉVASION ! La police te recherche");
   }
   function jailFree(u) {                                                  // ami libre : faire évader un détenu depuis la zone PRISON
     const p = pd[u]; shop = ""; if (!p || !(p.jl > 0)) { toast("Il n'est déjà plus en prison"); return; }
@@ -895,6 +897,7 @@ export function createStaClient(env) {
   function houseDo(k) {
     const H = HOUSES[k];
     if (owns(k)) { enterInn("house", k); return; }
+    if (me.hou) { toast("Tu as déjà une maison : une seule par joueur !"); return; }
     if (me.cash < H.p) { toast(`Il te faut $${H.p} pour acheter ${H.n}`); return; }
     me.cash -= H.p; me.hou |= 1 << k; if (me.hsp < 0) me.hsp = k;
     floats.push({ x: me.x, y: me.y - 22, t: tNow, s: `🏠 ${H.n} ACHETÉE −$${H.p}`, c: "#7ae582" }); beep(660, .12, "triangle", .06); setTimeout(() => beep(880, .12, "triangle", .06), 130); persist(true);
@@ -940,7 +943,7 @@ export function createStaClient(env) {
     if (!L.length) return [{ l: "1 · PERSONNE EN PRISON POUR LE MOMENT", r: "—", ok: false, f: () => { } }];
     return L.slice(0, 8).map(([u, p], k) => ({ l: `${k + 1} · FAIRE ÉVADER ${((lobbyP()[u] || {}).name || "?").slice(0, 12).toUpperCase()}`, r: `${p.jl} s`, ok: true, f: () => jailFree(u) }));
   }
-  function drawHouseZone(k) { const o = owns(k); drawZone({ x: HZ[k].x, y: HZ[k].y, c: o ? "#7ae582" : "#ffd23f", l: o ? `MAISON ${k + 1}` : `$${HOUSES[k].p}` }); }
+  function drawHouseZone(k) { const o = owns(k); drawZone({ x: HZ[k].x, y: HZ[k].y, c: o ? "#7ae582" : me.hou ? "#8a8f9a" : "#ffd23f", l: o ? `MAISON ${k + 1}` : me.hou ? "—" : `$${HOUSES[k].p}` }); }
   function drawHouseRoom(now, labels) {
     const R = ROOMS.house, w = R.w, h = R.h, H = HOUSES[inn.hk | 0], dx = R.door.x, hw = R.door.hw, sp = innSpot(), nc = !!(sp && sp.k === "chest");
     for (let y = 56, n = 0; y < h; y += 12, n++) { fr(0, y, w, 12, n & 1 ? "#8a6240" : "#80593a"); fr(0, y + 11, w, 1, "rgba(0,0,0,.3)"); for (let k = 0; k < 4; k++) fr((n * 83 + k * 109) % (w - 6), y, 1, 11, "rgba(0,0,0,.22)"); }
@@ -1423,7 +1426,7 @@ export function createStaClient(env) {
     g.fillStyle = "#262a38"; g.fillRect(0, 0, S, S);
     g.strokeStyle = "rgba(255,255,255,.08)"; g.lineWidth = 1; g.beginPath();                          // lignes centrales des routes
     for (let i = 0; i <= N; i++) { g.moveTo(i * CELL * k, 0); g.lineTo(i * CELL * k, S); g.moveTo(0, i * CELL * k); g.lineTo(S, i * CELL * k); } g.stroke();
-    const SP = [[POLICE, "#2f55c4", "P"], [HOSP, "#e9edf0", "+"], [GARAGE, "#6b7080", "G"], [ARMS, "#a14040", "A"], ...HOUSES.map(h => [[h.i, h.j], "#3f7d4e", "H"])];
+    const SP = [[POLICE, "#2f55c4", "P"], [HOSP, "#e9edf0", "+"], [GARAGE, "#6b7080", "G"], [ARMS, "#a14040", "A"], [JAIL, "#5d636b", "J"], ...HOUSES.map(h => [[h.i, h.j], "#3f7d4e", "H"])];
     for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
       const bx = lo(i) * k, by = lo(j) * k, bs = BL * k, sp = SP.find(s => s[0][0] === i && s[0][1] === j), pk = isPark(i, j);
       g.fillStyle = sp ? sp[1] : pk ? "#2f6b2c" : hs(i, j) % 3 ? "#4b5066" : "#575d75"; g.fillRect(bx, by, bs, bs);
@@ -1914,6 +1917,30 @@ function drawGarageZone(now) {                                                  
   x.font = "700 11px \"Courier New\",monospace"; x.textAlign = "center"; const t = me.g ? "GARAGE" : `$${GPRICE}`;
   x.fillStyle = "#000"; x.fillText(t, gx + 1, gy + 15); x.fillStyle = me.g ? "#fff" : "#ffe14d"; x.fillText(t, gx, gy + 14);
 }
+function drawLot(i, j) {                                                         // parcelle d'une maison : pelouse, clôture blanche, allée en dalles, arbres, buissons, panneau
+  const k = hIdx(i, j), H = HOUSES[k], sd = BL - 2 * SW, lx0 = lo(i) + SW, ly0 = lo(j) + SW, [hx, hy, hz] = hbox(i, j), cx = hx + hz / 2, o = owns(k);
+  x.fillStyle = patGrass; x.fillRect(lx0, ly0, sd, sd);
+  x.fillStyle = "#34702a"; for (let n = 0; n < 6; n++) x.fillRect(lx0 + hs(i + n, j) % (sd - 30), ly0 + hs(j + n, i + 9) % (sd - 30), 30, 22);
+  const py0 = hy + hz, py1 = ly0 + sd;                                              // allée de la porte jusqu'au portail
+  x.fillStyle = "#c7c0ad"; x.fillRect(cx - 14, py0, 28, py1 - py0);
+  x.fillStyle = "rgba(0,0,0,.18)"; for (let y2 = py0 + 10; y2 < py1; y2 += 12) x.fillRect(cx - 14, y2, 28, 1.5);
+  x.fillStyle = "rgba(0,0,0,.22)"; x.fillRect(cx - 14, py0, 2, py1 - py0); x.fillRect(cx + 12, py0, 2, py1 - py0);
+  const fx0 = lx0 + 3, fy0 = ly0 + 3, fx1 = lx0 + sd - 3, fy1 = ly0 + sd - 3;      // clôture
+  const rail = (ax, ay, rw2, rh2) => { x.fillStyle = "rgba(0,0,0,.28)"; x.fillRect(ax + 2, ay + 2, rw2, rh2); x.fillStyle = "#f3eee2"; x.fillRect(ax, ay, rw2, rh2); };
+  rail(fx0, fy0, fx1 - fx0, 3); rail(fx0, fy0, 3, fy1 - fy0); rail(fx1 - 3, fy0, 3, fy1 - fy0); rail(fx0, fy1 - 3, cx - 20 - fx0, 3); rail(cx + 20, fy1 - 3, fx1 - cx - 20, 3);
+  x.fillStyle = "#fffdf5"; for (let t = fx0 + 4; t < fx1 - 4; t += 9) { x.fillRect(t, fy0 - 2, 2, 7); if (t < cx - 22 || t > cx + 22) x.fillRect(t, fy1 - 4, 2, 7); }
+  x.fillStyle = H.r[0]; x.fillRect(cx - 24, fy1 - 6, 5, 10); x.fillRect(cx + 19, fy1 - 6, 5, 10);   // poteaux du portail aux couleurs du toit
+  const tree = (tx, ty, r) => { x.fillStyle = "rgba(0,0,0,.3)"; x.beginPath(); x.arc(tx + 5, ty + 5, r, 0, 7); x.fill(); x.fillStyle = "#1f5a1c"; x.beginPath(); x.arc(tx, ty, r, 0, 7); x.fill(); x.fillStyle = "#2f7a28"; x.beginPath(); x.arc(tx - 1, ty - 1, r * .65, 0, 7); x.fill(); x.fillStyle = "#43963a"; x.beginPath(); x.arc(tx - 4, ty - 4, r * .3, 0, 7); x.fill(); };
+  tree(lx0 + 20, ly0 + 22, 15); tree(lx0 + sd - 20, ly0 + 22, 15); if (hs(i, j) & 1) tree(lx0 + 22, ly0 + sd - 40, 12); else tree(lx0 + sd - 22, ly0 + sd - 40, 12);
+  const bush = (bx2, by2) => { x.fillStyle = "#245a22"; x.beginPath(); x.arc(bx2, by2, 8, 0, 7); x.fill(); x.fillStyle = "#3f9a38"; x.beginPath(); x.arc(bx2 - 1.5, by2 - 1.5, 5, 0, 7); x.fill(); };
+  [18, 34, hz - 34, hz - 18].forEach(d => bush(hx + d, hy + hz + 9));
+  for (let n = 0; n < 8; n++) { x.fillStyle = [H.r[1], "#ffd23f", "#fff", "#ff8fa3"][n & 3]; x.fillRect(hx + 10 + (n * 37) % (hz - 20), hy + hz + 16 + (n % 3) * 4, 3, 3); }   // plate-bande fleurie
+  const sx = cx + 46, sy = ly0 + sd - 44;                                          // panneau devant la maison
+  x.fillStyle = "#5a3a22"; x.fillRect(sx - 1.5, sy, 3, 20);
+  x.fillStyle = o ? "#2e7d3a" : me.hou ? "#6b7080" : "#c9302c"; x.fillRect(sx - 25, sy - 24, 50, 25); x.strokeStyle = "#fff"; x.lineWidth = 1.5; x.strokeRect(sx - 24, sy - 23, 48, 23);
+  x.font = "bold 9px 'Courier New',monospace"; x.textAlign = "center"; x.fillStyle = "#fff";
+  x.fillText(o ? "MA MAISON" : me.hou ? "NON DISPO" : "À VENDRE", sx, sy - 13); x.fillText(o ? "✔" : me.hou ? "(1 MAX)" : "$" + H.p, sx, sy - 3);
+}
 function drawWorld(vx0, vy0, vx1, vy1) {
   x.fillStyle = "#1b1b1f"; x.fillRect(vx0, vy0, vx1 - vx0, vy1 - vy0);
   const R2 = ROAD / 2, rx0 = Math.max(vx0, -R2), ry0 = Math.max(vy0, -R2), rx1 = Math.min(vx1, WORLD + R2), ry1 = Math.min(vy1, WORLD + R2);
@@ -1937,10 +1964,11 @@ function drawWorld(vx0, vy0, vx1, vy1) {
     x.fillStyle = patSide; rrect(bx, by, BL, BL, 26); x.fill();
     x.strokeStyle = "#f0ecd0"; x.lineWidth = 3; rrect(bx + 1.5, by + 1.5, BL - 3, BL - 3, 25); x.stroke();   // bordure claire
     x.strokeStyle = "#8a845c"; x.lineWidth = 1.5; rrect(bx - .5, by - .5, BL + 1, BL + 1, 26.5); x.stroke();
+    if (hIdx(i, j) >= 0) drawLot(i, j);
     if (i === GARAGE[0] && j === GARAGE[1]) drawGarageZone(tNow);
     else if (i === ARMS[0] && j === ARMS[1]) drawZone(ZONES.arms);
     else if (i === HOSP[0] && j === HOSP[1]) drawZone(ZONES.heal);
-    else if (i === POLICE[0] && j === POLICE[1]) drawZone(ZONES.jail);
+    else if (i === JAIL[0] && j === JAIL[1]) drawZone(ZONES.jail);
     else if (hIdx(i, j) >= 0) drawHouseZone(hIdx(i, j));
     if (!isPark(i, j)) { blds.push([i, j]); continue; }
     x.fillStyle = patGrass; x.fillRect(ox, oy, bw, bw);
@@ -1952,9 +1980,9 @@ function drawWorld(vx0, vy0, vx1, vy1) {
   const dist = b => Math.hypot(lo(b[0]) + BL / 2 - cam.x, lo(b[1]) + BL / 2 - cam.y);
   blds.sort((p, q) => dist(q) - dist(p));
   blds.forEach(([i, j]) => {
-    const h = hs(i, j), bw = BL - 2 * SW, ox = lo(i) + SW, oy = lo(j) + SW, pol = i === POLICE[0] && j === POLICE[1], hos = i === HOSP[0] && j === HOSP[1], gar = i === GARAGE[0] && j === GARAGE[1], arm = i === ARMS[0] && j === ARMS[1], hk = hIdx(i, j);
-    const pal = gar ? ["#4a4e5a", "#6b7080", "#2d3039"] : pol ? ["#2f55c4", "#5a7fe0", "#1c3585"] : hos ? ["#e9edf0", "#ffffff", "#aab3ba"] : arm ? ["#7a2a2a", "#a14040", "#4a1616"] : hk >= 0 ? HOUSES[hk].r : ROOF[h % ROOF.length];
-    const wc = gar ? "#59606f" : pol ? "#3f66d0" : hos ? "#e3e8ec" : arm ? "#8a3a3a" : hk >= 0 ? HOUSES[hk].w : WALL[h % 8], k = .17 * (pol || hos || gar || arm ? 1.1 : hk >= 0 ? .55 : .8 + (h % 4) * .13);
+    const h = hs(i, j), [ox, oy, bw] = hbox(i, j), jl = i === JAIL[0] && j === JAIL[1], pol = i === POLICE[0] && j === POLICE[1], hos = i === HOSP[0] && j === HOSP[1], gar = i === GARAGE[0] && j === GARAGE[1], arm = i === ARMS[0] && j === ARMS[1], hk = hIdx(i, j);
+    const pal = gar ? ["#4a4e5a", "#6b7080", "#2d3039"] : pol ? ["#2f55c4", "#5a7fe0", "#1c3585"] : hos ? ["#e9edf0", "#ffffff", "#aab3ba"] : arm ? ["#7a2a2a", "#a14040", "#4a1616"] : jl ? ["#5d636b", "#7d858f", "#3c4148"] : hk >= 0 ? HOUSES[hk].r : ROOF[h % ROOF.length];
+    const wc = gar ? "#59606f" : pol ? "#3f66d0" : hos ? "#e3e8ec" : arm ? "#8a3a3a" : jl ? "#7b8189" : hk >= 0 ? HOUSES[hk].w : WALL[h % 8], k = .17 * (pol || hos || gar || arm || jl ? 1.1 : hk >= 0 ? .55 : .8 + (h % 4) * .13);
     const P = (gx, gy) => [gx + (gx - cam.x) * k, gy + (gy - cam.y) * k];
     const g00 = [ox, oy], g10 = [ox + bw, oy], g11 = [ox + bw, oy + bw], g01 = [ox, oy + bw], r00 = P(ox, oy), r10 = P(ox + bw, oy), r11 = P(ox + bw, oy + bw), r01 = P(ox, oy + bw);
     x.fillStyle = "rgba(0,0,0,.4)"; x.fillRect(ox + 14, oy + 14, bw, bw);                         // ombre portée
@@ -1965,18 +1993,30 @@ function drawWorld(vx0, vy0, vx1, vy1) {
       x.strokeStyle = "rgba(0,0,0,.17)"; x.lineWidth = 1; x.beginPath(); for (let s = 1; s < 14; s++) { const p = Q(s / 14, 0), q = Q(s / 14, 1); x.moveTo(p[0], p[1]); x.lineTo(q[0], q[1]); } x.stroke();   // briques / stries verticales
       if (hos) { x.strokeStyle = "#d62828"; x.lineWidth = 3; const p = Q(0, .5), q = Q(1, .5); x.beginPath(); x.moveTo(p[0], p[1]); x.lineTo(q[0], q[1]); x.stroke(); }
       const nc = 7, nr = 3;
-      for (let c = 0; c < nc; c++) for (let r = 0; r < nr; r++) {
+      if (hk >= 0) {                                                                // maison : 2 fenêtres de chaque côté de la porte (mur sud), 1 au milieu ailleurs, volets colorés
+        const quad = (p1, p2, p3, p4) => { x.beginPath(); x.moveTo(p1[0], p1[1]); x.lineTo(p2[0], p2[1]); x.lineTo(p3[0], p3[1]); x.lineTo(p4[0], p4[1]); x.closePath(); };
+        const south = g0[1] === oy + bw && g1[1] === oy + bw;
+        (south ? [.2, .8] : [.5]).forEach(tc2 => {
+          const w3 = .085, u0 = .34, u1 = .78;
+          x.fillStyle = HOUSES[hk].r[0]; quad(Q(tc2 - w3 - .05, u0), Q(tc2 - w3, u0), Q(tc2 - w3, u1), Q(tc2 - w3 - .05, u1)); x.fill(); quad(Q(tc2 + w3, u0), Q(tc2 + w3 + .05, u0), Q(tc2 + w3 + .05, u1), Q(tc2 + w3, u1)); x.fill();
+          x.fillStyle = "#9fd3ee"; quad(Q(tc2 - w3, u0), Q(tc2 + w3, u0), Q(tc2 + w3, u1), Q(tc2 - w3, u1)); x.fill();
+          x.strokeStyle = "#fff"; x.lineWidth = 2; x.stroke();
+          x.lineWidth = 1; x.beginPath(); const m1 = Q(tc2, u0), m2 = Q(tc2, u1), m3 = Q(tc2 - w3, (u0 + u1) / 2), m4 = Q(tc2 + w3, (u0 + u1) / 2); x.moveTo(m1[0], m1[1]); x.lineTo(m2[0], m2[1]); x.moveTo(m3[0], m3[1]); x.lineTo(m4[0], m4[1]); x.stroke();
+        });
+      } else for (let c = 0; c < nc; c++) for (let r = 0; r < nr; r++) {
         const t0 = (c + .2) / nc, t1 = (c + .8) / nc, u0 = .1 + (r + .15) / nr * .82, u1 = .1 + (r + .75) / nr * .82, hv = (h >>> ((c + r * 3) % 28)) & 3;
-        x.fillStyle = gar ? (hv & 1 ? "#20232b" : "#2c303a") : pol ? (hv & 1 ? "#e8f0ff" : "#aac0ff") : hos ? (hv & 1 ? "#8fc7ea" : "#cfe9f7") : hk >= 0 ? ["#f4d58d", "#e9c46a", "#9ad1d4", "#f4d58d"][hv] : ["#3b84b3", "#2f6f9c", "#b84455", "#58a0c4"][hv];
+        x.fillStyle = gar ? (hv & 1 ? "#20232b" : "#2c303a") : pol ? (hv & 1 ? "#e8f0ff" : "#aac0ff") : hos ? (hv & 1 ? "#8fc7ea" : "#cfe9f7") : jl ? "#101216" : hk >= 0 ? ["#f4d58d", "#e9c46a", "#9ad1d4", "#f4d58d"][hv] : ["#3b84b3", "#2f6f9c", "#b84455", "#58a0c4"][hv];
         const a1 = Q(t0, u0), a2 = Q(t1, u0), a3 = Q(t1, u1), a4 = Q(t0, u1);
         x.beginPath(); x.moveTo(a1[0], a1[1]); x.lineTo(a2[0], a2[1]); x.lineTo(a3[0], a3[1]); x.lineTo(a4[0], a4[1]); x.closePath(); x.fill();
         x.strokeStyle = "rgba(0,0,0,.45)"; x.lineWidth = 1; x.stroke();
+        if (jl) { x.strokeStyle = "#9aa1ad"; x.beginPath(); for (let b = 1; b < 4; b++) { const p1 = Q(t0 + (t1 - t0) * b / 4, u0), p2 = Q(t0 + (t1 - t0) * b / 4, u1); x.moveTo(p1[0], p1[1]); x.lineTo(p2[0], p2[1]); } x.stroke(); }   // barreaux
       }
-      if ((gar || arm || hk >= 0) && g0[1] === oy + bw && g1[1] === oy + bw) {                                      // la porte (mur sud) : E pour entrer
-        const dX = gar ? GZ.x : hk >= 0 ? HZ[hk].x : ZONES.arms.x, hwd = (gar ? 34 : hk >= 0 ? 22 : 18) / bw, tc = (dX - ox) / bw, uh = gar ? .56 : hk >= 0 ? .5 : .62, dc = gar ? "#ffd23f" : hk >= 0 ? (owns(hk) ? "#7ae582" : "#ffd23f") : "#ff5a4d", pt = (a, b) => { x.lineTo(a[0], a[1]); };
+      if ((gar || arm || jl || hk >= 0) && g0[1] === oy + bw && g1[1] === oy + bw) {                                      // la porte (mur sud) : E pour entrer
+        const dX = gar ? GZ.x : hk >= 0 ? HZ[hk].x : jl ? ZONES.jail.x : ZONES.arms.x, hwd = (gar ? 34 : jl ? 26 : hk >= 0 ? 22 : 18) / bw, tc = (dX - ox) / bw, uh = gar ? .56 : hk >= 0 ? .5 : .62, dc = gar ? "#ffd23f" : hk >= 0 ? (owns(hk) ? "#7ae582" : "#ffd23f") : jl ? "#ff6b6b" : "#ff5a4d", pt = (a, b) => { x.lineTo(a[0], a[1]); };
         const d1 = Q(tc - hwd, 0), d2 = Q(tc + hwd, 0), d3 = Q(tc + hwd, uh), d4 = Q(tc - hwd, uh);
-        x.fillStyle = gar ? "#7d8190" : hk >= 0 ? "#5a3a22" : "#241012"; x.beginPath(); x.moveTo(d1[0], d1[1]); pt(d2); pt(d3); pt(d4); x.closePath(); x.fill();
+        x.fillStyle = gar ? "#7d8190" : jl ? "#15171b" : hk >= 0 ? "#5a3a22" : "#241012"; x.beginPath(); x.moveTo(d1[0], d1[1]); pt(d2); pt(d3); pt(d4); x.closePath(); x.fill();
         if (gar) { x.strokeStyle = "rgba(0,0,0,.38)"; x.lineWidth = 1; x.beginPath(); for (let s2 = 1; s2 < 8; s2++) { const p = Q(tc - hwd, uh * s2 / 8), q = Q(tc + hwd, uh * s2 / 8); x.moveTo(p[0], p[1]); x.lineTo(q[0], q[1]); } x.stroke(); }
+        else if (jl) { x.strokeStyle = "#aeb4bf"; x.lineWidth = 2; x.beginPath(); for (let s3 = 1; s3 < 7; s3++) { const tt = tc - hwd + 2 * hwd * s3 / 7, p3 = Q(tt, 0), q3 = Q(tt, uh); x.moveTo(p3[0], p3[1]); x.lineTo(q3[0], q3[1]); } x.stroke(); }   // grille de la porte
         else if (hk < 0) { const e1 = Q(tc - hwd * .7, .06), e2 = Q(tc + hwd * .7, .06), e3 = Q(tc + hwd * .7, uh - .08), e4 = Q(tc - hwd * .7, uh - .08); x.globalAlpha = .6; x.fillStyle = "#ff9a8a"; x.beginPath(); x.moveTo(e1[0], e1[1]); pt(e2); pt(e3); pt(e4); x.closePath(); x.fill(); x.globalAlpha = 1; }
         x.strokeStyle = dc; x.lineWidth = 2; x.beginPath(); x.moveTo(d1[0], d1[1]); pt(d4); pt(d3); pt(d2); x.stroke();
         const s1 = Q(tc - hwd, uh + .05), s2b = Q(tc + hwd, uh + .05), s3 = Q(tc + hwd, uh + .15), s4 = Q(tc - hwd, uh + .15);
@@ -1999,8 +2039,19 @@ function drawWorld(vx0, vy0, vx1, vy1) {
     else if (hos) { x.strokeStyle = "#d62828"; x.lineWidth = 4; x.beginPath(); x.arc(rx + rw / 2, ry + rw / 2, 46 * sc, 0, 7); x.stroke(); x.fillStyle = "#d62828"; x.fillRect(rx + rw / 2 - 8 * sc, ry + rw / 2 - 26 * sc, 16 * sc, 52 * sc); x.fillRect(rx + rw / 2 - 26 * sc, ry + rw / 2 - 8 * sc, 52 * sc, 16 * sc); }
     else if (gar) { x.fillStyle = "#ffd23f"; x.fillRect(rx + 14 * sc, ry + 22 * sc, rw - 28 * sc, 3); x.fillRect(rx + 14 * sc, ry + rw - 25 * sc, rw - 28 * sc, 3); x.font = `bold ${Math.round(24 * sc)}px "Courier New",monospace`; x.textAlign = "center"; x.fillStyle = "#fff"; x.fillText("GARAGE", rx + rw / 2, ry + 52 * sc); drawRoofPad(rx + rw / 2, ry + rw / 2 + 10 * sc, sc); }
     else if (arm) { x.strokeStyle = "#ffb4a8"; x.lineWidth = 3; const cx2 = rx + rw / 2, cy2 = ry + rw / 2 - 8 * sc; x.beginPath(); x.arc(cx2, cy2, 38 * sc, 0, 7); x.stroke(); x.beginPath(); x.moveTo(cx2 - 52 * sc, cy2); x.lineTo(cx2 + 52 * sc, cy2); x.moveTo(cx2, cy2 - 52 * sc); x.lineTo(cx2, cy2 + 52 * sc); x.stroke(); x.font = `bold ${Math.round(24 * sc)}px "Courier New",monospace`; x.textAlign = "center"; x.fillStyle = "#fff"; x.fillText("ARMURERIE", rx + rw / 2, ry + rw / 2 + 74 * sc); }
-    else if (hk >= 0) { x.strokeStyle = pal[2]; x.lineWidth = 3; x.beginPath(); x.moveTo(rx + 16 * sc, ry + rw / 2); x.lineTo(rx + rw - 16 * sc, ry + rw / 2); x.stroke(); x.fillStyle = "#6b4a3a"; x.fillRect(rx + rw - 46 * sc, ry + 26 * sc, 16 * sc, 20 * sc);   // faîtage + cheminée
-      x.font = `bold ${Math.round(17 * sc)}px "Courier New",monospace`; x.textAlign = "center"; x.fillStyle = "#fff"; x.fillText(owns(hk) ? `MAISON ${hk + 1} ✔` : `À VENDRE $${HOUSES[hk].p}`, rx + rw / 2, ry + rw / 2 + 56 * sc); }
+    else if (jl) {                                                                                       // prison : toit béton, grillage, barbelés, 4 miradors à lumière rouge, plaque PRISON
+      x.fillStyle = "#4b5159"; x.fillRect(rx + 10 * sc, ry + 10 * sc, rw - 20 * sc, rw - 20 * sc);
+      x.strokeStyle = "#9aa1ad"; x.lineWidth = 1; x.beginPath(); for (let t = 10 * sc; t < rw - 10 * sc; t += 8 * sc) { x.moveTo(rx + t, ry + 10 * sc); x.lineTo(rx + t, ry + rw - 10 * sc); x.moveTo(rx + 10 * sc, ry + t); x.lineTo(rx + rw - 10 * sc, ry + t); } x.stroke();
+      x.strokeStyle = "#d9dde4"; x.lineWidth = 2; x.setLineDash([3, 3]); x.strokeRect(rx + 10 * sc, ry + 10 * sc, rw - 20 * sc, rw - 20 * sc); x.setLineDash([]);
+      [[0, 0], [1, 0], [0, 1], [1, 1]].forEach(([a2, b2]) => { const tx = rx + (a2 ? rw - 40 * sc : 4 * sc), ty = ry + (b2 ? rw - 40 * sc : 4 * sc); x.fillStyle = "rgba(0,0,0,.35)"; x.fillRect(tx + 4, ty + 4, 36 * sc, 36 * sc); x.fillStyle = pal[2]; x.fillRect(tx, ty, 36 * sc, 36 * sc); x.fillStyle = pal[1]; x.fillRect(tx + 3 * sc, ty + 3 * sc, 30 * sc, 30 * sc); x.fillStyle = Math.floor(tNow / 400) % 2 ? "#ff3b30" : "#7a1a16"; x.beginPath(); x.arc(tx + 18 * sc, ty + 18 * sc, 6 * sc, 0, 7); x.fill(); });
+      x.fillStyle = "#1c1e23"; x.fillRect(rx + rw / 2 - 52 * sc, ry + rw / 2 - 16 * sc, 104 * sc, 32 * sc); x.font = `bold ${Math.round(22 * sc)}px "Courier New",monospace`; x.textAlign = "center"; x.fillStyle = "#ff6b6b"; x.fillText("PRISON", rx + rw / 2, ry + rw / 2 + 8 * sc); }
+    else if (hk >= 0) {                                                                                  // maison : toit à deux pentes (nord clair, sud sombre), faîtage, tuiles, cheminée, lucarne
+      x.fillStyle = pal[1]; x.fillRect(rx, ry, rw, rw / 2); x.fillStyle = pal[0]; x.fillRect(rx, ry + rw / 2, rw, rw / 2);
+      x.strokeStyle = "rgba(0,0,0,.2)"; x.lineWidth = 1; x.beginPath(); for (let t = 9 * sc; t < rw / 2 - 2; t += 9 * sc) { x.moveTo(rx, ry + t); x.lineTo(rx + rw, ry + t); x.moveTo(rx, ry + rw - t); x.lineTo(rx + rw, ry + rw - t); } x.stroke();
+      x.fillStyle = pal[2]; x.fillRect(rx - 2, ry + rw / 2 - 3, rw + 4, 6); x.fillStyle = pal[1]; x.fillRect(rx - 2, ry + rw / 2 - 3, rw + 4, 2);
+      x.fillStyle = "rgba(0,0,0,.28)"; x.fillRect(rx, ry + rw - 7, rw, 7); x.fillStyle = pal[2]; x.fillRect(rx, ry, rw, 4);
+      const dwx = rx + rw * .5 - 14 * sc, dwy = ry + rw * .62; x.fillStyle = "rgba(0,0,0,.3)"; x.fillRect(dwx + 3, dwy + 3, 28 * sc, 22 * sc); x.fillStyle = wc; x.fillRect(dwx, dwy, 28 * sc, 22 * sc); x.fillStyle = "#9fd3ee"; x.fillRect(dwx + 4 * sc, dwy + 5 * sc, 20 * sc, 14 * sc); x.fillStyle = pal[2]; x.fillRect(dwx - 2 * sc, dwy - 3 * sc, 32 * sc, 4 * sc);
+      const chx = rx + rw * .7, chy = ry + rw * .12; x.fillStyle = "rgba(0,0,0,.3)"; x.fillRect(chx + 3, chy + 3, 20 * sc, 26 * sc); x.fillStyle = "#8a4b3a"; x.fillRect(chx, chy, 20 * sc, 26 * sc); x.fillStyle = "#b3624e"; x.fillRect(chx, chy, 20 * sc, 4 * sc); x.fillStyle = "#2b2220"; x.fillRect(chx + 4 * sc, chy + 6 * sc, 12 * sc, 14 * sc); }
     else for (let n = 0; n < 3; n++) { const w = 18 + (h >>> (n * 5)) % 18, hh = 14 + (h >>> (n * 4 + 2)) % 16, px = rx + (22 + (h >>> (n * 6)) % (bw - 70)) * sc, py = ry + (22 + (h >>> (n * 7 + 1)) % (bw - 60)) * sc; x.fillStyle = pal[1]; x.fillRect(px, py, w * sc, hh * sc); x.fillStyle = pal[2]; x.fillRect(px, py + (hh - 3) * sc, w * sc, 3); x.fillRect(px + (w - 3) * sc, py, 3, hh * sc); }
   });
 }
@@ -2217,7 +2268,7 @@ function frame(now) {
   { const ga = gAct(); if (ga || (me.g && me.vid !== HELI && inGarage())) txt(ga === "buy" ? `E : ACHETER LE GARAGE ($${GPRICE})` : ga === "store" ? "E : RANGER LA VOITURE" : !me.vid ? (isOwner() ? "E : ENTRER AU GARAGE · G : FANTÔME 👻" : "E : ENTRER AU GARAGE") : ga === "take" ? (me.g && isOwner() ? "E : SORTIR TA VOITURE · G : FANTÔME 👻" : "E : SORTIR TA VOITURE") : ga === "ghost" ? "E : SORTIR LA VOITURE FANTÔME 👻" : ga === "ghostPut" ? "E : RANGER LE FANTÔME" : me.vid ? "GARAGE PLEIN" : "GARAGE VIDE", W / 2, H - 60, 15, ga === "buy" && me.cash < GPRICE ? "#ff9f43" : "#ffe14d"); }
   if (me.dead <= 0 && !shop) {
     let h = "", hc = "#ffe14d"; const sa = shopAt(), nh = nearHouse();
-    if (nh >= 0) { h = owns(nh) ? `E : ENTRER CHEZ TOI (${HOUSES[nh].n})` : `E : ACHETER ${HOUSES[nh].n} ($${HOUSES[nh].p})`; if (!owns(nh) && me.cash < HOUSES[nh].p) hc = "#ff9f43"; }
+    if (nh >= 0) { h = owns(nh) ? `E : ENTRER CHEZ TOI (${HOUSES[nh].n})` : me.hou ? "TU AS DÉJÀ UNE MAISON : UNE SEULE PAR JOUEUR" : `E : ACHETER ${HOUSES[nh].n} ($${HOUSES[nh].p})`; if (!owns(nh) && (me.hou || me.cash < HOUSES[nh].p)) hc = "#ff9f43"; }
     else if (sa) { if (me.vid) h = `DESCENDS (E) POUR ${sa === "heal" ? "TE SOIGNER" : sa === "jail" ? "OUVRIR LA PRISON" : "ACHETER DES ARMES"}`; else if (sa === "heal") { const p = healPrice(); h = me.hp >= 99 ? "TU ES EN PLEINE FORME" : `E : TE SOIGNER ($${p})`; if (me.hp < 99 && p > me.cash) hc = "#ff9f43"; } else if (sa === "jail") h = "E : PRISON (FAIRE ÉVADER UN AMI)"; else h = "E : ENTRER DANS L'ARMURERIE"; }
     else { const g = nearGiver(); if (g) h = mis ? `${g.n} : TU AS DÉJÀ UNE MISSION` : `E : PARLER À ${g.n} (${g.l})`; else if (nearBM()) h = "E : PARLER AU CHAUFFEUR 🚚"; else if (nearMech()) h = pw === 2 ? `🧨 LIVRE LA POUDRE À L’ARMURERIE : ${Math.max(0, Math.ceil(pwT))}s` : "E : PARLER AU MÉCANO (QUÊTE RPG 🧩)"; else if (nearPilot()) h = me.hu ? "E : PARLER AU PILOTE" : mis && mis.k === "heli" ? (mis.st === 1 ? "E : RENDRE LES PIÈCES AU PILOTE" : "E : PARLER AU PILOTE") : mis ? "LE PILOTE : TU AS DÉJÀ UNE MISSION" : "E : PARLER AU PILOTE (QUÊTE SPÉCIALE 🚁)"; }
     if (h) txt(h, W / 2, H - 60, 15, hc);
@@ -2302,7 +2353,7 @@ function frame(now) {
       Object.assign(me, { vid: 0, hp: 100, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, bust: 0, hurt: 0, v: 0, a: 0, cash: 0, cop: 0, wpn: 0, ammo: [0, 0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100, rpgParts: [], rpgQuest: 0, ammoQuest: 0, rpgAmmoUnlocked: 0, arm: 0, hou: 0, hsp: -1, hb: HOUSES.map(newBox), fu: "", fuT: 0, jT: 0 });
       inn = null; jail = null; mis = null; tgt = null; pw = 0; pwT = 0; shop = ""; killQ = []; carQ = []; pendingPedHits = new Map(); tracers = []; rockets = []; sparks = []; booms = []; wrecks = []; pickT = new Map(); lastFc = {}; lastCs = {}; fireKey = false; fireId = null;
       const ix = 2 + Math.floor(Math.random() * 5), iy = 2 + Math.floor(Math.random() * 5); spawnAt([ix * CELL, iy * CELL]);
-      $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : monter / descendre d'une voiture · en voiture ↑ accélère, ↓ freine, ←→ tourne · livre les colis 📦, écrase des piétons, évite la police ! · Sans arme tu frappes avec tes poings 👊 (F : 3 coups pour un piéton) ; ramasse les armes au sol : F tirer, X changer d'arme (0 = poings, 1-2-3) · en hélico : mitraillette à munitions infinies (F) · les voitures se cabossent ! · garage ($3500 ; à l'intérieur, un 2e emplacement pour une voiture de plus : $2500) : va sur la zone jaune et appuie sur E (owners : voiture fantôme 👻 invincible qui traverse les bâtiments, tu peux en descendre : elle reste garée et seuls les owners peuvent y remonter (E) ; au garage : ranger le fantôme (E), G pour en sortir un) · R : changer de radio (4 stations), H : klaxon · missions : parle au BOSS ❗ au bord ouest de la carte (E) : missions aléatoires (voitures, cavale, contrat, camion blindé 🚚), M pour abandonner · armurerie et distributeur de soins (hôpital) : va sur leur zone et appuie sur E · 🏎️ des voitures de sport (Supercar, Roadster) roulent en ville : bien plus rapides, vole-les et range-les au garage ! · 🚁 hélicoptère : un pilote mystérieux traîne quelque part en ville (il n'est PAS sur la carte) : trouve-le et réussis sa quête pour débloquer un hélico, rangé sur le toit de ton garage (échelle dans le garage) ; E pour te poser sur la zone 🅷 du toit · à 5★ la police envoie des hélicos : abats-les ! · 🔒 arrêté = PRISON (≈30 s, plus avec plus d'étoiles) : attends, corromps le gardien, creuse le mur (E) ou un ami te fait évader depuis la zone PRISON du commissariat · 🏠 quartier résidentiel : achète une maison (E à la porte) : coffre pour ranger argent, armes et gilet, et lit = point de réapparition";
+      $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : monter / descendre d'une voiture · en voiture ↑ accélère, ↓ freine, ←→ tourne · livre les colis 📦, écrase des piétons, évite la police ! · Sans arme tu frappes avec tes poings 👊 (F : 3 coups pour un piéton) ; ramasse les armes au sol : F tirer, X changer d'arme (0 = poings, 1-2-3) · en hélico : mitraillette à munitions infinies (F) · les voitures se cabossent ! · garage ($3500 ; à l'intérieur, un 2e emplacement pour une voiture de plus : $2500) : va sur la zone jaune et appuie sur E (owners : voiture fantôme 👻 invincible qui traverse les bâtiments, tu peux en descendre : elle reste garée et seuls les owners peuvent y remonter (E) ; au garage : ranger le fantôme (E), G pour en sortir un) · R : changer de radio (4 stations), H : klaxon · missions : parle au BOSS ❗ au bord ouest de la carte (E) : missions aléatoires (voitures, cavale, contrat, camion blindé 🚚), M pour abandonner · armurerie et distributeur de soins (hôpital) : va sur leur zone et appuie sur E · 🏎️ des voitures de sport (Supercar, Roadster) roulent en ville : bien plus rapides, vole-les et range-les au garage ! · 🚁 hélicoptère : un pilote mystérieux traîne quelque part en ville (il n'est PAS sur la carte) : trouve-le et réussis sa quête pour débloquer un hélico, rangé sur le toit de ton garage (échelle dans le garage) ; E pour te poser sur la zone 🅷 du toit · à 5★ la police envoie des hélicos : abats-les ! · 🔒 arrêté = PRISON (≈30 s, plus avec plus d'étoiles) : attends, corromps le gardien, creuse le mur (E) ou un ami te fait évader depuis la zone PRISON, devant la prison (grand bâtiment gris au sud-est de la carte) · 🏠 quartier résidentiel à l'est de la carte : achète UNE maison (une seule par joueur ; E à la porte) : coffre pour ranger argent, armes et gilet, et lit = point de réapparition";
       get(RF(`users/${myUid}/sta`)).then(s => { const v = +s.val(); if (v > 0 && me.cash === 0) { me.cash = v; savedCash = v; sPrevCash = v; } }).catch(() => { });
       get(RF(`users/${myUid}/sta2`)).then(s => {                           // garage, voiture rangée, armes et munitions
         try {

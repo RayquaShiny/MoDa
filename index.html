@@ -5,7 +5,7 @@
 <meta name="theme-color" content="var(--bg)">
 <!-- ⚠️ À CONSERVER À CHAQUE MISE À JOUR : à chaque nouvelle version (chaque modification), la version affichée doit faire +1.
      Changer le numéro aux 3 endroits, toujours identique : ce <meta name="moda-v">, `const VER` dans app.js, et `VERSION` dans sw.js. -->
-<meta name="moda-v" content="118"/>
+<meta name="moda-v" content="119"/>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -259,6 +259,8 @@ html[data-season] .chip,html[data-season] .tile,html[data-season] .stat{
 }
 html[data-season] .tile{border-radius:17px}
 html[data-season] .stat{border-radius:16px}
+/* STA I : supprimer le fin liseré saisonnier orange appliqué à toutes les tuiles */
+html[data-season] .tile.sta{border:0;box-shadow:0 8px 24px #21152f66}
 html[data-season] input{
   border-color:color-mix(in srgb,var(--edge) 38%,transparent);
   box-shadow:0 2px 10px #0002 inset;
@@ -573,5 +575,5 @@ html.neon .adl{border-top-color:#ff1f4b33}
 </div>
 <div id="toast" role="status"></div>
 <script>setTimeout(function(){var b=document.getElementById("boot");if(b)b.className="off"},8000)</script>
-<script type="module" src="app.js?v=118"></script>
+<script type="module" src="app.js?v=119"></script>
 </body></html>

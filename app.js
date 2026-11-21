@@ -13,7 +13,7 @@ import {createVoice} from "./voice.js";
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="114";
+const VER="115";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -157,12 +157,12 @@ let seq=0;
 let visitorIP=null,visitorIPHash=null,ipDenied=false;
 const DEVICE_KEY="moda.deviceId";let deviceId="";
 try{deviceId=localStorage.getItem(DEVICE_KEY)||"";if(!/^[a-f0-9-]{20,40}$/i.test(deviceId))deviceId="";if(!deviceId){deviceId=crypto.randomUUID?crypto.randomUUID():Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,"0")).join("");localStorage.setItem(DEVICE_KEY,deviceId)}}catch{deviceId=""}
-const visitorIPPromise=(async()=>{try{
- const r=await fetch('https://api.ipify.org?format=json',{cache:'no-store'});if(!r.ok)throw Error('IP service');
+const visitorIPPromise=(async()=>{const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),4000);try{
+ const r=await fetch('https://api.ipify.org?format=json',{cache:'no-store',signal:controller.signal});if(!r.ok)throw Error('IP service');
  const ip=String((await r.json()).ip||'').trim();if(!ip||!crypto.subtle)throw Error('IP unavailable');
  const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(ip));
  const hash=Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('');visitorIP=ip;visitorIPHash=hash;return {ip,hash};
-}catch(e){console.warn('IP lookup unavailable',e);return null}})();
+}catch(e){console.warn('IP lookup unavailable (timeout ou réseau)',e);return null}finally{clearTimeout(timer)}})();
 function showIPDenied(){if(ipDenied)return;ipDenied=true;document.querySelector('header')?.setAttribute('hidden','');document.querySelector('main')?.setAttribute('hidden','');document.querySelector('#side')?.setAttribute('hidden','');
  let p=document.getElementById('ipDeniedPage');if(!p){p=document.createElement('div');p.id='ipDeniedPage';p.style.cssText='position:fixed;inset:0;z-index:99999;display:grid;place-items:center;background:#090914;color:white;padding:24px;text-align:center;font:700 22px system-ui';p.textContent='Désolé, mais vous n’avez pas réussi à atteindre ce site';document.body.append(p)}
  const uid=me?.uid||auth.currentUser?.uid;if(uid)set(R(`presence/${uid}`),false).catch(()=>{});

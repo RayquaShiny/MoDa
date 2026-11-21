@@ -198,7 +198,13 @@ async function run(u){
     presUn.push(onValue(R(".info/connected"),x=>{
       clearTimeout(nt);
       if(x.val()){
-        onDisconnect(R(`presence/${u.uid}`)).set(false);set(R(`presence/${u.uid}`),true).catch(()=>{});
+        const presenceRef=R(`presence/${u.uid}`);
+        // Enregistrer d'abord le nettoyage côté serveur, puis annoncer la présence.
+        // Cela évite qu'une fermeture rapide arrive avant l'enregistrement onDisconnect.
+        onDisconnect(presenceRef).set(false).then(()=>set(presenceRef,true)).catch(e=>{
+          console.warn("Presence onDisconnect",e);
+          set(presenceRef,true).catch(()=>{});
+        });
         if(code&&lobby)onDisconnect(R(lobby.host===u.uid&&lobby.game!=="sta"?`lobbies/${code}`:`lobbies/${code}/players/${u.uid}`)).remove(); // ré-armé après une coupure
         $("net").hidden=true;if(was)toast("Reconnecté ✅");was=true;
       }else if(was)nt=setTimeout(()=>{$("net").hidden=false},1200);

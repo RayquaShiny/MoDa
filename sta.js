@@ -853,11 +853,18 @@ export function createStaClient(env) {
   const nearMech = () => (!me.vid && !me.dead && !inn && Math.hypot(RPG_CONTACT.x - me.x, RPG_CONTACT.y - me.y) < 58);
   const pwFail = (why) => { if (pw === 2) { pw = 1; toast(`🧨 Livraison ratée (${why}) : retourne chercher la poudre.`); } };
   // Cycle jour/nuit commun à tous : 180 s de jour, 165 s de nuit (345 s), fondu de 12 s. L'horloge est celle de l'hôte (sinon l'horloge locale si on est l'hôte).
-  const DAY_S = 180, NIGHT_S = 165, CYC_S = DAY_S + NIGHT_S, FADE_S = 12; let clockOff = null;
-  const cycT = () => (((Date.now() + (clockOff || 0)) / 1000) % CYC_S + CYC_S) % CYC_S;
+  const DAY_S = 180, NIGHT_S = 165, CYC_S = DAY_S + NIGHT_S, FADE_S = 12; let clockOff = null, dnOff = 0, admOpen = false, unD = null;   // dnOff : décalage de l'horloge jour/nuit fixé par le owner (partagé via games/<code>/dn)
+  const gClk = () => Date.now() + (clockOff || 0) + dnOff, cycT = () => ((gClk() / 1000) % CYC_S + CYC_S) % CYC_S;
+  function setPhase(target) {                                              // owner : target = secondes dans le cycle (0 = jour, DAY_S+1 = nuit) · null = automatique
+    if (target === null) { dnOff = 0; remove(RF(`games/${c}/dn`)).catch(() => { }); }
+    else { const base = Date.now() + (clockOff || 0), off = Math.round(target * 1000 - (base % (CYC_S * 1000))); dnOff = off; set(RF(`games/${c}/dn`), off).catch(() => { }); }
+  }
+  const ADM = { x: W - 176, y: 44, w: 166, h: 112 }, admBtns = [["☀️ JOUR", 0], ["🌙 NUIT", 1], ["⟲ AUTO", 2]];
+  const admHit = p => { if (!isOwner()) return 0; if (Math.hypot(p.x - (W - 24), p.y - 24) < 18) return -1; if (!admOpen || p.x < ADM.x || p.x > ADM.x + ADM.w || p.y < ADM.y || p.y > ADM.y + ADM.h) return 0; for (let i = 0; i < 3; i++) { const by = ADM.y + 34 + i * 25; if (p.y >= by && p.y <= by + 21) return i + 1; } return 0; };
+  function admDo(h) { if (h === -1) admOpen = !admOpen; else if (h === 1) setPhase(0); else if (h === 2) setPhase(DAY_S + 1); else if (h === 3) setPhase(null); }
   const darkness = (t) => t < DAY_S - FADE_S ? 0 : t < DAY_S ? (t - (DAY_S - FADE_S)) / FADE_S : t < CYC_S - FADE_S ? 1 : (CYC_S - t) / FADE_S;
   // Camion noir : chaque nuit, il se gare à un endroit différent (même pour tout le monde, calculé depuis l'horloge commune). Aucune annonce, aucun marqueur.
-  const bmPos = () => { const n = Math.floor((Date.now() + (clockOff || 0)) / 1000 / CYC_S), h = hs(n, 77), i = 1 + h % (N - 2), j = 1 + (h >>> 8) % (N - 2); return { x: i * CELL, y: j * CELL + CELL / 2 }; };
+  const bmPos = () => { const n = Math.floor(gClk() / 1000 / CYC_S), h = hs(n, 77), i = 1 + h % (N - 2), j = 1 + (h >>> 8) % (N - 2); return { x: i * CELL, y: j * CELL + CELL / 2 }; };
   const bmOn = () => darkness(cycT()) > .5;
   const nearBM = () => { if (me.vid || me.dead > 0 || inn || !bmOn()) return null; const q = bmPos(); return Math.abs(me.x - q.x) < 62 && Math.abs(me.y - q.y) < 74 ? q : null; };
   const PARTS = 5, PART_TIME = 480;                                      // difficulté de la quête : nombre de caisses · temps (s)
@@ -1790,6 +1797,11 @@ function frame(now) {
   x = mx2; x.setTransform(1, 0, 0, 1, 0, 0); x.imageSmoothingEnabled = false; x.drawImage(lc, 0, 0, cv.width, cv.height);   // …puis agrandie sans lissage = look GTA 1
   x.setTransform(S, 0, 0, S, 0, 0);
   labels.forEach(([s, wx, wy, c2, sz]) => { const [px, py] = sxy(wx, wy); if (px > -50 && px < W + 50 && py > -30 && py < H + 30) txt(s, px, py, sz || 12, c2); });
+  if (isOwner() && !inn) {
+    x.fillStyle = "rgba(0,0,0,.55)"; x.beginPath(); x.arc(W - 24, 24, 15, 0, 7); x.fill(); txt("⚙", W - 24, 30, 18, "#fff");
+    if (admOpen) { x.fillStyle = "rgba(10,10,16,.88)"; x.fillRect(ADM.x, ADM.y, ADM.w, ADM.h); x.strokeStyle = "#ffd23f"; x.lineWidth = 2; x.strokeRect(ADM.x, ADM.y, ADM.w, ADM.h); txt("ADMIN · TEMPS", ADM.x + ADM.w / 2, ADM.y + 20, 12, "#ffd23f");
+      admBtns.forEach(([l], i) => { const by = ADM.y + 34 + i * 25; x.fillStyle = "rgba(255,255,255,.14)"; x.fillRect(ADM.x + 10, by, ADM.w - 20, 21); txt(l, ADM.x + ADM.w / 2, by + 16, 13, "#fff"); }); }
+  }
   { const t = cycT(), isDay = t < DAY_S, left = Math.ceil(isDay ? DAY_S - t : CYC_S - t); txt(`${isDay ? "☀️ JOUR" : "🌙 NUIT"} ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`, W - 14, H - 12, 12, isDay ? "#ffe14d" : "#9db8ff", "right"); }
   floats = floats.filter(f => now - f.t < 1400); floats.forEach(f => { const [px, py] = sxy(f.x, f.y); x.globalAlpha = 1 - (now - f.t) / 1400; txt(f.s, px, py - (now - f.t) / 25, 15, f.c); }); x.globalAlpha = 1;
   // ----- HUD -----
@@ -1872,6 +1884,7 @@ function frame(now) {
     if (e.key === "r" || e.key === "R") { if (!e.repeat) nextStation(); e.preventDefault(); return; }
     if (e.key === "h" || e.key === "H") { hornKey = true; e.preventDefault(); return; }
     if (inn && e.key === "Escape" && !shop) { leaveInn(); return; }
+    if ((e.key === "p" || e.key === "P") && !e.repeat && isOwner() && !inn) { admOpen = !admOpen; e.preventDefault(); return; }
     if ((e.key === "g" || e.key === "G") && !shop && !inn) { if (!e.repeat && me.g && isOwner() && inGarage() && !me.vid && me.dead <= 0) ghostTake(); e.preventDefault(); return; }
     if (shop) { const d2 = /^(Digit|Numpad)([1-9])$/.exec(e.code || ""); if (d2) { shopPick(+d2[2] - 1); e.preventDefault(); return; } if (e.key === "Escape") { shop = ""; return; } }
     if ((e.key === "m" || e.key === "M") && mis) { if (!e.repeat) missionFail("", true); e.preventDefault(); return; }
@@ -1885,6 +1898,7 @@ function frame(now) {
   const rel = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height }; };
   cv.addEventListener("pointerdown", e => {
     if (!active) return; e.preventDefault(); const p = rel(e);
+    { const ah = admHit(p); if (ah) { admDo(ah); return; } }
     if (shop) { const r = shopHit(p); if (r !== -1) { if (r === -2) shop = ""; else if (r >= 0) shopPick(r); return; } }
     if (mis && p.x > 10 && p.x < 286 && p.y > 160 && p.y < 188) { missionFail("", true); return; }
     if ((hasGun() || me.vid === HELI || !me.vid) && Math.hypot(p.x - (W - 56), p.y - (H - 142)) < 38) { fireId = e.pointerId; try { cv.setPointerCapture(e.pointerId); } catch { } return; }
@@ -1926,11 +1940,11 @@ function frame(now) {
         } catch { }
         gLoaded = true; savedG = gStr();
       }).catch(() => { });
-      unS = onValue(RF(`games/${c}/state`), onState); unP = onValue(RF(`games/${c}/p`), onP);
+      dnOff = 0; unD = onValue(RF(`games/${c}/dn`), snap => { const v = snap.val(); dnOff = typeof v === "number" ? v : 0; }); unS = onValue(RF(`games/${c}/state`), onState); unP = onValue(RF(`games/${c}/p`), onP);
       timer = setInterval(simLoop, 50); raf = requestAnimationFrame(frame);
       env.played && env.played("sta", true);
       return () => {
-        active = false; clearInterval(timer); unS && unS(); unP && unP(); if (raf) cancelAnimationFrame(raf); raf = 0; keys.clear(); stick = null; hostOn = false; fireKey = false; fireId = null;
+        active = false; clearInterval(timer); unS && unS(); unP && unP(); unD && unD(); unD = null; admOpen = false; if (raf) cancelAnimationFrame(raf); raf = 0; keys.clear(); stick = null; hostOn = false; fireKey = false; fireId = null;
         SND.stop(); persist(true); remove(RF(`games/${c}/p/${myUid}`)).catch(() => { });
         x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.setLineDash([]); x.textAlign = "start";
       };

@@ -104,6 +104,10 @@ const parseP = s => { const a = String(s).split(","); return { x: +a[0] || 0, y:
 // ajoute une entrée EN HAUT de la liste, avec un numéro « v » plus grand que le précédent, la date du jour et les nouveautés en clair.
 // Les joueurs qui n'ont pas vu cette version voient la fenêtre à l'entrée dans le jeu.
 const NEWS = [
+  { v: 5, d: "22 nov. 2026", t: [
+    "🎬 Nouvelle intro : une animation avec musique te montre tout ce que tu peux faire dans STA I (elle se lance une fois pour tout le monde)",
+    "Tu peux la revoir quand tu veux avec le bouton 🎬 en haut"
+  ] },
   { v: 4, d: "22 nov. 2026", t: [
     "👥 Deux places dans CHAQUE voiture : un joueur peut monter comme passager à côté d'un conducteur (E près de sa voiture) — même dans la voiture fantôme 👻",
     "Le passager ne fait rien : il se laisse conduire, il est protégé, et descend avec E (ou quand le conducteur descend)"
@@ -146,7 +150,12 @@ export const staHasNews = () => NEWS.length > 0 && NEWS[0].v > newsSeen();
 #staNews summary{cursor:pointer;font-weight:700}
 #staNews details ul{margin-top:8px}
 #staNews .ok{align-self:center;margin-top:auto;padding:11px 26px;font-size:17px;background:#ffd23f;color:#241a00}
-#staNewsBtn.fresh{box-shadow:0 0 0 2px #ffd23f,0 0 14px #ffd23f}`;
+#staNewsBtn.fresh{box-shadow:0 0 0 2px #ffd23f,0 0 14px #ffd23f}
+#staIntro{position:absolute;inset:0;z-index:9;background:#0b0820;touch-action:none;-webkit-user-select:none;user-select:none;overflow:hidden}
+#staIntro canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#staIntro button{position:absolute;bottom:14px;right:14px;padding:10px 18px;font-size:15px;background:#17152fcc;color:#fff;border:1px solid #ffffff55}
+#staIntro button.go{right:50%;transform:translateX(50%);padding:13px 34px;font-size:20px;font-weight:700;background:#ffd23f;color:#241a00;border:0;animation:staGo .9s ease-in-out infinite alternate}
+@keyframes staGo{to{transform:translateX(50%) scale(1.07)}}`;
   document.head.appendChild(st);
 })();
 
@@ -2319,7 +2328,7 @@ function frame(now) {
   for (const [u, p] of activeP()) { if (u === myUid) continue; let d = dP.get(u); if (!d) dP.set(u, d = { x: p.x, y: p.y, a: p.a }); if (Math.abs(p.x - d.x) + Math.abs(p.y - d.y) > 300) { d.x = p.x; d.y = p.y; } else { d.x += (p.x - d.x) * k; d.y += (p.y - d.y) * k; } d.a = angLerp(d.a, p.a, k); d.vid = p.vid; d.cash = p.cash; d.wl = p.wl; d.v = p.v; d.dm = p.dm; d.wpn = p.wpn; d.hn = p.hn; d.rd = p.rd; d.ib = p.ib; d.hz = p.hz; }
   for (const u of dP.keys()) if (!lp[u]) dP.delete(u);
   if (me.dead > 0) { me.dead -= dt; if (me.dead <= 0) { if (me.where === "police") startJail(); else if (me.hsp >= 0 && owns(me.hsp)) spawnAtHouse(me.hsp); else spawnAt(SPAWN[me.where || "hosp"]); } }
-  else { if (useReq) { useReq = 0; useKey(); } if (me.rd) rideStep(); else if (inn) { innControl(dt); missions(dt); } else { control(dt); interact(dt); weapons(dt, now); missions(dt); } }
+  else { if (introOpen) { me.hp = 100; me.hurt = 0; me.bust = 0; useReq = 0; } if (useReq) { useReq = 0; useKey(); } if (me.rd) rideStep(); else if (inn) { innControl(dt); missions(dt); } else { control(dt); interact(dt); weapons(dt, now); missions(dt); } }
   stepRockets(dt, now); c4Step();                                                  // les roquettes volent même si je suis mort ou dans un bâtiment
   useReq = 0; if (me.vid) me.carT += dt;
   sendP(now); sndFrame(now);
@@ -2628,9 +2637,153 @@ function frame(now) {
     nm.addEventListener("pointerdown", e => e.stopPropagation());
     $("gw").appendChild(nm);
   }
+  // ================= INTRO : animation de bienvenue (une seule fois par joueur ; rejouable avec le bouton 🎬) =================
+  const INTRO_KEY = "moda_sta_intro";
+  const introSeen = () => { try { return localStorage.getItem(INTRO_KEY) === "1"; } catch { return false; } };
+  let introOpen = false, im = null, iCv = null, iX = null, iRaf = 0, iT0 = 0, iMus = null, iBtn = null, iMode = "", rbtn = null;
+  const IS = [
+    { e: "🚗", h: "VOLE DES VOITURES", s: ["Berlines, coupés, fourgons…", "et des supercars 🏎️ rares"] },
+    { e: "💰", h: "GAGNE DU CASH", s: ["Courses, livraisons, missions", "Écrase des piétons : +$50 chacun"] },
+    { e: "🚓", h: "FUIS LA POLICE", s: ["Plus tu fais le fou, plus tu as d'étoiles ★", "Flics, voitures de police, hélicos…"] },
+    { e: "🔫", h: "ARME-TOI", s: ["Pistolet, mitraillette, fusil à pompe", "RPG 🚀 et C4 💣 pour tout faire sauter"] },
+    { e: "🏠", h: "FAIS-TOI UNE VIE", s: ["Garage, maisons avec coffre, mécano", "Hélico 🚁 du Pilote · prison… et évasion !"] },
+    { e: "👥", h: "JOUE À PLUSIEURS", s: ["Jusqu'à 24 joueurs en même temps", "Monte en passager 👥 · finis 1er du classement 🏆"] }
+  ];
+  const SL = 3.75, F0 = SL * IS.length;                                   // durée d'une scène (2 mesures à 128 BPM) · début du final (le logo arrive sur le crash de la batterie)
+  const IFONT = "\"Pricedown Bl\",Pricedown,Impact,sans-serif", fnt = (px, fam) => "700 " + px + "px " + fam;
+  const ease3 = p => 1 - Math.pow(1 - Math.min(1, Math.max(0, p)), 3);
+  function fitPx(g, txt, px, fam, maxW) { g.font = fnt(px, fam); const m = g.measureText(txt).width; return m > maxW ? px * maxW / m : px; }
+
+  // Musique 100 % synthétisée par WebAudio (aucun fichier, donc aucun droit d'auteur) : funk-rock sombre en la mineur, 128 BPM, 16 mesures
+  function introMusic() {
+    try {
+      const A = env.audio && env.audio(); if (!A) return null; if (A.state !== "running") A.resume && A.resume();
+      const mg = A.createGain(); mg.gain.value = env.muted && env.muted() ? 0 : .5; mg.connect(A.destination);
+      const bf = A.createBiquadFilter(); bf.type = "lowpass"; bf.frequency.value = 520; bf.connect(mg);
+      const lf = A.createBiquadFilter(); lf.type = "lowpass"; lf.frequency.value = 3200; lf.connect(mg);
+      const B = 60 / 128, S = B / 4;
+      const dl = A.createDelay(1); dl.delayTime.value = B * .75; const fb = A.createGain(); fb.gain.value = .33; const dg = A.createGain(); dg.gain.value = .3;
+      lf.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(dg); dg.connect(mg);
+      const nb = A.createBuffer(1, Math.floor(A.sampleRate * .6), A.sampleRate), nd = nb.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+      const osc = (type, f, t, d, v, dest, f2) => { const o = A.createOscillator(), g = A.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + d); g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(v, t + .008); g.gain.exponentialRampToValueAtTime(.0001, t + d); o.connect(g); g.connect(dest); o.start(t); o.stop(t + d + .03); };
+      const noise = (t, d, v, hp) => { const s = A.createBufferSource(), f = A.createBiquadFilter(), g = A.createGain(); s.buffer = nb; f.type = "highpass"; f.frequency.value = hp; g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(.0001, t + d); s.connect(f); f.connect(g); g.connect(mg); s.start(t); s.stop(t + d + .03); };
+      const ROOT = [55, 43.65, 65.41, 49], TRI = [[440, 523.25, 659.25], [349.23, 440, 523.25], [523.25, 659.25, 783.99], [392, 493.88, 587.33]], LEAD = [0, 1, 2, 1, 0, 1, 2, 1, 0, 1, 2, 1, 2, 1, 0, 2], BASS = [0, 3, 6, 8, 11, 14];
+      const bar = (n, t0) => {
+        if (n === 16) { osc("sawtooth", 110, t0, 3.2, .4, bf); TRI[0].forEach(f => osc("square", f, t0, 3.2, .13, lf)); noise(t0, 2.6, .5, 3000); osc("sine", 140, t0, .4, 1, mg, 40); return; }
+        const ch = n % 4, r = ROOT[ch], tr = TRI[ch], hi = n >= 12 ? 2 : 1;
+        if (n === 12) { noise(t0, 2.2, .5, 3000); osc("sine", 120, t0, .5, 1, mg, 35); }
+        for (let s = 0; s < 16; s++) {
+          const t = t0 + s * S;
+          if (s % 4 === 0) osc("sine", 150, t, .22, 1, mg, 42);
+          if (s === 4 || s === 12) { noise(t, .16, .5, 1500); osc("triangle", 190, t, .1, .3, mg, 120); }
+          if (s % 2 === 0) noise(t, s % 8 === 6 ? .16 : .04, s % 8 === 6 ? .2 : .1, 7000);
+          if (BASS.includes(s)) osc("sawtooth", (s === 6 || s === 14) ? r * 2 : r, t, S * 2.2, .42, bf);
+          if (n >= 1) osc("square", tr[LEAD[s]] * hi, t, S * 1.7, .1, lf);
+          if (n === 11 && s >= 8) noise(t, .08, .22 + (s - 8) * .05, 1500);   // roulement de caisse claire avant le final
+        }
+      };
+      const T0 = A.currentTime + .1; let nb2 = 0;
+      const tick = () => { while (nb2 <= 16 && T0 + nb2 * 16 * S < A.currentTime + 2) { bar(nb2, T0 + nb2 * 16 * S); nb2++; } };
+      tick(); const tm = setInterval(tick, 400);
+      return { stop() { clearInterval(tm); try { mg.gain.cancelScheduledValues(A.currentTime); mg.gain.setTargetAtTime(0, A.currentTime, .12); } catch { } setTimeout(() => { try { mg.disconnect(); } catch { } }, 900); } };
+    } catch { return null; }
+  }
+  function flameShape(g, x, y, len, hh, wob) {
+    g.beginPath(); g.moveTo(x, y - hh); g.quadraticCurveTo(x - len * .5, y - hh * .9 + wob, x - len, y + wob * .6);
+    g.quadraticCurveTo(x - len * .45, y + hh * .35, x, y + hh); g.closePath();
+  }
+  const ICARS = [["#d94a4a", 0, 0], ["#3b82d9", 1, 70], ["#e6c229", 0, 160], ["#7a4fd0", 1, 240], ["#27ae7a", 0, 330], ["#e9edf0", 1, 400], ["#ff8a2a", 0, 490]];
+  function introDraw(now) {
+    if (!introOpen) return;
+    iRaf = requestAnimationFrame(introDraw);
+    const w = im.clientWidth, h = im.clientHeight, d = Math.min(2, window.devicePixelRatio || 1);
+    if (!w || !h) return;
+    if (iCv.width !== Math.round(w * d) || iCv.height !== Math.round(h * d)) { iCv.width = Math.round(w * d); iCv.height = Math.round(h * d); }
+    const g = iX; g.setTransform(d, 0, 0, d, 0, 0); g.globalAlpha = 1; g.textAlign = "left"; g.textBaseline = "alphabetic"; g.lineJoin = "round";
+    const t = Math.max(0, (now - iT0) / 1000), fin = t >= F0, ft = t - F0, off = t * (fin ? 70 : 150);
+    // décor : la ville vue du dessus (trottoir, immeubles à gauche, route violette avec des voitures)
+    g.fillStyle = "#bfb583"; g.fillRect(0, 0, w, h);
+    g.strokeStyle = "rgba(60,50,20,.18)"; g.lineWidth = 1; g.beginPath();
+    for (let y = -(off % 44); y < h; y += 44) { g.moveTo(0, y); g.lineTo(w, y); }
+    for (let x = 0; x < w; x += 44) { g.moveTo(x, 0); g.lineTo(x, h); }
+    g.stroke();
+    const bw = Math.max(54, w * .16);
+    for (let y = -(off % 64) - 64; y < h; y += 64) { g.fillStyle = "#8a6512"; g.fillRect(0, y, bw, 60); g.fillStyle = "#c99a2e"; g.fillRect(0, y, bw, 6); g.fillStyle = "#2b7385"; for (let x = 8; x < bw - 14; x += 26) g.fillRect(x, y + 16, 16, 30); }
+    const rw = Math.min(w * .3, 220), rx = Math.min(w * .74 - rw / 2, w - rw - 8);
+    g.fillStyle = "#5a5878"; g.fillRect(rx, 0, rw, h); g.fillStyle = "#e3e2ef"; g.fillRect(rx, 0, 4, h); g.fillRect(rx + rw - 4, 0, 4, h);
+    for (let y = -(off % 56); y < h; y += 56) g.fillRect(rx + rw / 2 - 2, y, 4, 28);
+    for (const [col, lane, o] of ICARS) {
+      const sp = lane ? 140 : 190, p = (t * sp + o * 3) % (h + 160), y = lane ? h + 80 - p : p - 80, x = rx + rw * (lane ? .73 : .27);
+      g.save(); g.translate(x, y); if (lane) g.rotate(Math.PI);
+      g.fillStyle = "rgba(0,0,0,.3)"; g.fillRect(-12, -22, 28, 52); g.fillStyle = col; g.fillRect(-13, -25, 26, 50); g.fillStyle = "rgba(0,0,0,.28)"; g.fillRect(-10, -12, 20, 20); g.fillStyle = "#9fd2ee"; g.fillRect(-10, 4, 20, 9); g.restore();
+    }
+    g.fillStyle = "rgba(12,9,32," + (fin ? .74 : .5) + ")"; g.fillRect(0, 0, w, h);
+    if (!fin) {
+      const i = Math.min(IS.length - 1, Math.floor(t / SL)), lt = t - i * SL, sc = IS[i], inn = ease3(lt / .45);
+      const a = Math.min(inn, lt > SL - .4 ? Math.max(0, (SL - lt) / .4) : 1), x0 = w * .07 - (1 - inn) * 70, fs = fitPx(g, sc.h, Math.min(w * .08, h * .13, 62), IFONT, w * .86 - (x0 - w * .07));
+      g.globalAlpha = a;
+      const es = Math.round(Math.min(h * .2, 120) * (1 + Math.sin(lt * 5) * .05)); g.font = es + "px sans-serif"; g.fillStyle = "#fff"; g.fillText(sc.e, x0, h * .3);
+      const ty = h * .46; g.font = fnt(fs, IFONT); g.lineWidth = fs * .16; g.strokeStyle = "#000"; g.strokeText(sc.h, x0, ty);
+      const gr = g.createLinearGradient(0, ty - fs, 0, ty); gr.addColorStop(0, "#fff27a"); gr.addColorStop(1, "#ff9a00"); g.fillStyle = gr; g.fillText(sc.h, x0, ty);
+      sc.s.forEach((line, k) => { const sf = fitPx(g, line, Math.min(w * .034, 26), "'DM Sans',sans-serif", w * .86 - (x0 - w * .07)), yy = ty + fs * .25 + (k + 1) * sf * 1.55; g.font = fnt(sf, "'DM Sans',sans-serif"); g.lineWidth = 4; g.strokeStyle = "#000"; g.strokeText(line, x0, yy); g.fillStyle = "#fff"; g.fillText(line, x0, yy); });
+      g.globalAlpha = 1;
+      for (let k = 0; k < IS.length; k++) { g.fillStyle = k === i ? "#ffd23f" : "rgba(255,255,255,.35)"; g.beginPath(); g.arc(w / 2 + (k - 2.5) * 18, h - 26, 4, 0, 6.283); g.fill(); }
+    } else {
+      // le logo « SMALL THEFT AUTO » (flammes + étoiles)
+      const L = ["SMALL", "THEFT", "AUTO"], OFF = [0, .55, .12];
+      g.font = fnt(100, IFONT); const ws = L.map(s => g.measureText(s).width / 100), bwEm = Math.max(...ws.map((v, k) => v + OFF[k]));
+      const fs = Math.min(h * .2, w * .17, (w * (w < 520 ? .54 : .72)) / bwEm), p = Math.min(1, ft / .45), s0 = 1.5 - .5 * ease3(p), shk = Math.max(0, 1 - ft * 2.5) * 9;
+      g.save(); g.globalAlpha = Math.min(1, ft / .12); g.translate(w / 2 + (Math.random() - .5) * shk, h * .45 + (Math.random() - .5) * shk); g.scale(s0, s0); g.transform(1, 0, -.18, 1, 0, 0);
+      const lh = fs * .9, bx = -bwEm * fs / 2, by = k => (k - 1) * lh + fs * .35;
+      const line = k => {
+        const x = bx + OFF[k] * fs, y = by(k); g.font = fnt(fs, IFONT); g.lineWidth = fs * .2; g.strokeStyle = "#000"; g.strokeText(L[k], x + fs * .05, y + fs * .08); g.fillStyle = "#000"; g.fillText(L[k], x + fs * .05, y + fs * .08);
+        g.lineWidth = fs * .15; g.strokeText(L[k], x, y); const gr = g.createLinearGradient(0, y - fs * .75, 0, y); gr.addColorStop(0, "#fff27a"); gr.addColorStop(.45, "#ffc21a"); gr.addColorStop(1, "#ff6f00"); g.fillStyle = gr; g.fillText(L[k], x, y);
+      };
+      line(0);
+      const fx = bx + OFF[1] * fs + fs * .06, fy = by(1) - fs * .34;                    // flammes à gauche de THEFT
+      for (let j = 0; j < 4; j++) {
+        const len = fs * (.95 - j * .13) + Math.sin(ft * 14 + j * 1.7) * fs * .06, hh = fs * (.2 - j * .025), yy = fy + (j - 1.5) * fs * .13, wob = Math.sin(ft * 11 + j * 2.1) * fs * .06;
+        flameShape(g, fx, yy, len, hh, wob); g.lineWidth = fs * .035; g.strokeStyle = "#000"; g.stroke(); g.fillStyle = "#ff6a00"; g.fill();
+        flameShape(g, fx, yy, len * .66, hh * .6, wob * .7); g.fillStyle = "#ffd23f"; g.fill();
+        flameShape(g, fx, yy, len * .32, hh * .3, wob * .4); g.fillStyle = "#fff6c8"; g.fill();
+      }
+      line(1); line(2);
+      const sf = fs * .34, pul = 1 + Math.sin(ft * 6) * .06; g.font = fnt(sf, "sans-serif"); g.lineWidth = sf * .14; g.strokeStyle = "#000"; const sw = g.measureText("★★★").width;
+      const star = (x, y) => { g.save(); g.translate(x + sw / 2, y); g.scale(pul, pul); g.strokeText("★★★", -sw / 2, 0); g.fillStyle = "#fff"; g.fillText("★★★", -sw / 2, 0); g.restore(); };
+      star(bx + (ws[0] + OFF[0]) * fs + fs * .12, by(0) - fs * .66); star(bx + OFF[2] * fs - sw - fs * .1, by(2) - fs * .5);
+      g.restore();
+      const ta = Math.min(1, Math.max(0, (ft - .8) / .5)), ty2 = h * .45 + fs * 1.95;
+      if (ta > 0 && ty2 < h - 60) { const tf = fitPx(g, "BIENVENUE À STA I", fs * .26, IFONT, w * .8); g.globalAlpha = ta; g.textAlign = "center"; g.font = fnt(tf, IFONT); g.lineWidth = tf * .2; g.strokeStyle = "#000"; g.strokeText("BIENVENUE À STA I", w / 2, ty2); g.fillStyle = "#fff"; g.fillText("BIENVENUE À STA I", w / 2, ty2); g.globalAlpha = 1; }
+      if (ft < .5) { g.fillStyle = "rgba(255,255,255," + (.85 * (1 - ft / .5)) + ")"; g.fillRect(0, 0, w, h); }
+    }
+    const mode = fin && ft > 1.4 ? "go" : "skip";
+    if (mode !== iMode) { iMode = mode; iBtn.className = mode === "go" ? "go" : ""; iBtn.textContent = mode === "go" ? "▶ JOUER !" : "Passer ▶"; }
+  }
+  function introEnd(mark) {
+    if (iRaf) cancelAnimationFrame(iRaf); iRaf = 0;
+    if (iMus) { iMus.stop(); iMus = null; }
+    if (im) { im.remove(); im = null; } iCv = iX = iBtn = null;
+    const was = introOpen; introOpen = false;
+    keys.clear(); stick = null; fireKey = false; fireId = null; hornKey = false; hornId = null; brakeId = null;
+    if (mark) { try { localStorage.setItem(INTRO_KEY, "1"); } catch { } }
+    if (was && active && staHasNews()) setTimeout(() => { if (active && !introOpen) newsShow(); }, 300);   // puis les nouveautés, si tu ne les as pas vues
+  }
+  function introShow() {
+    if (introOpen || !active) return;
+    newsClose(false);
+    try { document.fonts && document.fonts.load("700 40px \"Pricedown Bl\""); } catch { }
+    introOpen = true; keys.clear(); stick = null; fireKey = false; fireId = null; hornKey = false; hornId = null; brakeId = null; iMode = "";
+    im = mkEl("div"); im.id = "staIntro"; im.setAttribute("role", "dialog"); im.setAttribute("aria-label", "Bienvenue dans STA I");
+    iCv = mkEl("canvas"); iX = iCv.getContext("2d"); iBtn = mkEl("button"); iBtn.type = "button"; iBtn.onclick = () => introEnd(true);
+    im.appendChild(iCv); im.appendChild(iBtn);
+    ["pointerdown", "pointerup", "touchstart", "contextmenu"].forEach(ev => im.addEventListener(ev, e => { e.stopPropagation(); if (ev === "contextmenu") e.preventDefault(); }));
+    $("gw").appendChild(im);
+    iT0 = performance.now() + 150; iMus = introMusic(); iRaf = requestAnimationFrame(introDraw);
+  }
   // ================= ENTRÉES =================
   addEventListener("keydown", e => {
     if (!active || /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+    if (introOpen) { if ((e.key === "Escape" || e.key === "Enter" || e.key === " ") && performance.now() - iT0 > 1500) introEnd(true); e.preventDefault(); return; }   // intro en cours : elle prend toutes les touches
     if (newsOpen) { if (e.key === "Escape" || e.key === "Enter") { newsClose(true); e.preventDefault(); } return; }   // fenêtre « Quoi de neuf » ouverte : elle prend toutes les touches
     if (e.key === "f" || e.key === "F") { fireKey = true; e.preventDefault(); return; }
     if (e.key === "x" || e.key === "X") { if (!e.repeat) cycleWpn(); e.preventDefault(); return; }
@@ -2707,11 +2860,14 @@ function frame(now) {
       me.c4 = 0; c4s = []; c4d = 0; c4p = ""; lastBd = {};
       nbtn = mkEl("button", "🆕", "alt mini"); nbtn.id = "staNewsBtn"; nbtn.type = "button"; nbtn.setAttribute("aria-label", "Quoi de neuf"); nbtn.title = "Quoi de neuf";
       nbtn.onclick = () => { nbtn.blur(); newsShow(); }; if (staHasNews()) nbtn.classList.add("fresh"); $("gbar").prepend(nbtn);
-      if (staHasNews()) setTimeout(() => { if (active) newsShow(); }, 1200);   // première visite depuis la mise à jour : on l'affiche tout seul
+      rbtn = mkEl("button", "🎬", "alt mini"); rbtn.id = "staIntroBtn"; rbtn.type = "button"; rbtn.setAttribute("aria-label", "Revoir l'intro"); rbtn.title = "Revoir l'intro";
+      rbtn.onclick = () => { rbtn.blur(); introShow(); }; $("gbar").prepend(rbtn);
+      if (!introSeen()) setTimeout(() => { if (active) introShow(); }, 700);   // première visite (pour tout le monde, même les anciens joueurs) : l'intro se lance toute seule, puis les nouveautés
+      else if (staHasNews()) setTimeout(() => { if (active) newsShow(); }, 1200);   // sinon : les nouveautés, si tu ne les as pas vues
       return () => {
         active = false; clearInterval(timer); unS && unS(); unP && unP(); unD && unD(); unD = null; admOpen = false; if (raf) cancelAnimationFrame(raf); raf = 0; keys.clear(); stick = null; hostOn = false; fireKey = false; fireId = null;
         SND.stop(); persist(true); if (!dupe) remove(RF(`games/${c}/p/${myUid}`)).catch(() => { });
-        newsClose(false); if (nbtn) { nbtn.remove(); nbtn = null; }
+        introEnd(false); newsClose(false); if (nbtn) { nbtn.remove(); nbtn = null; } if (rbtn) { rbtn.remove(); rbtn = null; }
         x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.setLineDash([]); x.textAlign = "start";
       };
     }

@@ -98,6 +98,40 @@ function push(p, r) {
 }
 const parseP = s => { const a = String(s).split(","); return { x: +a[0] || 0, y: +a[1] || 0, a: +a[2] || 0, vid: +a[3] || 0, wl: +a[4] || 0, cash: +a[5] || 0, hp: +a[6] || 0, v: +a[7] || 0, hs: +a[8] || 0, hid: +a[9] || 0, dm: +a[10] || 0, wpn: +a[11] || 0, fc: +a[12] || 0, fw: +a[13] || 0, cs: +a[14] || 0, cid: +a[15] || 0, ca: +a[16] || 0, gn: +a[17] || 0, go: +a[18] || 0, gi: +a[19] || 0, gm: +a[20] || 0, hn: +a[21] || 0, pgx: +a[22] || 0, pgy: +a[23] || 0, pga: +a[24] || 0, ib: +a[25] || 0, hz: +a[26] || 0, jl: +a[27] || 0, fu: a[28] || "" }; };
 
+// ===== QUOI DE NEUF (STA I) =====
+// À CHAQUE MISE À JOUR DE STA I : ajoute une entrée EN HAUT de la liste, avec un numéro « v » plus grand que le précédent.
+// Les joueurs qui n'ont pas vu cette version voient la fenêtre à l'entrée dans le jeu.
+const NEWS = [
+  { v: 1, d: "22 nov. 2026", t: [
+    "🆕 Ajout du « Quoi de neuf » : retrouve les nouveautés de STA I ici, avec le bouton 🆕 en haut",
+    "⛓️ Prison : creuse au coin du mur (E), corromps le gardien ou fais évader un ami",
+    "🏠 Maisons : 6 maisons à acheter, avec coffre et point de réapparition",
+    "🚁 Hélicoptère du Pilote, RPG et réparations chez le Mécano"
+  ] }
+];
+const NEWS_KEY = "moda_sta_news";
+const newsSeen = () => { try { return +localStorage.getItem(NEWS_KEY) || 0; } catch { return 0; } };
+const newsMark = () => { try { localStorage.setItem(NEWS_KEY, String(NEWS[0].v)); } catch { } };
+export const staHasNews = () => NEWS.length > 0 && NEWS[0].v > newsSeen();
+(() => {
+  if (document.getElementById("sta-news-css")) return;
+  const st = document.createElement("style"); st.id = "sta-news-css";
+  st.textContent = `
+#staNews{position:absolute;inset:6px;z-index:8;display:flex;flex-direction:column;gap:10px;padding:16px;border-radius:14px;overflow:auto;touch-action:pan-y;-webkit-user-select:none;user-select:none;color:#fff;
+  background:linear-gradient(180deg,#17152ff2 0%,#30234cf2 45%,#75416ff2 100%);border:2px solid #f39a7e;box-shadow:0 10px 40px #000a}
+#staNews h2{font:700 34px "Pricedown Bl",Impact,sans-serif;letter-spacing:1px;margin:0;color:#ffd23f;text-shadow:0 3px 0 #17152f}
+#staNews h3{font:700 20px "Pricedown Bl",Impact,sans-serif;margin:0;color:#fff}
+#staNews .nv{font:600 13px 'DM Sans',sans-serif;opacity:.75;margin-left:8px}
+#staNews ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+#staNews li{background:#17152f99;border-radius:10px;padding:8px 12px;font-size:15px;line-height:1.35}
+#staNews details{background:#17152f66;border-radius:10px;padding:8px 12px}
+#staNews summary{cursor:pointer;font-weight:700}
+#staNews details ul{margin-top:8px}
+#staNews .ok{align-self:center;margin-top:auto;padding:11px 26px;font-size:17px;background:#ffd23f;color:#241a00}
+#staNewsBtn.fresh{box-shadow:0 0 0 2px #ffd23f,0 0 14px #ffd23f}`;
+  document.head.appendChild(st);
+})();
+
 export function createStaClient(env) {
   const { R: RF, set, get, remove, onValue, $, beep, getMe, getCode, getLobby, toast } = env;
   try { document.fonts.load('700 20px "Pricedown Bl"'); } catch (e) { }   // police GTA (Pricedown) : à charger explicitement pour le canvas
@@ -2435,9 +2469,31 @@ function frame(now) {
   drawAdm();
 }
 
-// ================= ENTRÉES =================
+// ================= QUOI DE NEUF : fenêtre =================
+  let nm = null, newsOpen = false, nbtn = null;
+  const mkEl = (tag, txt, cls) => { const e = document.createElement(tag); if (txt) e.textContent = txt; if (cls) e.className = cls; return e; };
+  const newsList = items => { const ul = mkEl("ul"); items.forEach(t => ul.appendChild(mkEl("li", t))); return ul; };
+  function newsClose(mark) {
+    if (nm) { nm.remove(); nm = null; }
+    newsOpen = false;
+    if (mark) { newsMark(); if (nbtn) nbtn.classList.remove("fresh"); }
+    keys.clear(); stick = null; fireKey = false; fireId = null; hornKey = false; hornId = null; brakeId = null;
+  }
+  function newsShow() {
+    if (newsOpen || !active || !NEWS.length) return;
+    newsOpen = true; keys.clear(); stick = null; fireKey = false; fireId = null; hornKey = false; hornId = null; brakeId = null;
+    nm = mkEl("div"); nm.id = "staNews"; nm.setAttribute("role", "dialog"); nm.setAttribute("aria-label", "Quoi de neuf");
+    nm.appendChild(mkEl("h2", "🆕 QUOI DE NEUF"));
+    const cur = NEWS[0], hd = mkEl("h3", "Dernière mise à jour"); hd.appendChild(mkEl("span", cur.d, "nv")); nm.appendChild(hd); nm.appendChild(newsList(cur.t));
+    NEWS.slice(1).forEach(n => { const d = mkEl("details"); d.appendChild(mkEl("summary", "Version précédente · " + n.d)); d.appendChild(newsList(n.t)); nm.appendChild(d); });
+    const ok = mkEl("button", "OK, c'est parti !", "ok"); ok.type = "button"; ok.onclick = () => newsClose(true); nm.appendChild(ok);
+    nm.addEventListener("pointerdown", e => e.stopPropagation());
+    $("gw").appendChild(nm);
+  }
+  // ================= ENTRÉES =================
   addEventListener("keydown", e => {
     if (!active || /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+    if (newsOpen) { if (e.key === "Escape" || e.key === "Enter") { newsClose(true); e.preventDefault(); } return; }   // fenêtre « Quoi de neuf » ouverte : elle prend toutes les touches
     if (e.key === "f" || e.key === "F") { fireKey = true; e.preventDefault(); return; }
     if (e.key === "x" || e.key === "X") { if (!e.repeat) cycleWpn(); e.preventDefault(); return; }
     if (e.key === "r" || e.key === "R") { if (!e.repeat) nextStation(); e.preventDefault(); return; }
@@ -2506,9 +2562,13 @@ function frame(now) {
       dnOff = 0; unD = onValue(RF(`games/${c}/dn`), snap => { const v = snap.val(); dnOff = typeof v === "number" ? v : 0; }); unS = onValue(RF(`games/${c}/state`), onState); unP = onValue(RF(`games/${c}/p`), onP);
       timer = setInterval(simLoop, 50); raf = requestAnimationFrame(frame);
       env.played && env.played("sta", true);
+      nbtn = mkEl("button", "🆕", "alt mini"); nbtn.id = "staNewsBtn"; nbtn.type = "button"; nbtn.setAttribute("aria-label", "Quoi de neuf"); nbtn.title = "Quoi de neuf";
+      nbtn.onclick = () => { nbtn.blur(); newsShow(); }; if (staHasNews()) nbtn.classList.add("fresh"); $("gbar").prepend(nbtn);
+      if (staHasNews()) setTimeout(() => { if (active) newsShow(); }, 1200);   // première visite depuis la mise à jour : on l'affiche tout seul
       return () => {
         active = false; clearInterval(timer); unS && unS(); unP && unP(); unD && unD(); unD = null; admOpen = false; if (raf) cancelAnimationFrame(raf); raf = 0; keys.clear(); stick = null; hostOn = false; fireKey = false; fireId = null;
         SND.stop(); persist(true); remove(RF(`games/${c}/p/${myUid}`)).catch(() => { });
+        newsClose(false); if (nbtn) { nbtn.remove(); nbtn = null; }
         x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.setLineDash([]); x.textAlign = "start";
       };
     }

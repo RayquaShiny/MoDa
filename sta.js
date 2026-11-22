@@ -100,9 +100,14 @@ const C4_MAX = 4, C4_PRICE = 350, C4_R = 84, C4_CAR = 75, C4_PVP = 70, C4_SELF =
 const parseP = s => { const a = String(s).split(","); return { x: +a[0] || 0, y: +a[1] || 0, a: +a[2] || 0, vid: +a[3] || 0, wl: +a[4] || 0, cash: +a[5] || 0, hp: +a[6] || 0, v: +a[7] || 0, hs: +a[8] || 0, hid: +a[9] || 0, dm: +a[10] || 0, wpn: +a[11] || 0, fc: +a[12] || 0, fw: +a[13] || 0, cs: +a[14] || 0, cid: +a[15] || 0, ca: +a[16] || 0, gn: +a[17] || 0, go: +a[18] || 0, gi: +a[19] || 0, gm: +a[20] || 0, hn: +a[21] || 0, pgx: +a[22] || 0, pgy: +a[23] || 0, pga: +a[24] || 0, ib: +a[25] || 0, hz: +a[26] || 0, jl: +a[27] || 0, fu: a[28] || "", c4: a[29] || "", bd: +a[30] || 0, bp: a[31] || "", rd: a[32] || "" }; };
 
 // ===== QUOI DE NEUF (STA I) =====
-// À CHAQUE MISE À JOUR DE STA I : ajoute une entrée EN HAUT de la liste, avec un numéro « v » plus grand que le précédent.
+// ⚠️ À CHAQUE MISE À JOUR DE STA I, N'IMPORTE LAQUELLE (nouveauté, correctif, petit changement…) :
+// ajoute une entrée EN HAUT de la liste, avec un numéro « v » plus grand que le précédent, la date du jour et les nouveautés en clair.
 // Les joueurs qui n'ont pas vu cette version voient la fenêtre à l'entrée dans le jeu.
 const NEWS = [
+  { v: 4, d: "22 nov. 2026", t: [
+    "👥 Deux places dans CHAQUE voiture : un joueur peut monter comme passager à côté d'un conducteur (E près de sa voiture) — même dans la voiture fantôme 👻",
+    "Le passager ne fait rien : il se laisse conduire, il est protégé, et descend avec E (ou quand le conducteur descend)"
+  ] },
   { v: 3, d: "22 nov. 2026", t: [
     "🔒 Nouvelle prison : cellule plus grande, lit superposé, couloir surveillé par une caméra, cellule voisine avec un détenu, poste de garde",
     "🟠 Tu portes la combinaison orange en cellule, et le gardien fait les cent pas devant ta porte",

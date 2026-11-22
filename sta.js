@@ -104,6 +104,10 @@ const parseP = s => { const a = String(s).split(","); return { x: +a[0] || 0, y:
 // ajoute une entrée EN HAUT de la liste, avec un numéro « v » plus grand que le précédent, la date du jour et les nouveautés en clair.
 // Les joueurs qui n'ont pas vu cette version voient la fenêtre à l'entrée dans le jeu.
 const NEWS = [
+  { v: 8, d: "22 nov. 2026", t: [
+    "L'intro revient une dernière fois pour tout le monde, avec sa nouvelle musique",
+    "Le bouton 🎬 pour revoir l'intro a été retiré"
+  ] },
   { v: 7, d: "22 nov. 2026", t: [
     "Nouvelle musique pour l'intro : ambiance psychédélique, claviers chauds et groove lent"
   ] },
@@ -2648,9 +2652,9 @@ function frame(now) {
     $("gw").appendChild(nm);
   }
   // ================= INTRO : animation de bienvenue (une seule fois par joueur ; rejouable avec le bouton 🎬) =================
-  const INTRO_KEY = "moda_sta_intro";
+  const INTRO_KEY = "moda_sta_intro2";   // ⚠️ pour que tout le monde la revoie une fois : changer ce nom (intro3, intro4…)
   const introSeen = () => { try { return localStorage.getItem(INTRO_KEY) === "1"; } catch { return false; } };
-  let introOpen = false, im = null, iCv = null, iX = null, iRaf = 0, iT0 = 0, iMus = null, iBtn = null, iMode = "", rbtn = null;
+  let introOpen = false, im = null, iCv = null, iX = null, iRaf = 0, iT0 = 0, iMus = null, iBtn = null, iMode = "";
   const IS = [
     { h: "VOLE DES VOITURES", s: ["Berlines, coupés, fourgons…", "et des supercars rares"] },
     { h: "GAGNE DU CASH", s: ["Courses, livraisons, missions", "Écrase des piétons : +$50 chacun"] },
@@ -3036,14 +3040,12 @@ function frame(now) {
       me.c4 = 0; c4s = []; c4d = 0; c4p = ""; lastBd = {};
       nbtn = mkEl("button", "🆕", "alt mini"); nbtn.id = "staNewsBtn"; nbtn.type = "button"; nbtn.setAttribute("aria-label", "Quoi de neuf"); nbtn.title = "Quoi de neuf";
       nbtn.onclick = () => { nbtn.blur(); newsShow(); }; if (staHasNews()) nbtn.classList.add("fresh"); $("gbar").prepend(nbtn);
-      rbtn = mkEl("button", "🎬", "alt mini"); rbtn.id = "staIntroBtn"; rbtn.type = "button"; rbtn.setAttribute("aria-label", "Revoir l'intro"); rbtn.title = "Revoir l'intro";
-      rbtn.onclick = () => { rbtn.blur(); introShow(); }; $("gbar").prepend(rbtn);
-      if (!introSeen()) setTimeout(() => { if (active) introShow(); }, 700);   // première visite (pour tout le monde, même les anciens joueurs) : l'intro se lance toute seule, puis les nouveautés
+      if (!introSeen()) setTimeout(() => { if (active) introShow(); }, 700);   // une fois pour tout le monde, même les anciens joueurs : l'intro se lance toute seule, puis les nouveautés
       else if (staHasNews()) setTimeout(() => { if (active) newsShow(); }, 1200);   // sinon : les nouveautés, si tu ne les as pas vues
       return () => {
         active = false; clearInterval(timer); unS && unS(); unP && unP(); unD && unD(); unD = null; admOpen = false; if (raf) cancelAnimationFrame(raf); raf = 0; keys.clear(); stick = null; hostOn = false; fireKey = false; fireId = null;
         SND.stop(); persist(true); if (!dupe) remove(RF(`games/${c}/p/${myUid}`)).catch(() => { });
-        introEnd(false); newsClose(false); if (nbtn) { nbtn.remove(); nbtn = null; } if (rbtn) { rbtn.remove(); rbtn = null; }
+        introEnd(false); newsClose(false); if (nbtn) { nbtn.remove(); nbtn = null; }
         x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.setLineDash([]); x.textAlign = "start";
       };
     }

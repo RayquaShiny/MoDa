@@ -105,7 +105,8 @@ const parseP = s => { const a = String(s).split(","); return { x: +a[0] || 0, y:
 // Les joueurs qui n'ont pas vu cette version voient la fenêtre à l'entrée dans le jeu.
 const NEWS = [
   { v: 6, d: "22 nov. 2026", t: [
-    "Intro refaite : plus rythmée, avec une mini-animation pour chaque scène (voitures, cash, poursuite, armes, maison, multijoueur), sans emojis",
+    "Intro refaite : plus rythmée, avec une mini-animation pour chaque scène (voitures, cash, poursuite, armes, garage / prison / maisons, multijoueur), sans emojis, avec une nouvelle musique",
+    "L'intro ne se saute plus : le bouton JOUER apparaît à la fin",
     "Correction : les boutons du haut ne passent plus par-dessus l'intro"
   ] },
   { v: 5, d: "22 nov. 2026", t: [
@@ -2660,32 +2661,36 @@ function frame(now) {
   const ease3 = p => 1 - Math.pow(1 - Math.min(1, Math.max(0, p)), 3);
   function fitPx(g, txt, px, fam, maxW) { g.font = fnt(px, fam); const m = g.measureText(txt).width; return m > maxW ? px * maxW / m : px; }
 
-  // Musique 100 % synthétisée par WebAudio (aucun fichier, donc aucun droit d'auteur) : funk-rock sombre en la mineur, 128 BPM, 16 mesures
+  // Musique 100 % synthétisée par WebAudio (aucun fichier, donc aucun droit d'auteur) : synthwave en ré mineur, 128 BPM, 16 mesures (même structure : le crash du final tombe à la mesure 12)
   function introMusic() {
     try {
       const A = env.audio && env.audio(); if (!A) return null; if (A.state !== "running") A.resume && A.resume();
       const mg = A.createGain(); mg.gain.value = env.muted && env.muted() ? 0 : .5; mg.connect(A.destination);
-      const bf = A.createBiquadFilter(); bf.type = "lowpass"; bf.frequency.value = 520; bf.connect(mg);
-      const lf = A.createBiquadFilter(); lf.type = "lowpass"; lf.frequency.value = 3200; lf.connect(mg);
+      const bf = A.createBiquadFilter(); bf.type = "lowpass"; bf.frequency.value = 700; bf.connect(mg);
+      const lf = A.createBiquadFilter(); lf.type = "lowpass"; lf.frequency.value = 5200; lf.connect(mg);
       const B = 60 / 128, S = B / 4;
-      const dl = A.createDelay(1); dl.delayTime.value = B * .75; const fb = A.createGain(); fb.gain.value = .33; const dg = A.createGain(); dg.gain.value = .3;
+      const dl = A.createDelay(1); dl.delayTime.value = B * .75; const fb = A.createGain(); fb.gain.value = .38; const dg = A.createGain(); dg.gain.value = .35;
       lf.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(dg); dg.connect(mg);
       const nb = A.createBuffer(1, Math.floor(A.sampleRate * .6), A.sampleRate), nd = nb.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
       const osc = (type, f, t, d, v, dest, f2) => { const o = A.createOscillator(), g = A.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + d); g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(v, t + .008); g.gain.exponentialRampToValueAtTime(.0001, t + d); o.connect(g); g.connect(dest); o.start(t); o.stop(t + d + .03); };
       const noise = (t, d, v, hp) => { const s = A.createBufferSource(), f = A.createBiquadFilter(), g = A.createGain(); s.buffer = nb; f.type = "highpass"; f.frequency.value = hp; g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(.0001, t + d); s.connect(f); f.connect(g); g.connect(mg); s.start(t); s.stop(t + d + .03); };
-      const ROOT = [55, 43.65, 65.41, 49], TRI = [[440, 523.25, 659.25], [349.23, 440, 523.25], [523.25, 659.25, 783.99], [392, 493.88, 587.33]], LEAD = [0, 1, 2, 1, 0, 1, 2, 1, 0, 1, 2, 1, 2, 1, 0, 2], BASS = [0, 3, 6, 8, 11, 14];
+      const ROOT = [73.42, 58.27, 87.31, 65.41], CH = [[293.66, 349.23, 440, 587.33], [233.08, 293.66, 349.23, 466.16], [349.23, 440, 523.25, 698.46], [261.63, 329.63, 392, 523.25]];   // Dm · Sib · Fa · Do
+      const ARP = [0, 1, 2, 3, 2, 1, 2, 3, 0, 1, 2, 3, 2, 1, 3, 2];
       const bar = (n, t0) => {
-        if (n === 16) { osc("sawtooth", 110, t0, 3.2, .4, bf); TRI[0].forEach(f => osc("square", f, t0, 3.2, .13, lf)); noise(t0, 2.6, .5, 3000); osc("sine", 140, t0, .4, 1, mg, 40); return; }
-        const ch = n % 4, r = ROOT[ch], tr = TRI[ch], hi = n >= 12 ? 2 : 1;
+        if (n === 16) { osc("sawtooth", 146.83, t0, 3.2, .4, bf); CH[0].forEach(f => osc("sawtooth", f, t0, 3.2, .1, lf)); noise(t0, 2.6, .5, 3000); osc("sine", 140, t0, .4, 1, mg, 40); return; }
+        const ch = n % 4, r = ROOT[ch], c = CH[ch], hi = n >= 12 ? 2 : 1;
         if (n === 12) { noise(t0, 2.2, .5, 3000); osc("sine", 120, t0, .5, 1, mg, 35); }
+        if (n >= 4 && n < 12) c.slice(0, 3).forEach(f => osc("triangle", f / 2, t0, 16 * S, .07, lf));   // nappe
         for (let s = 0; s < 16; s++) {
           const t = t0 + s * S;
-          if (s % 4 === 0) osc("sine", 150, t, .22, 1, mg, 42);
-          if (s === 4 || s === 12) { noise(t, .16, .5, 1500); osc("triangle", 190, t, .1, .3, mg, 120); }
-          if (s % 2 === 0) noise(t, s % 8 === 6 ? .16 : .04, s % 8 === 6 ? .2 : .1, 7000);
-          if (BASS.includes(s)) osc("sawtooth", (s === 6 || s === 14) ? r * 2 : r, t, S * 2.2, .42, bf);
-          if (n >= 1) osc("square", tr[LEAD[s]] * hi, t, S * 1.7, .1, lf);
-          if (n === 11 && s >= 8) noise(t, .08, .22 + (s - 8) * .05, 1500);   // roulement de caisse claire avant le final
+          if (s % 4 === 0) osc("sine", 150, t, .22, 1, mg, 42);                                          // grosse caisse sur chaque temps
+          if (n >= 1 && (s === 4 || s === 12)) { noise(t, .14, .45, 1800); osc("triangle", 220, t, .08, .22, mg, 140); }   // clap
+          if (s % 4 === 2) noise(t, .12, .2, 8000); else if (s % 2 === 0) noise(t, .03, .07, 9000);      // charleston
+          if (n >= 1 && s % 4 === 2) osc("sawtooth", r * (n >= 12 && s === 10 ? 2 : 1), t, S * 1.7, .45, bf);   // basse sur les contretemps
+          if (s % 8 === 0) osc("sine", r, t, S * 3.6, .4, mg);
+          if (n >= 1) osc("sawtooth", c[ARP[s]] * hi, t, S * .9, .065, lf);                               // arpège
+          if (n >= 8 && (s === 0 || s === 6 || s === 10)) osc("square", c[(s >> 1) % 4] * 2, t, S * 2.4, .07, lf);   // mélodie
+          if (n === 11 && s >= 8) noise(t, .08, .22 + (s - 8) * .05, 1500);                              // roulement avant le final
         }
       };
       const T0 = A.currentTime + .1; let nb2 = 0;
@@ -2772,21 +2777,35 @@ function frame(now) {
         if (e < .1) { g.fillStyle = "rgba(255,255,255," + (.7 * (1 - e / .1)) + ")"; g.fillRect(-104, -104, 208, 208); }
       }
     },
-    (g, t, now) => {                                                                                  // FAIS-TOI UNE VIE : maison, garage, prison, hélico
-      g.fillStyle = "#3f6e3b"; g.fillRect(-104, -104, 208, 208);
-      iRoad(g, 56, 36, t, 120);
-      g.fillStyle = "rgba(0,0,0,.3)"; g.fillRect(-90, -88, 80, 56); g.fillStyle = "#a33b3b"; g.fillRect(-94, -92, 80, 56); g.fillStyle = "#c25353"; g.fillRect(-94, -92, 80, 28); g.fillStyle = "#5e2424"; g.fillRect(-94, -64, 80, 3); g.fillStyle = "#7d7d86"; g.fillRect(-80, -86, 10, 12);   // maison
-      g.fillStyle = "rgba(255,210,63," + (.55 + Math.sin(now / 200) * .25) + ")"; g.fillRect(-64, -34, 22, 9); iLab(g, "MAISON", -54, -42, 10, "#fff");
-      g.fillStyle = "#1c1c24"; g.fillRect(-94, -10, 82, 56);                                           // garage : sol sombre, la voiture entre, le toit la cache
-      const per = 2.8, u = (t % per) / per, gx = 150 - ease3(Math.min(1, u * 1.4)) * 220;
-      if (u < .8) iCar(g, gx, 22, Math.PI, "#3b82d9", 1, 1.15, 0, now);
-      g.fillStyle = "#7d7d86"; g.fillRect(-94, -10, 62, 56); g.fillStyle = "#9a9aa5"; g.fillRect(-94, -10, 62, 6); g.fillStyle = "#55555d"; g.fillRect(-94, 40, 62, 6);
-      iLab(g, "GARAGE", -63, 18, 11, "#fff");
-      g.fillStyle = "#6f7480"; g.fillRect(26, -92, 66, 80); g.fillStyle = "#8d93a0"; g.fillRect(26, -92, 66, 8);   // prison
-      g.fillStyle = "#14141a"; for (let k = 0; k < 5; k++) g.fillRect(34 + k * 12, -78, 4, 36);
-      g.fillStyle = "#2a2a32"; g.fillRect(52, -30, 18, 14); iLab(g, "PRISON", 59, -2, 10, "#fff");
-      const sa = Math.sin(t * 1.6) * .7 + .8; g.fillStyle = "rgba(255,255,200,.16)"; g.beginPath(); g.moveTo(59, -23); g.lineTo(59 + Math.cos(sa) * 70, -23 + Math.sin(sa) * 70); g.lineTo(59 + Math.cos(sa + .35) * 70, -23 + Math.sin(sa + .35) * 70); g.closePath(); g.fill();
-      iHeli(g, 8 + Math.sin(t * 1.3) * 22, -8 + Math.cos(t * 1.7) * 10, Math.sin(t * 1.3 + 1.5) * .35, .62, {}, now);
+    (g, t, now) => {                                                                                  // FAIS-TOI UNE VIE : les toits du jeu (garage + héliport, prison + miradors, maisons) vus de dessus
+      g.fillStyle = "#bfb583"; g.fillRect(-104, -104, 208, 208); g.strokeStyle = "rgba(60,50,20,.18)"; g.lineWidth = 1; g.beginPath(); for (let k = -104; k <= 104; k += 22) { g.moveTo(k, -104); g.lineTo(k, 104); g.moveTo(-104, k); g.lineTo(104, k); } g.stroke();
+      iRoad(g, -4, 32, t, 110);
+      const dr = (px, py, S, pal) => { g.fillStyle = "rgba(0,0,0,.4)"; g.fillRect(px + 5, py + 5, S, S); g.fillStyle = pal[0]; g.fillRect(px, py, S, S); g.fillStyle = pal[1]; g.fillRect(px, py, S, 2.5); g.fillRect(px, py, 2.5, S); g.fillStyle = pal[2]; g.fillRect(px, py + S - 4, S, 4); g.fillRect(px + S - 4, py, 4, S); };
+      { const S = 88, sc = S / 224, px = -100, py = -102, pal = ["#4a4e5a", "#6b7080", "#2d3039"];     // garage
+        dr(px, py, S, pal); g.strokeStyle = pal[2]; g.lineWidth = 1.5; g.strokeRect(px + 14 * sc, py + 14 * sc, S - 28 * sc, S - 28 * sc);
+        g.fillStyle = "#ffd23f"; g.fillRect(px + 14 * sc, py + 22 * sc, S - 28 * sc, 2); g.fillRect(px + 14 * sc, py + S - 25 * sc, S - 28 * sc, 2);
+        iLab(g, "GARAGE", px + S / 2, py + 52 * sc, 24 * sc, "#fff");
+        const cx = px + S / 2, cy = py + S / 2 + 12 * sc; g.fillStyle = "#262933"; g.beginPath(); g.arc(cx, cy, 50 * sc, 0, 7); g.fill(); g.strokeStyle = "#ffd23f"; g.lineWidth = 3 * sc; g.beginPath(); g.arc(cx, cy, 45 * sc, 0, 7); g.stroke();
+        for (let k = 0; k < 8; k++) { const an = k * Math.PI / 4 + .39; g.fillStyle = Math.floor(now / 500 + k) % 2 ? "#ff3b30" : "#5a1410"; g.fillRect(cx + Math.cos(an) * 50 * sc - 1.5, cy + Math.sin(an) * 50 * sc - 1.5, 3, 3); }
+        iLab(g, "H", cx, cy + 14 * sc, 40 * sc, "#ffd23f"); }
+      { const S = 88, sc = S / 224, px = 12, py = -102, pal = ["#5d636b", "#7d858f", "#3c4148"];        // prison
+        dr(px, py, S, pal); g.fillStyle = "#4b5159"; g.fillRect(px + 10 * sc, py + 10 * sc, S - 20 * sc, S - 20 * sc);
+        g.strokeStyle = "#9aa1ad"; g.lineWidth = 1; g.beginPath(); for (let k = 10 * sc; k < S - 10 * sc; k += 8 * sc) { g.moveTo(px + k, py + 10 * sc); g.lineTo(px + k, py + S - 10 * sc); g.moveTo(px + 10 * sc, py + k); g.lineTo(px + S - 10 * sc, py + k); } g.stroke();
+        g.strokeStyle = "#d9dde4"; g.lineWidth = 1.5; g.setLineDash([3, 3]); g.strokeRect(px + 10 * sc, py + 10 * sc, S - 20 * sc, S - 20 * sc); g.setLineDash([]);
+        [[0, 0], [1, 0], [0, 1], [1, 1]].forEach(([a2, b2], k) => { const tx = px + (a2 ? S - 40 * sc : 4 * sc), ty = py + (b2 ? S - 40 * sc : 4 * sc); g.fillStyle = "rgba(0,0,0,.35)"; g.fillRect(tx + 3, ty + 3, 36 * sc, 36 * sc); g.fillStyle = pal[2]; g.fillRect(tx, ty, 36 * sc, 36 * sc); g.fillStyle = pal[1]; g.fillRect(tx + 3 * sc, ty + 3 * sc, 30 * sc, 30 * sc); g.fillStyle = Math.floor(now / 400 + k) % 2 ? "#ff3b30" : "#5a1410"; g.beginPath(); g.arc(tx + 18 * sc, ty + 18 * sc, 6 * sc, 0, 7); g.fill(); });
+        g.fillStyle = "#1c1e23"; g.fillRect(px + S / 2 - 40 * sc, py + S / 2 - 14 * sc, 80 * sc, 28 * sc); iLab(g, "PRISON", px + S / 2, py + S / 2 + 7 * sc, 20 * sc, "#ff6b6b"); }
+      [0, 1, 2].forEach(k => {                                                                         // 3 maisons du quartier (toit à deux pentes, tuiles, faîtage, lucarne, cheminée)
+        const Hh = HOUSES[k], pal = Hh.r, S = 60, sc = S / 224, px = -98 + k * 66, py = 40;
+        g.fillStyle = "rgba(0,0,0,.4)"; g.fillRect(px + 4, py + 4, S, S); g.fillStyle = pal[1]; g.fillRect(px, py, S, S / 2); g.fillStyle = pal[0]; g.fillRect(px, py + S / 2, S, S / 2);
+        g.strokeStyle = "rgba(0,0,0,.2)"; g.lineWidth = 1; g.beginPath(); for (let u = 9 * sc; u < S / 2 - 2; u += 9 * sc) { g.moveTo(px, py + u); g.lineTo(px + S, py + u); g.moveTo(px, py + S - u); g.lineTo(px + S, py + S - u); } g.stroke();
+        g.fillStyle = pal[2]; g.fillRect(px - 1, py + S / 2 - 2, S + 2, 4); g.fillStyle = pal[1]; g.fillRect(px - 1, py + S / 2 - 2, S + 2, 1.4);
+        g.fillStyle = "rgba(0,0,0,.28)"; g.fillRect(px, py + S - 5, S, 5); g.fillStyle = pal[2]; g.fillRect(px, py, S, 3);
+        const dx = px + S * .5 - 14 * sc, dy = py + S * .62; g.fillStyle = Hh.w; g.fillRect(dx, dy, 28 * sc, 22 * sc); g.fillStyle = "#9fd3ee"; g.fillRect(dx + 4 * sc, dy + 5 * sc, 20 * sc, 14 * sc); g.fillStyle = pal[2]; g.fillRect(dx - 2 * sc, dy - 3 * sc, 32 * sc, 4 * sc);
+        const hx = px + S * .7, hy = py + S * .12; g.fillStyle = "#8a4b3a"; g.fillRect(hx, hy, 20 * sc, 26 * sc); g.fillStyle = "#b3624e"; g.fillRect(hx, hy, 20 * sc, 4 * sc); g.fillStyle = "#2b2220"; g.fillRect(hx + 4 * sc, hy + 6 * sc, 12 * sc, 14 * sc);
+      });
+      const per = 3.2, u = (t % per) / per; iCar(g, -130 + u * 280, 12, 0, "#3b82d9", 1, 1.1, 0, now);
+      iCar(g, 130 - ((t + 1.4) % per) / per * 280, 20, Math.PI, "#e6c229", 2, 1.1, 0, now);
+      iHeli(g, -52 + Math.sin(t * 1.2) * 20, -58 + Math.cos(t * 1.5) * 8, Math.sin(t * 1.2 + 1.5) * .4, .6, {}, now);
     },
     (g, t, now) => {                                                                                  // JOUE À PLUSIEURS : la ville pleine de joueurs et le classement
       g.fillStyle = "#2a2f4a"; g.fillRect(-104, -104, 208, 208);
@@ -2884,7 +2903,7 @@ function frame(now) {
       if (ft < .5) { g.fillStyle = "rgba(255,255,255," + (.85 * (1 - ft / .5)) + ")"; g.fillRect(0, 0, w, h); }
     }
     const mode = fin && ft > 1.4 ? "go" : "skip";
-    if (mode !== iMode) { iMode = mode; iBtn.className = mode === "go" ? "go" : ""; iBtn.textContent = mode === "go" ? "JOUER !" : "PASSER"; }
+    if (mode !== iMode) { iMode = mode; iBtn.className = "go"; iBtn.textContent = "JOUER !"; iBtn.style.display = mode === "go" ? "" : "none"; }
   }
   function introEnd(mark) {
     if (iRaf) cancelAnimationFrame(iRaf); iRaf = 0;
@@ -2910,7 +2929,7 @@ function frame(now) {
   // ================= ENTRÉES =================
   addEventListener("keydown", e => {
     if (!active || /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
-    if (introOpen) { if ((e.key === "Escape" || e.key === "Enter" || e.key === " ") && performance.now() - iT0 > 1500) introEnd(true); e.preventDefault(); return; }   // intro en cours : elle prend toutes les touches
+    if (introOpen) { if ((e.key === "Escape" || e.key === "Enter" || e.key === " ") && performance.now() - iT0 > F0 * 1000 + 1400) introEnd(true); e.preventDefault(); return; }   // intro en cours : elle prend toutes les touches
     if (newsOpen) { if (e.key === "Escape" || e.key === "Enter") { newsClose(true); e.preventDefault(); } return; }   // fenêtre « Quoi de neuf » ouverte : elle prend toutes les touches
     if (e.key === "f" || e.key === "F") { fireKey = true; e.preventDefault(); return; }
     if (e.key === "x" || e.key === "X") { if (!e.repeat) cycleWpn(); e.preventDefault(); return; }

@@ -13,7 +13,7 @@ import {createVoice} from "./voice.js";
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="125";
+const VER="127";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -514,15 +514,16 @@ function unwake(){try{wl&&wl.release()}catch{}wl=null}
 let hinted=0;
 function orientHint(){if(!TOUCH||hinted||gk==="snake")return;if(matchMedia("(orientation:portrait)").matches){hinted=1;setTimeout(()=>{if(cur==="game")toast("📱 Astuce : tourne ton téléphone en paysage pour une vue plus grande")},1600)}}
 // ---------- Chat vocal de proximité (voice.js) : actif seulement en partie, désactivable par l'hôte dans le lobby (opts.vc) ----------
+const micOk=()=>{try{return localStorage.getItem("moda.mic")!=="0"}catch{return true}};   // réglage « Micro » (onglet Settings) : désactivé = aucun jeu ne demande le micro
 const vcOn=()=>!!(code&&lobby&&!spec&&(lobby.opts||{}).vc!==0);
 function vsync(){
   specTag.hidden=!(spec&&cur==="game");
   const want=cur==="game"&&vcOn();
-  if(want&&!voice)voice=createVoice({R,set,remove,onValue,onDisconnect,getMe:()=>me,toast,onState:s=>{vst=s;vmicUI()}});
+  if(want&&!voice)voice=createVoice({R,set,remove,onValue,onDisconnect,getMe:()=>me,toast,micAllowed:micOk,onState:s=>{vst=s;vmicUI()}});
   if(want&&!voice.isOn())voice.start(code);else if(!want&&voice&&voice.isOn())voice.stop();
   vmicUI()}
 function vmicUI(){const b=$("vmic");b.hidden=!(cur==="game"&&vcOn());
-  b.textContent=vst.has&&vst.mic?"🎙️":"🤐";b.title=vst.has?(vst.mic?"Micro actif : touche pour couper":"Micro coupé : touche pour réactiver"):"Micro indisponible : touche pour réessayer"}
+  b.textContent=vst.has&&vst.mic?"🎙️":"🤐";b.title=vst.has?(vst.mic?"Micro actif : touche pour couper":"Micro coupé : touche pour réactiver"):(micOk()?"Micro indisponible : touche pour réessayer":"Micro désactivé dans Settings")}
 $("vmic").onclick=()=>voice&&voice.toggleMic();
 // Positions envoyées au chat vocal (Snake, Survie, Battle Royale, Tanks, Évasion) : 5 fois par seconde ; les autres jeux envoient les leurs
 setInterval(()=>{
@@ -1756,6 +1757,12 @@ async function startBr(){
 // ---------- Owners : interrupteur + statistiques ----------
 function applyNeon(){const on=!!(me&&me.owner&&adm);document.documentElement.classList.toggle("neon",on);
   const m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",on?"#050204":(window.__season?window.__season.tc:"#14102b"))}
+// ---------- Onglet Settings (accueil) ----------
+function micUI(){const on=micOk();$("micSw").setAttribute("aria-checked",String(on));
+  $("micHint").textContent=on?"Activé : tu parles dans le chat vocal des jeux (ton navigateur peut demander l'autorisation du micro).":"Désactivé : aucun jeu ne demande ton micro. Tu entends toujours les autres, mais ils ne t'entendent pas."}
+function homeTab(set){$("tbGames").setAttribute("aria-selected",String(!set));$("tbSet").setAttribute("aria-selected",String(set));$("hGames").hidden=set;$("hSet").hidden=!set;if(set)micUI()}
+$("tbGames").onclick=()=>homeTab(false);$("tbSet").onclick=()=>homeTab(true);
+$("micSw").onclick=()=>{const on=!micOk();try{localStorage.setItem("moda.mic",on?"1":"0")}catch{}micUI();toast(on?"🎙️ Micro autorisé dans les jeux":"🤐 Micro désactivé dans tous les jeux")};
 function showHome(){applyNeon();if(me&&me.owner&&adm){show("stats");startStats()}else{stopStats();show("home")}}
 $("sw").onclick=()=>{adm=!adm;try{localStorage.setItem("moda.stats",adm?"1":"0")}catch{}
   $("sw").setAttribute("aria-checked",String(adm));applyNeon();if(cur==="home"||cur==="stats")showHome()};
@@ -2191,7 +2198,7 @@ function renderAdmin(D){
 
 // ---------- Installation (PWA) ----------
 if("serviceWorker" in navigator&&location.protocol==="https:"){
-  addEventListener("load",()=>navigator.serviceWorker.register("sw.js?v=125",{updateViaCache:"none"}).catch(()=>{}));
+  addEventListener("load",()=>navigator.serviceWorker.register("sw.js?v=127",{updateViaCache:"none"}).catch(()=>{}));
   // Nouvelle version détectée : rechargement obligatoire et automatique (sauvegarde + reprise gérées par tryUpdate)
   let notified=false;
   navigator.serviceWorker.addEventListener("message",e=>{

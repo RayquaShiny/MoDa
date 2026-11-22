@@ -7,6 +7,7 @@ const ICE = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "st
 
 export function createVoice(env) {
   const { R, set, remove, onValue, onDisconnect, getMe, toast, onState } = env;
+  const micOk = () => { try { return env.micAllowed ? !!env.micAllowed() : true; } catch { return true; } };   // réglage « Micro » (Settings) : faux = on écoute seulement, on ne demande jamais le micro
   let code = null, on = false, mic = null, micWanted = true, ctx = null, peers = {}, unP = null, unS = null, timer = 0, seq = 0;
   let pos = { me: null, o: {}, range: 450 }, handled = new Set(), gen = 0;
   const myUid = () => getMe().uid;
@@ -88,8 +89,10 @@ export function createVoice(env) {
     if (on) return; on = true; code = c; const my = ++gen;
     if (!window.RTCPeerConnection) { toast("Chat vocal non supporté par ce navigateur"); on = false; return; }
     try { ctx = new (window.AudioContext || window.webkitAudioContext)(); if (ctx.state !== "running") ctx.resume(); } catch { }
+    if (micOk()) {
     try { mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
     catch { mic = null; toast("🎙️ Micro refusé ou introuvable : tu entends les autres, mais ils ne t'entendent pas"); }
+    }
     if (my !== gen || !on) { if (mic) mic.getTracks().forEach(t => t.stop()); mic = null; return; } // quitté pendant la demande d'autorisation
     if (mic) mic.getAudioTracks()[0].enabled = micWanted;
     const me = myUid();
@@ -126,6 +129,7 @@ export function createVoice(env) {
     // Bouton micro : premier appui = demande du micro si refusé auparavant ; ensuite coupe / réactive
     async toggleMic() {
       if (!on) return;
+      if (!mic && !micOk()) { toast("🤐 Micro désactivé : active-le dans Settings (menu des jeux)"); return; }
       if (!mic) {
         try { mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); micWanted = true; const t = mic.getAudioTracks()[0]; Object.values(peers).forEach(P => P.tr && P.tr.sender.replaceTrack(t).catch(() => { })); }
         catch { toast("Micro indisponible : autorise-le dans les réglages du navigateur"); }

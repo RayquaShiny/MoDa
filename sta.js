@@ -96,12 +96,25 @@ function push(p, r) {
   const o = ROAD / 2 - r; const nx = clamp(p.x, -o, WORLD + o), ny = clamp(p.y, -o, WORLD + o); if (nx !== p.x || ny !== p.y) { p.x = nx; p.y = ny; hit = true; }
   return hit;
 }
-const parseP = s => { const a = String(s).split(","); return { x: +a[0] || 0, y: +a[1] || 0, a: +a[2] || 0, vid: +a[3] || 0, wl: +a[4] || 0, cash: +a[5] || 0, hp: +a[6] || 0, v: +a[7] || 0, hs: +a[8] || 0, hid: +a[9] || 0, dm: +a[10] || 0, wpn: +a[11] || 0, fc: +a[12] || 0, fw: +a[13] || 0, cs: +a[14] || 0, cid: +a[15] || 0, ca: +a[16] || 0, gn: +a[17] || 0, go: +a[18] || 0, gi: +a[19] || 0, gm: +a[20] || 0, hn: +a[21] || 0, pgx: +a[22] || 0, pgy: +a[23] || 0, pga: +a[24] || 0, ib: +a[25] || 0, hz: +a[26] || 0, jl: +a[27] || 0, fu: a[28] || "" }; };
+const C4_MAX = 4, C4_PRICE = 350, C4_R = 84, C4_CAR = 75, C4_PVP = 70, C4_SELF = 90, C4_LIFE = 150000;   // C4 : charges max (portées ET posées) · prix · rayon du souffle (px) · dégâts voitures / joueurs & flics / sur soi · durée de vie d'une charge posée (ms)
+const parseP = s => { const a = String(s).split(","); return { x: +a[0] || 0, y: +a[1] || 0, a: +a[2] || 0, vid: +a[3] || 0, wl: +a[4] || 0, cash: +a[5] || 0, hp: +a[6] || 0, v: +a[7] || 0, hs: +a[8] || 0, hid: +a[9] || 0, dm: +a[10] || 0, wpn: +a[11] || 0, fc: +a[12] || 0, fw: +a[13] || 0, cs: +a[14] || 0, cid: +a[15] || 0, ca: +a[16] || 0, gn: +a[17] || 0, go: +a[18] || 0, gi: +a[19] || 0, gm: +a[20] || 0, hn: +a[21] || 0, pgx: +a[22] || 0, pgy: +a[23] || 0, pga: +a[24] || 0, ib: +a[25] || 0, hz: +a[26] || 0, jl: +a[27] || 0, fu: a[28] || "", c4: a[29] || "", bd: +a[30] || 0, bp: a[31] || "" }; };
 
 // ===== QUOI DE NEUF (STA I) =====
 // À CHAQUE MISE À JOUR DE STA I : ajoute une entrée EN HAUT de la liste, avec un numéro « v » plus grand que le précédent.
 // Les joueurs qui n'ont pas vu cette version voient la fenêtre à l'entrée dans le jeu.
 const NEWS = [
+  { v: 3, d: "22 nov. 2026", t: [
+    "🔒 Nouvelle prison : cellule plus grande, lit superposé, couloir surveillé par une caméra, cellule voisine avec un détenu, poste de garde",
+    "🟠 Tu portes la combinaison orange en cellule, et le gardien fait les cent pas devant ta porte",
+    "🗺️ La mini-carte est plus zoomée et te suit : elle défile quand tu bouges",
+    "📍 Les objectifs lointains (mission, course) restent collés au bord de la mini-carte"
+  ] },
+  { v: 2, d: "22 nov. 2026", t: [
+    "💣 Nouvelle arme : le C4 ! À l'armurerie, $350 la charge (4 maximum)",
+    "C : poser une charge au sol · B : tout faire sauter (sur mobile : boutons C4 et 💥)",
+    "Les charges sont visibles par tout le monde (LED rouge) et se désamorcent après 2 min 30",
+    "Attention : le souffle te touche aussi, et la police n'aime pas ça"
+  ] },
   { v: 1, d: "22 nov. 2026", t: [
     "🆕 Ajout du « Quoi de neuf » : retrouve les nouveautés de STA I ici, avec le bouton 🆕 en haut",
     "⛓️ Prison : creuse au coin du mur (E), corromps le gardien ou fais évader un ami",
@@ -419,7 +432,9 @@ export function createStaClient(env) {
   function onP(snap) {
     const o = snap.val() || {}, n = {}; Object.keys(o).forEach(u => { n[u] = parseP(o[u]); }); pd = n;
     for (const u in n) {                                                  // tirs des autres : traceurs + touche calculée chez la victime
-      if (u === myUid) continue; const p = n[u], old = lastFc[u]; lastFc[u] = p.fc; if (old === undefined || old === p.fc) continue;
+      if (u === myUid) continue; const p = n[u], old = lastFc[u]; lastFc[u] = p.fc;
+      { const ob = lastBd[u]; lastBd[u] = p.bd; if (ob !== undefined && ob !== p.bd && p.bp) p.bp.split(";").forEach(q => { const a = q.split(":"); if (a.length === 2) c4Blast(+a[0], +a[1], tNow, 0); }); }   // C4 d'un autre joueur qui explose
+      if (old === undefined || old === p.fc) continue;
       let k = (p.fc - old + 1000) % 1000; if (k > 8) k = 1; const W = WPN[p.fw]; if (!W) continue;
       const dd = dP.get(u); if (dd) { dd.flash = tNow; dd.fw = p.fw; } SND.shot(p.fw, dv(p.x, p.y, 520) * .8);
       for (let sh = 0; sh < k; sh++) for (let q = 0; q < W.pel; q++) {
@@ -436,8 +451,8 @@ export function createStaClient(env) {
   // ================= MOI =================
   const col = i => CCOL[(i | 0) % 8];
   function spawnAt(p) { me.hz = 0; me.land = 0; me.x = p[0] + rr(-30, 30); me.y = p[1]; me.vid = 0; me.v = 0; me.hp = 100; me.dead = 0; me.heat = 0; me.bust = 0; job = null; cam.x = me.x; cam.y = me.y; }
-  function die(why, loss, where) { pwFail("tu es tombé"); me.hz = 0; me.land = 0; shop = ""; if (mis) missionFail("tu es tombé"); me.dead = 2.2; me.msg = why; me.wpn = 0; me.arm = 0; me.ammo = [0, 0, 0, 0, 0]; me.vid = 0; me.v = 0; me.heat = 0; me.cash = Math.floor(me.cash * (1 - loss)); me.where = where; SND.wasted(); }
-  const gStr = () => JSON.stringify({ g: me.g, c: me.gcar, g2: me.g2 ? 1 : 0, c2: me.gcar2, a: me.ammo.slice(1), w: me.wpn, h: me.hu ? 1 : 0, hh: Math.round(clamp(me.hh, 0, 100)), rp: me.rpgParts, rq: me.rpgQuest, aq: me.ammoQuest, rau: me.rpgAmmoUnlocked, ar: me.arm | 0, ho: me.hou | 0, hq: me.hsp, hb: me.hb.map(b => [Math.round(b.c), b.a[0], b.a[1], b.a[2], b.a[3], b.v]) });
+  function die(why, loss, where) { pwFail("tu es tombé"); me.hz = 0; me.land = 0; shop = ""; if (mis) missionFail("tu es tombé"); me.dead = 2.2; me.msg = why; me.wpn = 0; me.arm = 0; me.c4 = 0; me.ammo = [0, 0, 0, 0, 0]; me.vid = 0; me.v = 0; me.heat = 0; me.cash = Math.floor(me.cash * (1 - loss)); me.where = where; SND.wasted(); }
+  const gStr = () => JSON.stringify({ g: me.g, c: me.gcar, g2: me.g2 ? 1 : 0, c2: me.gcar2, a: me.ammo.slice(1), w: me.wpn, h: me.hu ? 1 : 0, hh: Math.round(clamp(me.hh, 0, 100)), c4: me.c4 | 0, rp: me.rpgParts, rq: me.rpgQuest, aq: me.ammoQuest, rau: me.rpgAmmoUnlocked, ar: me.arm | 0, ho: me.hou | 0, hq: me.hsp, hb: me.hb.map(b => [Math.round(b.c), b.a[0], b.a[1], b.a[2], b.a[3], b.v]) });
   function persist(force) {                                               // argent (users/<uid>/sta) + garage, voiture rangée, armes et munitions (users/<uid>/sta2)
     const cash = Math.round(me.cash);
     if (force || cash !== savedCash) { savedCash = cash; set(RF(`users/${myUid}/sta`), cash).catch(() => { }); }
@@ -740,7 +755,7 @@ export function createStaClient(env) {
   }
   const vestRows = rows => shop !== "arms" ? rows : rows.concat(VEST.map((v, k) => { const t = k + 1; return { ic: 10 + t, nm: v.n, sub: `−${Math.round(v.r * 100)}% dégâts`, l: `${rows.length + t} · ${v.n}`, r: me.arm === t ? "ÉQUIPÉ" : me.arm > t ? "—" : `${v.p}`, ok: me.arm < t && me.cash >= v.p, f: () => buyVest(t) }; }));   // gilets : en bas du menu de l'armurerie
   const shopItems = () => {
-    if (shop === "arms" || shop === "bm") return vestRows((shop === "bm" ? SHOP_BM : SHOP_ARMS).map(a => { const WP = WPN[a.n], full = me.ammo[a.n] >= WP.max, locked = a.n === 4 && (!me.rpgAmmoUnlocked || me.rpgParts.length < 3); return { ic: a.n, nm: WP.n, sub: `+${WP.ammo} (${me.ammo[a.n]}/${WP.max})`, bar: me.ammo[a.n] / WP.max, l: `${a.n} · ${WP.n} +${WP.ammo}`, r: locked ? "VERROUILLÉ" : full ? "PLEIN" : `${a.p}`, ok: !locked && !full && me.cash >= a.p, f: () => buyArm(a) }; }));
+    if (shop === "arms" || shop === "bm") return vestRows(((shop === "bm" ? SHOP_BM : SHOP_ARMS).map(a => { const WP = WPN[a.n], full = me.ammo[a.n] >= WP.max, locked = a.n === 4 && (!me.rpgAmmoUnlocked || me.rpgParts.length < 3); return { ic: a.n, nm: WP.n, sub: `+${WP.ammo} (${me.ammo[a.n]}/${WP.max})`, bar: me.ammo[a.n] / WP.max, l: `${a.n} · ${WP.n} +${WP.ammo}`, r: locked ? "VERROUILLÉ" : full ? "PLEIN" : `${a.p}`, ok: !locked && !full && me.cash >= a.p, f: () => buyArm(a) }; })).concat(shop === "arms" ? [c4Row()] : []));
     if (shop === "chest" && inn && inn.k === "house") return chestRows();
     if (shop === "jail") return jailRows();
     if (shop === "garage") {
@@ -817,8 +832,8 @@ export function createStaClient(env) {
   };
   ROOMS.house = { w: 520, h: 340, name: "MA MAISON", c: "#7ae582", door: { x: 260, hw: 30 },
     obs: [[20,70,108,66],[142,76,26,28],[184,68,76,34],[300,62,182,34],[464,98,40,68],[18,182,34,80],[70,180,104,58],[82,250,72,26],[310,210,92,48],[442,210,64,48],[470,120,34,70]] };
-  ROOMS.jail = { w: 520, h: 340, name: "PRISON", c: "#ff6b6b", door: { x: -999, hw: 0 },          // pas de porte : on ne sort que par les moyens prévus
-    obs: [[20, 72, 108, 48], [224, 72, 64, 66], [150, 202, 74, 27], [28, 190, 88, 23], [293, 56, 13, 270], [344, 70, 74, 72], [440, 70, 62, 94]] };
+  ROOMS.jail = { w: 640, h: 380, name: "PRISON", c: "#ff6b6b", door: { x: -999, hw: 0 },          // pas de porte : on ne sort que par les moyens prévus
+    obs: [[20, 72, 118, 56], [20, 138, 44, 24], [224, 72, 64, 66], [150, 202, 74, 27], [28, 190, 88, 23], [256, 318, 30, 28], [295, 56, 13, 324]] };   // lit · coffre · sanitaires · table · banc · poubelle · barreaux (on ne passe pas)
   function enterInn(k, hk) {
     if (me.wl > 0 || me.bust > 0) { toast("La police te colle : impossible d'entrer !"); return; }
     const R = ROOMS[k]; inn = { k, hk: hk | 0, x: R.door.x, y: R.h - 34, a: -Math.PI / 2, t0: tNow, hp: me.hp, mv: false };
@@ -856,8 +871,8 @@ export function createStaClient(env) {
       return null;
     }
     if (inn.k === "jail") {
-      if (jail && p.x > 240 && p.y > 120 && p.y < 262) return { k: "guard", h: `E : CORROMPRE LE GARDIEN ($${bribeCost()})` };
-      if (jail && p.x < 100 && p.y > 252) return { k: "dig", h: `E : CREUSER LE MUR (${jail.dig}/${DIG_NEED}) · RISQUE D'ÊTRE ENTENDU` };
+      if (jail && p.x > 236 && p.y > 140 && p.y < 300) return { k: "guard", h: `E : CORROMPRE LE GARDIEN ($${bribeCost()})` };
+      if (jail && p.x < 112 && p.y > ROOMS.jail.h - 92) return { k: "dig", h: `E : CREUSER LE MUR (${jail.dig}/${DIG_NEED}) · RISQUE D'ÊTRE ENTENDU` };
       return null;
     }
     if (inn.k === "arms") { if (p.y > 134 && p.y < 180 && p.x > 60 && p.x < 340) return { k: "counter", h: "E : ACHETER DES ARMES" }; return null; }
@@ -1012,43 +1027,41 @@ export function createStaClient(env) {
     labels.push(["COFFRE",474,276,nc?"#ffe14d":"#fff",10],["LIT",72,150,me.hsp===inn.hk?"#7ae582":spk==="bed"?"#ffe14d":"#fff",10],["TÉLÉ",34,272,spk==="tv"?"#ffe14d":"#fff",10],["SORTIE",dx,h-24,"#fff",10]);
   }
   function drawJailRoom(now, labels) {
-    const R = ROOMS.jail, w = R.w, h = R.h, sp = innSpot(), dg = jail ? jail.dig : 0, BX = 298;
+    const R = ROOMS.jail, w = R.w, h = R.h, sp = innSpot(), dg = jail ? jail.dig : 0, BX = 300;
     const pulse = .5 + .5 * Math.sin(now / 520), alarm = .5 + .5 * Math.sin(now / 210);
-    // Sol de la cellule : béton usé, dalles régulières et zone de circulation dégagée.
-    fr(0, 0, w, h, "#252a32");
-    for (let row = 0; row < 15; row++) for (let col = 0; col < 15; col++) {
-      const px = col * 20, py = 56 + row * 20;
-      fr(px, py, 19, 19, (row + col) & 1 ? "#555b65" : "#4d535d");
-      fr(px + 1, py + 1, 17, 1, "rgba(255,255,255,.035)");
-    }
-    // Couloir sécurisé du gardien, plus clair que la cellule.
-    fr(BX + 8, 56, w - BX - 8, h - 70, "#69727d");
-    for (let yy = 64; yy < h - 18; yy += 24) fr(BX + 12, yy, w - BX - 24, 1, "rgba(255,255,255,.12)");
-    // Murs et briques du fond.
-    fr(0, 0, w, 58, "#303640");
-    for (let yy = 5; yy < 54; yy += 12) for (let xx = ((yy / 12) & 1) * 15; xx < w; xx += 30)
-      fr(xx, yy, 27, 9, "#3a424e");
+    const fl = Math.sin(now / 97) + Math.sin(now / 41) > 1.75 ? .45 : 1;          // néon qui grésille de temps en temps
+    // ---- sols : cellule (dalles de béton) · couloir (gris clair, lignes jaunes) · poste de garde (damier)
+    fr(0, 0, w, h, "#1f242c");
+    for (let row = 0; row < 16; row++) for (let col = 0; col < 15; col++) { const px = col * 20, py = 58 + row * 20; fr(px, py, 19, 19, (row + col) & 1 ? "#4c525c" : "#454b55"); fr(px + 1, py + 1, 17, 1, "rgba(255,255,255,.035)"); }
+    fr(BX + 8, 58, 108, h - 58, "#68717c");
+    for (let yy = 66; yy < h - 8; yy += 26) fr(BX + 12, yy, 100, 1, "rgba(255,255,255,.12)");
+    fr(BX + 12, 58, 3, h - 58, "#c9a53c"); fr(BX + 109, 58, 3, h - 58, "#c9a53c");
+    for (let row = 0; row < 14; row++) for (let col = 0; col < 10; col++) { const px = 416 + col * 24, py = 58 + row * 24; if (px >= w || py + 23 > h) continue; fr(px, py, Math.min(23, w - px), 23, (row + col) & 1 ? "#5e6772" : "#535c67"); }
+    // ---- mur du fond : briques, deux fenêtres à barreaux, plaques, règlement, horloge
+    fr(0, 0, w, 58, "#2c323c");
+    for (let yy = 5; yy < 54; yy += 12) for (let xx = ((yy / 12) & 1) * 15; xx < w; xx += 30) fr(xx, yy, 27, 9, "#373e49");
     fr(0, 54, w, 4, "#1b2028");
-    // Fenêtre haute, verre froid, barreaux et lumière du jour.
-    fr(132, 8, 78, 38, "#171d28"); fr(136, 12, 70, 30, "#253d59");
-    x.fillStyle = "rgba(150,205,255,.22)"; x.beginPath(); x.moveTo(138, 14); x.lineTo(203, 14); x.lineTo(192, 42); x.lineTo(138, 42); x.fill();
-    fr(169, 12, 3, 30, "#aeb9c8"); fr(190, 12, 3, 30, "#aeb9c8"); fr(136, 26, 70, 3, "#aeb9c8");
-    pool(170, 72, 130, "rgba(145,190,255,.10)");
-    // Petite plaque de cellule et signalétique.
-    fr(18, 10, 78, 34, "#171c24"); fr(21, 13, 72, 28, "#46515e");
-    txt("CELLULE 04", 57, 31, 10, "#e7d7a8");
-    fr(224, 12, 52, 30, "#202833"); fr(228, 16, 44, 22, "#b8c2ce");
-    fr(232, 20, 36, 2, "#8e3434"); fr(232, 26, 28, 2, "#68717c"); fr(232, 32, 33, 2, "#68717c");
-    // Lit métallique : cadre, matelas, couverture pliée et oreiller.
-    fr(20, 76, 108, 42, "#252a32"); fr(24, 72, 104, 8, "#788492");
-    fr(24, 82, 100, 29, "#9ca8b5"); fr(27, 85, 94, 22, "#778797");
-    fr(28, 86, 26, 18, "#d4d9dc"); fr(57, 87, 64, 17, "#526b83");
-    fr(57, 87, 64, 3, "#718ba4"); fr(24, 113, 104, 5, "#303844");
-    fr(28, 118, 5, 9, "#252a32"); fr(116, 118, 5, 9, "#252a32");
-    // Tablette murale et effets personnels.
-    fr(24, 145, 84, 5, "#8b7354"); fr(29, 150, 5, 12, "#514332"); fr(98, 150, 5, 12, "#514332");
-    fr(38, 136, 22, 8, "#b9c1c9"); fr(66, 136, 14, 8, "#c6a45b");
-    // Toilettes et lavabo dans un petit renfoncement carrelé.
+    const win = wx => { fr(wx, 8, 78, 38, "#171d28"); fr(wx + 4, 12, 70, 30, "#253d59"); x.fillStyle = "rgba(150,205,255,.22)"; x.beginPath(); x.moveTo(wx + 6, 14); x.lineTo(wx + 71, 14); x.lineTo(wx + 60, 42); x.lineTo(wx + 6, 42); x.fill(); fr(wx + 37, 12, 3, 30, "#aeb9c8"); fr(wx + 58, 12, 3, 30, "#aeb9c8"); fr(wx + 4, 26, 70, 3, "#aeb9c8"); };
+    win(118); win(332);
+    x.fillStyle = "rgba(160,205,255,.07)";                                  // rayons de lune à travers les barreaux
+    for (let q = 0; q < 3; q++) { x.beginPath(); x.moveTo(132 + q * 24, 46); x.lineTo(144 + q * 24, 46); x.lineTo(176 + q * 24, 170); x.lineTo(164 + q * 24, 170); x.fill(); }
+    fr(18, 10, 78, 34, "#171c24"); fr(21, 13, 72, 28, "#46515e");           // plaque de cellule
+    fr(224, 10, 66, 36, "#171c24"); fr(227, 13, 60, 30, "#3d4651");         // jours comptés à la craie
+    x.strokeStyle = "rgba(235,235,225,.8)"; x.lineWidth = 1.5; x.beginPath();
+    for (let g = 0; g < 3; g++) { const bx2 = 232 + g * 19; for (let q = 0; q < 4; q++) { x.moveTo(bx2 + q * 3.5, 18); x.lineTo(bx2 + q * 3.5, 36); } x.moveTo(bx2 - 2, 34); x.lineTo(bx2 + 13, 20); }
+    x.stroke();
+    fr(426, 10, 64, 36, "#171c24"); fr(429, 13, 58, 30, "#c9c4a9");         // règlement affiché
+    for (let q = 0; q < 5; q++) fr(433, 17 + q * 5, q === 0 ? 34 : 44 - (q % 2) * 10, 2, q === 0 ? "#8e3434" : "#5b5846");
+    { const d = new Date(), cx2 = 520, cy2 = 28, am = (d.getMinutes() + d.getSeconds() / 60) / 60 * 6.2832 - 1.5708, ah = ((d.getHours() % 12) + d.getMinutes() / 60) / 12 * 6.2832 - 1.5708;   // horloge murale : l'heure réelle
+      x.fillStyle = "#171c24"; x.beginPath(); x.arc(cx2, cy2, 16, 0, 7); x.fill(); x.fillStyle = "#d9dee3"; x.beginPath(); x.arc(cx2, cy2, 13.5, 0, 7); x.fill();
+      x.strokeStyle = "#20252d"; x.lineWidth = 1.5; x.beginPath(); x.moveTo(cx2, cy2); x.lineTo(cx2 + Math.cos(am) * 11, cy2 + Math.sin(am) * 11); x.moveTo(cx2, cy2); x.lineTo(cx2 + Math.cos(ah) * 7, cy2 + Math.sin(ah) * 7); x.stroke(); }
+    fr(552, 10, 66, 34, "#171c24"); fr(555, 13, 60, 28, "#46515e");         // plaque de la cellule voisine
+    // ---- ma cellule : lit superposé (vu de dessus), coffre, sanitaires, banc, table, poubelle
+    fr(20, 72, 118, 56, "#1a1e25"); fr(24, 76, 104, 48, "#8f9aa8"); fr(27, 79, 98, 42, "#778797");
+    fr(27, 80, 26, 40, "#d9dde0"); fr(30, 83, 20, 34, "#c3c9ce"); fr(56, 80, 68, 40, "#3d5a78"); fr(56, 80, 68, 4, "#5a7c9e"); for (let q = 0; q < 4; q++) fr(56, 90 + q * 8, 68, 2, "#34506b");
+    fr(132, 76, 5, 48, "#202630"); for (let q = 0; q < 5; q++) fr(132, 80 + q * 9, 5, 2, "#9aa6b4");
+    fr(24, 128, 112, 5, "rgba(0,0,0,.25)");
+    fr(20, 138, 44, 24, "#2a313b"); fr(22, 140, 40, 20, "#4a5565"); fr(22, 148, 40, 2, "#2a313b"); fr(39, 144, 6, 5, "#c6a45b");   // coffre au pied du lit
     fr(224, 72, 64, 66, "#3b4652");
     for (let q = 0; q < 4; q++) fr(228 + q * 14, 76, 1, 58, "rgba(220,230,240,.13)");
     for (let q = 0; q < 4; q++) fr(228, 76 + q * 14, 56, 1, "rgba(220,230,240,.13)");
@@ -1056,14 +1069,16 @@ export function createStaClient(env) {
     x.fillStyle = "#8fa4b4"; x.beginPath(); x.ellipse(250, 90, 6, 3, 0, 0, 7); x.fill();
     fr(269, 80, 12, 20, "#cbd2d8"); fr(272, 83, 6, 14, "#eef1f2"); fr(274, 76, 3, 6, "#aab7c3");
     fr(238, 108, 32, 18, "#aeb9c4"); fr(241, 111, 26, 12, "#dce2e6"); fr(250, 104, 8, 5, "#8da2b2");
-    // Banc fixé au mur et petite table vissée au sol.
+    { const dd = (now / 14) % 40; if (dd < 20) { x.globalAlpha = 1 - dd / 20; fr(253, 124 + dd * .5, 2, 3, "#9fd4ff"); x.globalAlpha = 1; } }   // robinet qui goutte
     fr(28, 190, 88, 9, "#594b3c"); fr(32, 199, 6, 14, "#353943"); fr(106, 199, 6, 14, "#353943");
     fr(150, 202, 74, 9, "#6d5944"); fr(155, 211, 6, 18, "#343a43"); fr(213, 211, 6, 18, "#343a43");
     fr(160, 195, 18, 7, "#c5cbd0"); fr(185, 194, 14, 8, "#b8894b");
-    // Traces de vie : marques de taille, chaussures, livre et gobelet.
+    fr(256, 318, 30, 28, "#2f353e"); fr(258, 320, 26, 24, "#454d58"); fr(256, 318, 30, 5, "#5a6471");                                      // poubelle
     for (let q = 0; q < 5; q++) fr(18 + q * 18, 244 + (q % 2) * 3, 11, 2, "rgba(20,23,29,.45)");
     fr(238, 160, 30, 20, "#343c47"); fr(241, 163, 24, 14, "#b7a98b");
     for (let q = 0; q < 3; q++) fr(244, 166 + q * 3, 18, 1, "#6d6a61");
+    // ---- mur fragile (coin sud-ouest) : fissures, puis trou qui grandit
+    x.save(); x.translate(0, h - 340);
     // Zone du mur fragile : fissures qui progressent à mesure que le joueur creuse.
     fr(12, 274, 92, 54, "#39414a");
     for (let row = 0; row < 4; row++) for (let col = 0; col < 5; col++)
@@ -1097,51 +1112,55 @@ export function createStaClient(env) {
       x.moveTo(31, 291); x.lineTo(39, 296); x.lineTo(35, 301);
       x.moveTo(53, 289); x.lineTo(49, 296); x.lineTo(57, 302); x.stroke();
     }
-    // Barreaux épais, porte coulissante et verrou central.
-    fr(BX - 5, 56, 13, h - 70, "#202630");
-    for (let yy = 60; yy < h - 18; yy += 12) {
-      fr(BX - 3, yy, 3, 9, "#aab4c1"); fr(BX + 4, yy, 2, 9, "#687482");
-    }
+    x.restore();
+    // ---- cellule voisine : un détenu, des barreaux
+    fr(504, 62, 130, 96, "#3a404a");
+    for (let q = 0; q < 6; q++) fr(504 + q * 22, 62, 1, 96, "rgba(220,230,240,.07)");
+    fr(510, 68, 54, 24, "#252a32"); fr(513, 71, 48, 18, "#8f9aa8"); fr(516, 73, 14, 14, "#d9dde0"); fr(532, 73, 26, 14, "#6d3b3b");
+    drawWalker(598, 122 + 2 * Math.sin(now / 800), Math.PI, "#ff8a1c", "#8d5524", null, 0, false);
+    fr(500, 62, 6, 98, "#202630"); fr(500, 152, 134, 7, "#202630");
+    for (let xx = 510; xx < 632; xx += 11) fr(xx, 149, 3, 13, "#aab4c1");
+    // ---- barreaux entre la cellule et le couloir, porte coulissante et verrou
+    fr(BX - 5, 56, 13, h - 56, "#202630");
+    for (let yy = 60; yy < h - 8; yy += 12) { fr(BX - 3, yy, 3, 9, "#aab4c1"); fr(BX + 4, yy, 2, 9, "#687482"); }
     fr(BX - 10, 184, 22, 54, "#333c48"); fr(BX - 8, 188, 18, 46, "#596575");
     fr(BX - 5, 195, 12, 4, "#c3a14e"); fr(BX - 1, 203, 5, 13, "#d4b65e");
     fr(BX - 7, 222, 16, 3, "#303844");
-    // Poste du gardien : bureau, écrans, lampe et tableau de surveillance.
-    fr(344, 192, 126, 42, "#382d27"); fr(348, 190, 118, 32, "#76543a");
-    fr(356, 194, 42, 26, "#171d26"); fr(358, 196, 38, 22, "#243f50");
-    fr(361, 199, 32, 2, "#5fc5ad"); fr(361, 204, 25, 2, "#5fc5ad"); fr(361, 209, 29, 2, "#5fc5ad");
-    fr(404, 194, 42, 26, "#171d26"); fr(406, 196, 38, 22, "#263e50");
-    x.globalAlpha = .45 + .3 * pulse; fr(408, 199, 34, 16, "#4cbf9b"); x.globalAlpha = 1;
-    fr(418, 202, 18, 2, "#173b36"); fr(418, 207, 12, 2, "#173b36");
-    fr(370, 224, 60, 4, "#262a31"); fr(452, 198, 8, 12, "#c7cbd0"); fr(454, 200, 4, 8, "#a7b2be");
-    // Tableau de clés et armoire de dossiers.
-    fr(350, 70, 68, 72, "#46515e"); fr(354, 74, 60, 64, "#303a47");
-    for (let q = 0; q < 4; q++) {
-      fr(360 + q * 13, 82, 8, 8, "#b58d42"); fr(363 + q * 13, 90, 2, 16, "#d5b66c");
-      fr(359 + q * 13, 110, 9, 20, q & 1 ? "#71859a" : "#8b6e58");
-    }
-    fr(440, 70, 62, 94, "#3c4652"); fr(444, 74, 54, 86, "#596777");
-    for (let q = 0; q < 3; q++) { fr(447, 80 + q * 25, 48, 20, "#485462"); fr(450, 84 + q * 25, 40, 2, "#aab4c0"); fr(450, 90 + q * 25, 30, 2, "#aab4c0"); }
-    // Gardien en ronde lente, lampe témoin et porte de sécurité au fond du couloir.
-    { const gy = 164 + 25 * Math.sin(now / 1900); drawWalker(414, gy, Math.PI, "#243c63", "#e0ac69", now / 110, 0, false, true); }
-    fr(452, h - 48, 48, 30, "#252d37"); fr(456, h - 44, 40, 22, "#455363");
-    fr(460, h - 40, 32, 14, "#263847"); fr(466, h - 36, 20, 6, "#79bfd0");
-    x.fillStyle = alarm > .5 ? "#ff554c" : "#8d2727"; x.beginPath(); x.arc(476, h - 53, 4, 0, 7); x.fill();
-    x.fillStyle = "rgba(255,60,48," + (.10 + .10 * alarm) + ")"; x.beginPath(); x.arc(476, h - 53, 19, 0, 7); x.fill();
-    // Marquages au sol, bandes de sécurité et ombres des barreaux.
-    for (let q = 0; q < 8; q++) fr(BX + 18 + q * 20, h - 20, 12, 5, q & 1 ? "#252b34" : "#d0a849");
+    // ---- caméra de surveillance : son cône rouge balaie le couloir
+    { x.save(); x.translate(360, 66); x.rotate(Math.sin(now / 1300) * .7); x.fillStyle = "rgba(255,70,60," + (.07 + .05 * pulse) + ")"; x.beginPath(); x.moveTo(0, 0); x.lineTo(-46, 150); x.lineTo(46, 150); x.closePath(); x.fill(); x.restore();
+      fr(352, 58, 16, 9, "#2a2f38"); fr(354, 60, 12, 4, "#4a515d"); x.fillStyle = alarm > .5 ? "#ff554c" : "#6d1f1f"; x.beginPath(); x.arc(360, 69, 2.2, 0, 7); x.fill(); }
+    // ---- poste de garde : tableau de clés, bureau avec écrans, armoire, porte blindée
+    fr(424, 70, 68, 72, "#46515e"); fr(428, 74, 60, 64, "#303a47");
+    for (let q = 0; q < 4; q++) { fr(434 + q * 13, 82, 8, 8, "#b58d42"); fr(437 + q * 13, 90, 2, 16, "#d5b66c"); fr(433 + q * 13, 110, 9, 20, q & 1 ? "#71859a" : "#8b6e58"); }
+    fr(572, 196, 58, 94, "#3c4652"); fr(576, 200, 50, 86, "#596777");
+    for (let q = 0; q < 3; q++) { fr(579, 206 + q * 26, 44, 20, "#485462"); fr(582, 210 + q * 26, 36, 2, "#aab4c0"); fr(582, 216 + q * 26, 26, 2, "#aab4c0"); }
+    fr(432, 208, 128, 42, "#382d27"); fr(436, 206, 120, 32, "#76543a");
+    fr(444, 210, 42, 26, "#171d26"); fr(446, 212, 38, 22, "#243f50"); fr(449, 215, 32, 2, "#5fc5ad"); fr(449, 220, 25, 2, "#5fc5ad"); fr(449, 225, 29, 2, "#5fc5ad");
+    fr(492, 210, 42, 26, "#171d26"); fr(494, 212, 38, 22, "#263e50"); x.globalAlpha = .45 + .3 * pulse; fr(496, 215, 34, 16, "#4cbf9b"); x.globalAlpha = 1;
+    fr(506, 218, 18, 2, "#173b36"); fr(506, 223, 12, 2, "#173b36");
+    fr(458, 240, 60, 4, "#262a31"); fr(540, 214, 8, 12, "#c7cbd0"); fr(542, 216, 4, 8, "#a7b2be");
+    fr(560, h - 52, 64, 34, "#252d37"); fr(564, h - 48, 56, 26, "#455363"); fr(568, h - 44, 48, 18, "#263847"); fr(578, h - 40, 28, 10, "#79bfd0");
+    x.fillStyle = alarm > .5 ? "#ff554c" : "#8d2727"; x.beginPath(); x.arc(592, h - 58, 4, 0, 7); x.fill();
+    x.fillStyle = "rgba(255,60,48," + (.10 + .10 * alarm) + ")"; x.beginPath(); x.arc(592, h - 58, 19, 0, 7); x.fill();
+    // ---- gardien : il fait les cent pas dans le couloir, juste devant ta porte
+    const gy = 200 + 55 * Math.sin(now / 2300);
+    drawWalker(350, gy, Math.PI, "#243c63", "#e0ac69", now / 110, 0, false, true);
+    // ---- marquages, ombres des barreaux, lumières
+    for (let q = 0; q < 5; q++) fr(BX + 16 + q * 20, h - 20, 12, 5, q & 1 ? "#252b34" : "#d0a849");
     x.strokeStyle = "rgba(10,14,20,.22)"; x.lineWidth = 2; x.beginPath();
     for (let q = 0; q < 7; q++) { x.moveTo(18 + q * 15, 120); x.lineTo(34 + q * 15, 190); } x.stroke();
-    // Lumières localisées et ambiance froide.
-    pool(260, 148, 78, "rgba(210,225,255,.10)");
-    pool(410, 170, 105, "rgba(190,215,255,.12)");
-    pool(476, h - 46, 48, "rgba(255,65,55,.10)");
+    pool(150, 150, 110, "rgba(210,225,255," + (.10 * fl).toFixed(3) + ")");
+    pool(360, 150, 95, "rgba(190,215,255," + (.12 * fl).toFixed(3) + ")");
+    pool(500, 240, 115, "rgba(190,215,255," + (.10 * fl).toFixed(3) + ")");
+    pool(592, h - 52, 52, "rgba(255,65,55,.10)");
+    if (fl < 1) { x.fillStyle = "rgba(0,0,0,.14)"; x.fillRect(0, 58, BX, h - 58); }
     labels.push(
-      ["CELLULE 04", 64, 64, "#d7e0e9", 10],
-      ["LIT", 76, 132, "#aebdca", 9],
-      ["SANITAIRES", 254, 150, "#aebdca", 9],
-      ["GARDIEN", 414, 140 + 25 * Math.sin(now / 1900), sp && sp.k === "guard" ? "#ffe14d" : "#c4d6eb", 10],
-      ["MUR FRAGILE", 58, 270, sp && sp.k === "dig" ? "#ffe14d" : "#d0d7df", 10],
-      ["POSTE DE GARDE", 410, 250, "#c4d6eb", 9]
+      ["CELLULE 04", 57, 64, "#d7e0e9", 10],
+      ["SANITAIRES", 256, 150, "#aebdca", 9],
+      ["CELLULE 05", 585, 62, "#d7e0e9", 10],
+      ["GARDIEN", 350, gy - 26, sp && sp.k === "guard" ? "#ffe14d" : "#c4d6eb", 10],
+      ["MUR FRAGILE", 58, h - 70, sp && sp.k === "dig" ? "#ffe14d" : "#d0d7df", 10],
+      ["POSTE DE GARDE", 500, 272, "#c4d6eb", 9]
     );
   }
   function repairDo(sl) {
@@ -1171,6 +1190,10 @@ export function createStaClient(env) {
     if (n === 1) { fr(-8, -3, 16, 5, "#15151a"); fr(-8, 2, 5, 7, "#15151a"); fr(-6, -3, 10, 2, "#3a3a44"); }
     else if (n === 2) { fr(-13, -3, 26, 5, "#15151a"); fr(-2, 2, 4, 9, "#15151a"); fr(-18, -2, 6, 3, "#15151a"); fr(-10, -3, 14, 2, "#3a3a44"); }
     else if (n === 4) { fr(-16, -4, 30, 8, "#3d4a2f"); fr(-16, -4, 30, 2, "#566644"); fr(-19, -5, 5, 10, "#15151a"); fr(-3, 4, 4, 7, "#15151a"); fr(8, -5, 3, 10, "#8b8b95"); x.fillStyle = "#b3261e"; x.beginPath(); x.moveTo(14, -4); x.lineTo(22, 0); x.lineTo(14, 4); x.fill(); }
+    else if (n === 20) {                                                  // brique de C4 : pâte beige, détonateur noir, LED rouge, fil
+      fr(-15, -9, 30, 18, "#15151a"); fr(-14, -8, 28, 16, "#cfc8a4"); fr(-14, -8, 28, 4, "#e6e0c0"); fr(-14, 4, 28, 4, "#a39c7a"); fr(4, -6, 8, 12, "#15151a");
+      x.fillStyle = "#ff2b2b"; x.beginPath(); x.arc(8, 0, 2.2, 0, 7); x.fill(); x.strokeStyle = "#b3261e"; x.lineWidth = 2; x.beginPath(); x.moveTo(-14, 0); x.quadraticCurveTo(-20, -8, -24, -2); x.stroke();
+    }
     else if (n >= 11) {                                                   // gilet pare-balles : bouclier (bleu · or · rouge selon le niveau)
       x.fillStyle = "#15151a"; x.beginPath(); x.moveTo(-11, -11); x.lineTo(11, -11); x.lineTo(11, 2); x.quadraticCurveTo(11, 11, 0, 15); x.quadraticCurveTo(-11, 11, -11, 2); x.closePath(); x.fill();
       x.fillStyle = ["#7f9bb3", "#e0a93b", "#b3261e"][n - 11]; x.beginPath(); x.moveTo(-9, -9); x.lineTo(9, -9); x.lineTo(9, 2); x.quadraticCurveTo(9, 9, 0, 12.5); x.quadraticCurveTo(-9, 9, -9, 2); x.closePath(); x.fill();
@@ -1291,7 +1314,7 @@ export function createStaClient(env) {
     x = lx; x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = "#08080c"; x.fillRect(0, 0, lc.width, lc.height);
     x.setTransform(z / LR, 0, 0, z / LR, tx, ty);
     if (inn.k === "arms") drawArmsRoom(now, labels); else if (inn.k === "house") drawHouseRoom(now, labels); else if (inn.k === "jail") drawJailRoom(now, labels); else drawGarageRoom(now, labels);
-    drawWalker(inn.x, inn.y, inn.a, (lobbyP()[myUid] || {}).color || "#fff", "#f1c27d", inn.mv ? now / 85 : null, 0, false);
+    drawWalker(inn.x, inn.y, inn.a, inn.k === "jail" ? "#ff8a1c" : (lobbyP()[myUid] || {}).color || "#fff", "#f1c27d", inn.mv ? now / 85 : null, 0, false);
     { const ay = inn.y - 15 + Math.sin(now / 160) * 2; x.fillStyle = "#ffe14d"; x.strokeStyle = "#000"; x.lineWidth = 1; x.beginPath(); x.moveTo(inn.x, ay + 6); x.lineTo(inn.x - 5, ay - 2); x.lineTo(inn.x + 5, ay - 2); x.closePath(); x.fill(); x.stroke(); }
     x.setTransform(1, 0, 0, 1, 0, 0);                                      // pénombre autour de toi
     { const gx = inn.x * z / LR + tx, gy = inn.y * z / LR + ty, gr = x.createRadialGradient(gx, gy, 40, gx, gy, 250); gr.addColorStop(0, "rgba(0,0,0,0)"); gr.addColorStop(1, "rgba(0,0,0,.5)"); x.fillStyle = gr; x.fillRect(0, 0, lc.width, lc.height); }
@@ -1590,18 +1613,19 @@ export function createStaClient(env) {
       if (d > 120) { const ax = W / 2 + Math.cos(a) * 96, ay = H / 2 + Math.sin(a) * 78; x.save(); x.translate(ax, ay); x.rotate(a); x.fillStyle = pt.c; x.strokeStyle = "#000"; x.lineWidth = 2; x.beginPath(); x.moveTo(15, 0); x.lineTo(-9, -10); x.lineTo(-9, 10); x.closePath(); x.fill(); x.stroke(); x.restore(); txt(`${Math.round(d / 10)} m`, ax, ay + 26, 12, pt.c); }
     } else if (mis.k === "car" && mis.st === 0) txt("cherche en ville…", W / 2, 24, 12, "#ffd23f");
   }
-  function mkMini() {                                                     // fond de la minicarte, dessiné une seule fois : routes, blocs, parcs, bâtiments importants
-    const S = 280, c2 = document.createElement("canvas"); c2.width = c2.height = S; const g = c2.getContext("2d"), k = S / WORLD;
+  function mkMini() {                                                     // fond de la minicarte (monde entier, haute définition), dessiné une seule fois : routes, blocs, parcs, bâtiments importants
+    const S = 1728, F = S / 700, c2 = document.createElement("canvas"); c2.width = c2.height = S; const g = c2.getContext("2d"), k = S / WORLD;
     g.fillStyle = "#262a38"; g.fillRect(0, 0, S, S);
-    g.strokeStyle = "rgba(255,255,255,.08)"; g.lineWidth = 1; g.beginPath();                          // lignes centrales des routes
-    for (let i = 0; i <= N; i++) { g.moveTo(i * CELL * k, 0); g.lineTo(i * CELL * k, S); g.moveTo(0, i * CELL * k); g.lineTo(S, i * CELL * k); } g.stroke();
+    g.strokeStyle = "rgba(255,214,90,.30)"; g.lineWidth = F * .8; g.setLineDash([F * 5, F * 5]); g.beginPath();   // lignes centrales des routes (tirets)
+    for (let i = 0; i <= N; i++) { g.moveTo(i * CELL * k, 0); g.lineTo(i * CELL * k, S); g.moveTo(0, i * CELL * k); g.lineTo(S, i * CELL * k); } g.stroke(); g.setLineDash([]);
     const SP = [[POLICE, "#2f55c4", "P"], [HOSP, "#e9edf0", "+"], [GARAGE, "#6b7080", "G"], [ARMS, "#a14040", "A"], [JAIL, "#5d636b", "J"], ...HOUSES.map(h => [[h.i, h.j], "#3f7d4e", "H"])];
     for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
       const bx = lo(i) * k, by = lo(j) * k, bs = BL * k, sp = SP.find(s => s[0][0] === i && s[0][1] === j), pk = isPark(i, j);
       g.fillStyle = sp ? sp[1] : pk ? "#2f6b2c" : hs(i, j) % 3 ? "#4b5066" : "#575d75"; g.fillRect(bx, by, bs, bs);
-      g.strokeStyle = sp ? "#fff" : pk ? "#4f9a45" : "#7a8099"; g.lineWidth = sp ? 1.5 : 1; g.strokeRect(bx + .5, by + .5, bs - 1, bs - 1);
-      if (pk) { g.fillStyle = "#245a22"; for (let t = 0; t < 4; t++) { g.beginPath(); g.arc(bx + 8 + hs(i + t, j) % (bs - 16), by + 8 + hs(j + t, i + 9) % (bs - 16), 3, 0, 7); g.fill(); } }
-      if (sp) { g.font = "bold 18px 'Pricedown Bl',Pricedown,Impact,sans-serif"; g.textAlign = "center"; g.fillStyle = sp[0] === HOSP ? "#d62828" : "#fff"; g.fillText(sp[2], bx + bs / 2, by + bs / 2 + 6); }
+      g.strokeStyle = sp ? "#fff" : pk ? "#4f9a45" : "#7a8099"; g.lineWidth = (sp ? 1.5 : 1) * F; g.strokeRect(bx + F / 2, by + F / 2, bs - F, bs - F);
+      if (pk) { g.fillStyle = "#245a22"; for (let t = 0; t < 4; t++) { g.beginPath(); g.arc(bx + 8 * F + hs(i + t, j) % (bs - 16 * F), by + 8 * F + hs(j + t, i + 9) % (bs - 16 * F), 3 * F, 0, 7); g.fill(); } }
+      else if (!sp) { g.fillStyle = "rgba(255,255,255,.07)"; for (let t = 0; t < 3; t++) g.fillRect(bx + 10 * F + (hs(i, j + t) % 5) * 12 * F, by + 10 * F + t * 18 * F, 22 * F, 8 * F); }   // quelques toits / fenêtres pour donner du relief
+      if (sp) { g.font = "bold " + Math.round(18 * F) + "px 'Pricedown Bl',Pricedown,Impact,sans-serif"; g.textAlign = "center"; g.fillStyle = sp[0] === HOSP ? "#d62828" : "#fff"; g.fillText(sp[2], bx + bs / 2, by + bs / 2 + 6 * F); }
     }
     return c2;
   }
@@ -1676,7 +1700,7 @@ export function createStaClient(env) {
     if (me.vid && job && Math.hypot(job.x - me.x, job.y - me.y) < 60) { const r = 200 + Math.round(job.d / 6); me.cash += r; floats.push({ x: me.x, y: me.y - 20, t: tNow, s: `+$${r} livraison !`, c: "#ffd23f" }); beep(660, .12, "triangle", .06); newJob(); }
   }
   function sendP(now) {
-    const s = `${Math.round(me.x)},${Math.round(me.y)},${me.a.toFixed(2)},${me.vid},${me.wl},${Math.round(me.cash)},${Math.round(me.hp)},${Math.round(Math.abs(me.v))},${me.hs},${me.hid},${me.vid ? me.dm : 0},${me.wpn},${me.fc},${me.fw},${me.cs},${me.cid},${me.ca},${me.gn},${me.go},${me.gi},${me.gm},${me.hn | 0},${me.pg ? Math.round(me.pg.x) : 0},${me.pg ? Math.round(me.pg.y) : 0},${me.pg ? me.pg.a.toFixed(2) : 0},${inn ? 1 : 0},${me.vid === HELI ? me.hz.toFixed(2) : 0},${inn && jail ? Math.max(1, Math.ceil(jail.t)) : 0},${me.fuT > now ? me.fu : ""}`;
+    const s = `${Math.round(me.x)},${Math.round(me.y)},${me.a.toFixed(2)},${me.vid},${me.wl},${Math.round(me.cash)},${Math.round(me.hp)},${Math.round(Math.abs(me.v))},${me.hs},${me.hid},${me.vid ? me.dm : 0},${me.wpn},${me.fc},${me.fw},${me.cs},${me.cid},${me.ca},${me.gn},${me.go},${me.gi},${me.gm},${me.hn | 0},${me.pg ? Math.round(me.pg.x) : 0},${me.pg ? Math.round(me.pg.y) : 0},${me.pg ? me.pg.a.toFixed(2) : 0},${inn ? 1 : 0},${me.vid === HELI ? me.hz.toFixed(2) : 0},${inn && jail ? Math.max(1, Math.ceil(jail.t)) : 0},${me.fuT > now ? me.fu : ""},${c4s.map(q => `${Math.round(q.x)}:${Math.round(q.y)}`).join(";")},${c4d},${c4p}`;
     if ((s === sentStr && now - sentAt < 700) || now - sentAt < 110) return;
     sentStr = s; sentAt = now; set(RF(`games/${c}/p/${myUid}`), s).catch(() => { });
     if (now - saveAt > 8000) { saveAt = now; persist(false); }
@@ -2253,7 +2277,7 @@ function frame(now) {
   for (const u of dP.keys()) if (!lp[u]) dP.delete(u);
   if (me.dead > 0) { me.dead -= dt; if (me.dead <= 0) { if (me.where === "police") startJail(); else if (me.hsp >= 0 && owns(me.hsp)) spawnAtHouse(me.hsp); else spawnAt(SPAWN[me.where || "hosp"]); } }
   else { if (useReq) { useReq = 0; useKey(); } if (inn) { innControl(dt); missions(dt); } else { control(dt); interact(dt); weapons(dt, now); missions(dt); } }
-  stepRockets(dt, now);                                                  // les roquettes volent même si je suis mort ou dans un bâtiment
+  stepRockets(dt, now); c4Step();                                                  // les roquettes volent même si je suis mort ou dans un bâtiment
   useReq = 0; if (me.vid) me.carT += dt;
   sendP(now); sndFrame(now);
   if (inn) { frameInside(now); return; }
@@ -2330,6 +2354,9 @@ function frame(now) {
     drawHeli(d.x, d.y, d.a, { cop: 1, beam: 1, flash: now - (d.fl || -1e9) < 70, rot: now / 38 + id * 1.3, now });
     if (d.hp < HEL_HP * .45) for (let k = 0; k < 4; k++) { const u = ((now / 40 + k * 8) % 32); x.fillStyle = `rgba(45,45,45,${Math.max(0, .5 - u / 70).toFixed(2)})`; x.beginPath(); x.arc(d.x - Math.cos(d.a) * (14 + u) + Math.sin(now / 200 + k) * 2, d.y - Math.sin(d.a) * (14 + u), 4 + u / 6, 0, 7); x.fill(); }
   }
+  { const drawC = (px, py, own) => { x.save(); x.translate(px, py); x.fillStyle = "rgba(0,0,0,.35)"; x.fillRect(-8, -3, 16, 9); x.fillStyle = "#cfc8a4"; x.fillRect(-7, -5, 14, 9); x.fillStyle = "#a39c7a"; x.fillRect(-7, 1, 14, 3); x.fillStyle = "#15151a"; x.fillRect(2, -4, 4, 6); if (Math.floor(now / 350) % 2) { x.fillStyle = "#ff2b2b"; x.beginPath(); x.arc(-3, -1, 1.8, 0, 7); x.fill(); } if (own) { x.strokeStyle = "#ffe14d88"; x.lineWidth = 1; x.beginPath(); x.arc(0, 0, 11, 0, 7); x.stroke(); } x.restore(); };
+    c4s.forEach(q => drawC(q.x, q.y, 1));
+    for (const [u, p] of activeP()) if (u !== myUid && p.c4) p.c4.split(";").forEach(q => { const a = q.split(":"); if (a.length === 2) drawC(+a[0], +a[1], 0); }); }   // charges C4 posées (les miennes avec un anneau)
   rockets.forEach(q => {
      const hx = q.x, hy = q.y;
      if (!q.done) {
@@ -2403,29 +2430,38 @@ function frame(now) {
   }
   if (!TOUCH && hasGun() && me.vid !== HELI && now - me.gunT < 9000) txt("F : TIRER · X ou 0-1-2-3 : CHANGER D'ARME (0 = POINGS 👊)", W / 2, H - 40, 13, "#ffe14d");
   if (TOUCH && (hasGun() || me.vid === HELI || !me.vid)) { const fb = fireId !== null; x.fillStyle = fb ? "#ff5a4d" : "#b3261e"; x.beginPath(); x.arc(W - 56, H - 142, 34, 0, 7); x.fill(); x.strokeStyle = "#000"; x.lineWidth = 3; x.stroke(); txt(me.vid === HELI || me.wpn ? "FEU" : "👊", W - 56, H - 138, 14); if (hasGun() && me.vid !== HELI) { x.fillStyle = "#555a66"; x.beginPath(); x.arc(W - 136, H - 136, 26, 0, 7); x.fill(); x.stroke(); txt("ARME", W - 136, H - 132, 11); } }
+  if (!inn && (me.c4 > 0 || c4s.length)) {
+    if (!TOUCH) txt(`💣 C4 ×${me.c4} · POSÉS ${c4s.length} · C : POSER · B : FAIRE SAUTER`, W / 2, H - 62, 13, "#ffe14d");
+    else if (me.vid !== HELI) {
+      x.fillStyle = "#4a5a2a"; x.beginPath(); x.arc(W - 56, H - 214, 28, 0, 7); x.fill(); x.strokeStyle = "#000"; x.lineWidth = 3; x.stroke(); txt(`C4 ×${me.c4}`, W - 56, H - 210, 12);
+      if (c4s.length) { x.fillStyle = "#d49a00"; x.beginPath(); x.arc(W - 130, H - 206, 28, 0, 7); x.fill(); x.stroke(); txt(`💥 ${c4s.length}`, W - 130, H - 202, 13); }
+    }
+  }
   const rank = [[myUid, me.cash]].concat(activeP().filter(([u]) => u !== myUid).map(([u, p]) => [u, p.cash])).sort((a, b) => b[1] - a[1]);
   txt(`SERVEUR ${c} · ${rank.length} JOUEUR${rank.length > 1 ? "S" : ""}${hostOn ? " · HÔTE" : ""}`, W - 12, 18, 12, "#fffa", "right");
   rank.slice(0, 6).forEach(([u, cs], i) => { const pl = lp[u] || {}; x.fillStyle = pl.color || "#fff"; x.fillRect(W - 170, 28 + i * 18, 9, 9); txt(`${(pl.name || "?").slice(0, 10)}${u === myUid ? "*" : ""}`, W - 156, 37 + i * 18, 12, "#fff", "left"); txt(`$${Math.round(cs)}`, W - 12, 37 + i * 18, 12, "#ffe14d", "right"); });
-  const mm = 140, mx = 12, my = H - mm - 12, mk = mm / WORLD;
+  const mm = 168, mx = 12, my = H - mm - 12, VIEW = 1500, mk = mm / VIEW;                // la minicarte montre une fenêtre de 1500 px de monde, centrée sur toi (elle défile quand tu bouges)
+  const wx0 = clamp(me.x - VIEW / 2, 0, WORLD - VIEW), wy0 = clamp(me.y - VIEW / 2, 0, WORLD - VIEW);
   if (!mmBase) mmBase = mkMini();
-  const mpx = wx => mx + clamp(wx, 0, WORLD) * mk, mpy = wy => my + clamp(wy, 0, WORLD) * mk, pul = (per) => (now % per) / per;
+  const mpx = wx => mx + (wx - wx0) * mk, mpy = wy => my + (wy - wy0) * mk, pul = (per) => (now % per) / per;
+  const epx = wx => clamp(mpx(wx), mx + 8, mx + mm - 8), epy = wy => clamp(mpy(wy), my + 8, my + mm - 8);   // objectifs lointains : collés au bord de la carte
   x.fillStyle = "rgba(0,0,0,.45)"; rrect(mx - 2, my + 3, mm + 4, mm + 4, 14); x.fill();                  // ombre portée
-  x.save(); rrect(mx, my, mm, mm, 12); x.clip(); x.imageSmoothingEnabled = true; x.drawImage(mmBase, mx, my, mm, mm);
-  x.strokeStyle = "rgba(255,255,255,.4)"; x.lineWidth = 1; x.strokeRect(mx + vx0 * mk, my + vy0 * mk, vw * mk, vh * mk);   // ce que l'écran montre
-  const dot = (wx, wy, cl, r) => { x.fillStyle = cl; x.strokeStyle = "rgba(0,0,0,.8)"; x.lineWidth = 1; x.beginPath(); x.arc(mpx(wx), mpy(wy), r, 0, 7); x.fill(); x.stroke(); };
+  x.save(); rrect(mx, my, mm, mm, 12); x.clip(); x.imageSmoothingEnabled = true; x.drawImage(mmBase, wx0 * mmBase.width / WORLD, wy0 * mmBase.height / WORLD, VIEW * mmBase.width / WORLD, VIEW * mmBase.height / WORLD, mx, my, mm, mm);
+  x.strokeStyle = "rgba(255,255,255,.4)"; x.lineWidth = 1; x.strokeRect(mpx(vx0), mpy(vy0), vw * mk, vh * mk);   // ce que l'écran montre
+  const dot = (wx, wy, cl, r, ed) => { x.fillStyle = cl; x.strokeStyle = "rgba(0,0,0,.8)"; x.lineWidth = 1; x.beginPath(); x.arc(ed ? epx(wx) : mpx(wx), ed ? epy(wy) : mpy(wy), r, 0, 7); x.fill(); x.stroke(); };
   const arrow = (wx, wy, a, cl) => { x.save(); x.translate(mpx(wx), mpy(wy)); x.rotate(a); x.fillStyle = cl; x.strokeStyle = "#000"; x.lineWidth = 1.5; x.beginPath(); x.moveTo(6.5, 0); x.lineTo(-4.5, -4.5); x.lineTo(-2, 0); x.lineTo(-4.5, 4.5); x.closePath(); x.fill(); x.stroke(); x.restore(); };
-  const ping = (wx, wy, cl, r) => { const f = pul(1100); x.globalAlpha = .7 * (1 - f); x.strokeStyle = cl; x.lineWidth = 1.5; x.beginPath(); x.arc(mpx(wx), mpy(wy), r + f * 9, 0, 7); x.stroke(); x.globalAlpha = 1; };
+  const ping = (wx, wy, cl, r, ed) => { const f = pul(1100); x.globalAlpha = .7 * (1 - f); x.strokeStyle = cl; x.lineWidth = 1.5; x.beginPath(); x.arc(ed ? epx(wx) : mpx(wx), ed ? epy(wy) : mpy(wy), r + f * 9, 0, 7); x.stroke(); x.globalAlpha = 1; };
   dot(ZONES.arms.x, ZONES.arms.y, "#ff5a4d", 2.6); dot(ZONES.heal.x, ZONES.heal.y, "#7ae582", 2.6);
   if (!mis) GIVERS.forEach(g => { dot(g.x, g.y, "#ffd23f", 3); });
   for (const d of dCars.values()) if (d.m === "c") { const fl = Math.floor(now / 200) % 2; dot(d.x, d.y, fl ? "#ff2a2a" : "#2a5bff", 2.8); }
   for (const d of dCops.values()) dot(d.x, d.y, "#7da2ff", 1.8);
   for (const d of dHelis.values()) { const fl = Math.floor(now / 200) % 2; dot(d.x, d.y, fl ? "#ff2a2a" : "#2a5bff", 3.6); }
   for (const d of dP.values()) if (!d.ib) arrow(d.x, d.y, d.a, "#ff3b30");                                         // les autres joueurs : flèches rouges
-  if (job) dot(job.x, job.y, "#ffd23f", 3.5);
-  if (me.rpgQuest && me.rpgParts.length < 3) RPG_PART_SPOTS.forEach((q, i) => { if (!me.rpgParts.includes(i)) { ping(q.x, q.y, "#ffd23f", 3); dot(q.x, q.y, "#ffd23f", 3); } });
-  if (me.ammoQuest && !me.rpgAmmoUnlocked && pw === 1) { ping(POWDER_SPOT.x, POWDER_SPOT.y, "#ff9a3d", 4); dot(POWDER_SPOT.x, POWDER_SPOT.y, "#ff9a3d", 4); }
-  if (pw === 2) { ping(ZONES.arms.x, ZONES.arms.y, "#ff9a3d", 5); }
-  { const mp = misPt(); if (mp && !mp.nm) { ping(mp.x, mp.y, mp.c, 4); dot(mp.x, mp.y, mp.c, 4); } }
+  if (job) dot(job.x, job.y, "#ffd23f", 3.5, 1);
+  if (me.rpgQuest && me.rpgParts.length < 3) RPG_PART_SPOTS.forEach((q, i) => { if (!me.rpgParts.includes(i)) { ping(q.x, q.y, "#ffd23f", 3, 1); dot(q.x, q.y, "#ffd23f", 3, 1); } });
+  if (me.ammoQuest && !me.rpgAmmoUnlocked && pw === 1) { ping(POWDER_SPOT.x, POWDER_SPOT.y, "#ff9a3d", 4, 1); dot(POWDER_SPOT.x, POWDER_SPOT.y, "#ff9a3d", 4, 1); }
+  if (pw === 2) { ping(ZONES.arms.x, ZONES.arms.y, "#ff9a3d", 5, 1); }
+  { const mp = misPt(); if (mp && !mp.nm) { ping(mp.x, mp.y, mp.c, 4, 1); dot(mp.x, mp.y, mp.c, 4, 1); } }
   if (me.wl > 0 && Math.floor(now / 250) % 2) { x.strokeStyle = "rgba(255,60,60,.9)"; x.lineWidth = 2; rrect(mx + 1, my + 1, mm - 2, mm - 2, 11); x.stroke(); }   // recherché : le cadre clignote
   HOUSES.forEach((h, k) => { if (owns(k)) dot(HZ[k].x, HZ[k].y, "#7ae582", 3); });
   ping(me.x, me.y, "#fff", 3);
@@ -2469,7 +2505,63 @@ function frame(now) {
   drawAdm();
 }
 
-// ================= QUOI DE NEUF : fenêtre =================
+// ================= C4 💣 =================
+  // Une charge se pose au sol (C), se voit de tous (LED rouge) et explose quand son propriétaire appuie sur B : toutes ses charges sautent d'un coup.
+  // Réseau : mes charges = champ 29 de mon « p » (x:y;x:y) · compteur de détonations = champ 30 · positions de la dernière explosion = champ 31.
+  // Chaque joueur calcule lui-même ses dégâts quand le compteur change (comme pour les tirs).
+  let c4s = [], c4d = 0, c4p = "", lastBd = {};
+  function c4Row() {
+    const full = me.c4 >= C4_MAX;
+    return { ic: 20, nm: "C4", sub: `${me.c4}/${C4_MAX} charges`, bar: me.c4 / C4_MAX, l: `4 · C4 +1`, r: full ? "PLEIN" : `${C4_PRICE}`, ok: !full && me.cash >= C4_PRICE, f: buyC4 };
+  }
+  function buyC4() {
+    if (me.c4 >= C4_MAX) { toast("Tu portes déjà le maximum de C4"); return; }
+    if (me.cash < C4_PRICE) { toast(`Il te faut $${C4_PRICE}`); return; }
+    me.cash -= C4_PRICE; me.c4++; floats.push({ x: me.x, y: me.y - 22, t: tNow, s: `💣 C4 −$${C4_PRICE}`, c: "#ffe14d" }); beep(880, .1, "triangle", .06); persist(true);
+  }
+  function c4Place() {
+    if (!active || me.dead > 0 || inn || me.vid === HELI || me.vid === GHOST) return;
+    if (me.c4 <= 0) { toast("Plus de C4 : va en acheter à l'armurerie 💣"); return; }
+    if (c4s.length >= C4_MAX) { toast(`${C4_MAX} charges posées au maximum : fais-les sauter (B)`); return; }
+    const k = me.vid ? 26 : 0, px = me.x - Math.cos(me.a) * k, py = me.y - Math.sin(me.a) * k;
+    if (inBld(px, py)) { toast("Pose le C4 dehors, pas dans un bâtiment"); return; }
+    me.c4--; c4s.push({ x: px, y: py, t: tNow }); me.heat = Math.min(5, me.heat + .25);
+    floats.push({ x: px, y: py - 16, t: tNow, s: "💣 C4 posé", c: "#ffe14d" }); beep(520, .06, "square", .04, 200); persist(true); sentAt = 0;
+  }
+  function c4Boom() {
+    if (!active || me.dead > 0) return;
+    if (!c4s.length) { toast("Aucune charge posée : C pour en poser une"); return; }
+    const pts = c4s; c4s = []; c4d = (c4d + 1) % 1000; c4p = pts.map(q => `${Math.round(q.x)}:${Math.round(q.y)}`).join(";"); sentAt = 0;
+    pts.forEach(q => c4Blast(q.x, q.y, tNow, 1));
+    navigator.vibrate && navigator.vibrate(60);
+  }
+  function c4Step() {                                                     // une charge non utilisée se désamorce toute seule
+    if (!c4s.length) return; const n = c4s.length; c4s = c4s.filter(q => tNow - q.t < C4_LIFE);
+    if (c4s.length !== n) { toast("Une charge C4 s'est désamorcée"); sentAt = 0; }
+  }
+  function c4Blast(px, py, now, own) {                                    // own = 1 : c'est MON C4 (je calcule les dégâts sur le monde) · 0 : celui d'un autre (je prends seulement les dégâts sur moi)
+    booms.push({ x: px, y: py, t: now, rpg: 1 }, { x: px + 18, y: py - 12, t: now + 80, rpg: 1 }, { x: px - 16, y: py + 14, t: now + 150, rpg: 1 });
+    SND.boom(dv(px, py, 1100)); sparks.push({ x: px, y: py, t: now });
+    if (me.dead <= 0 && me.vid !== GHOST && !inn) {
+      const ds = Math.hypot(me.x - px, me.y - py);
+      if (ds < C4_R) {
+        const dm = (own ? C4_SELF : C4_PVP) * (1 - ds / C4_R) * (me.vid ? .6 : 1);
+        if (me.vid === HELI) me.hh -= dm; else me.hp -= dm * armK();
+        if (dm >= 1) { floats.push({ x: me.x, y: me.y - 24, t: now, s: `💥 −${Math.round(dm)}`, c: "#ff5a4d" }); beep(130, .08, "square", .05, 45); if (me.vid && me.vid !== HELI && Math.random() < .6) dent(Math.atan2(py - me.y, px - me.x), 2); }
+      }
+    }
+    if (!own) return;
+    me.heat = Math.min(5, me.heat + .6);
+    const pushCar = (id, v) => { me.lastCar = id; me.lastCarT = tNow; const l = carQ[carQ.length - 1]; if (l && l[0] === id) l[1] += v; else carQ.push([id, v]); if (carQ.length > 8) carQ.shift(); };
+    const near = (d, r) => Math.hypot(d.x - px, d.y - py) < r;
+    for (const [id, d] of dCars) if (d.m !== "t" && id !== me.vid && near(d, 62)) pushCar(id, C4_CAR);
+    for (const [id, d] of dHelis) if (near(d, 70)) pushCar(id, C4_CAR);
+    for (const [id, d] of dCops) if (!hitDone.has(id) && near(d, 56)) { me.heat = Math.min(5, me.heat + .1); pushCar(id, C4_PVP); }
+    for (const [id, d] of dPeds) if (!hitDone.has(id) && near(d, 56)) { hitDone.add(id); killQ.push(id); me.cash += 30; me.heat = Math.min(5, me.heat + .3); floats.push({ x: d.x, y: d.y - 10, t: tNow, s: "+$30", c: "#7ae582" }); splats.push({ x: d.x, y: d.y, t: tNow }); }
+    if (tgt && tgt.hp > 0 && near(tgt, 56)) hitTgt(C4_PVP * 1.3);
+    if (mis && mis.k === "truck" && mis.trk.hp > 0 && near(mis.trk, 66)) hitTruck(C4_CAR * 1.6);
+  }
+  // ================= QUOI DE NEUF : fenêtre =================
   let nm = null, newsOpen = false, nbtn = null;
   const mkEl = (tag, txt, cls) => { const e = document.createElement(tag); if (txt) e.textContent = txt; if (cls) e.className = cls; return e; };
   const newsList = items => { const ul = mkEl("ul"); items.forEach(t => ul.appendChild(mkEl("li", t))); return ul; };
@@ -2498,6 +2590,8 @@ function frame(now) {
     if (e.key === "x" || e.key === "X") { if (!e.repeat) cycleWpn(); e.preventDefault(); return; }
     if (e.key === "r" || e.key === "R") { if (!e.repeat) nextStation(); e.preventDefault(); return; }
     if (e.key === "h" || e.key === "H") { hornKey = true; e.preventDefault(); return; }
+    if (e.key === "c" || e.key === "C") { if (!e.repeat) c4Place(); e.preventDefault(); return; }   // C4 : poser
+    if (e.key === "b" || e.key === "B") { if (!e.repeat) c4Boom(); e.preventDefault(); return; }    // C4 : tout faire sauter
     if (inn && e.key === "Escape" && !shop) { if (inn.k !== "jail") leaveInn(); return; }
     if (admOpen && e.key === "Escape") { admOpen = false; e.preventDefault(); return; }
     if ((e.key === "p" || e.key === "P") && !e.repeat && isOwner() && !inn) { admOpen = !admOpen; e.preventDefault(); return; }
@@ -2517,6 +2611,7 @@ function frame(now) {
     { const ah = admHit(p); if (ah !== null) { admDo(ah); return; } }
     if (shop) { const r = shopHit(p); if (r !== -1) { if (r === -2) shop = ""; else if (r >= 0) shopPick(r); return; } }
     if (mis && p.x > 10 && p.x < 286 && p.y > 160 && p.y < 188) { missionFail("", true); return; }
+    if (!inn && me.vid !== HELI && (me.c4 > 0 || c4s.length)) { if (Math.hypot(p.x - (W - 56), p.y - (H - 214)) < 32) { c4Place(); return; } if (c4s.length && Math.hypot(p.x - (W - 130), p.y - (H - 206)) < 32) { c4Boom(); return; } }
     if ((hasGun() || me.vid === HELI || !me.vid) && Math.hypot(p.x - (W - 56), p.y - (H - 142)) < 38) { fireId = e.pointerId; try { cv.setPointerCapture(e.pointerId); } catch { } return; }
     if (hasGun() && me.vid !== HELI && Math.hypot(p.x - (W - 136), p.y - (H - 136)) < 30) { cycleWpn(); return; }
     if (e.button === 2 || Math.hypot(p.x - (W - 56), p.y - (H - 62)) < 40) { useReq = 1; return; }
@@ -2552,7 +2647,7 @@ function frame(now) {
           if (v && typeof v === "object") {
             me.g = v.g ? 1 : 0; me.hu = v.h ? 1 : 0; me.hh = v.hh === undefined ? 100 : clamp(Math.round(+v.hh) || 0, 0, 100); const gc = v.c; const rdCar = q => q && Number.isFinite(+q.t) ? { c: (+q.c | 0) & 7, t: clamp(+q.t | 0, 0, 4), d: (+q.d | 0) & 255, p: q.p ? 1 : 0 } : null; me.gcar = rdCar(gc); me.g2 = v.g2 ? 1 : 0; me.gcar2 = me.g2 ? rdCar(v.c2) : null;
             if (Array.isArray(v.a)) { for (let n = 1; n <= 4; n++) me.ammo[n] = clamp(Math.floor(+v.a[n - 1]) || 0, 0, WPN[n].max); const w = +v.w | 0; me.wpn = w >= 1 && w <= 4 && me.ammo[w] > 0 ? w : 0; if (!me.wpn) cycleWpn(); } me.rpgParts = Array.isArray(v.rp) ? v.rp.filter(n=>Number.isInteger(n)&&n>=0&&n<3) : []; me.rpgQuest = v.rq ? 1 : 0; me.ammoQuest = v.aq ? 1 : 0; me.rpgAmmoUnlocked = v.rau ? 1 : 0; me.arm = clamp(+v.ar | 0, 0, 3); if (me.rpgAmmoUnlocked && me.rpgParts.length < 3) me.rpgParts = [0, 1, 2]; pw = me.ammoQuest && !me.rpgAmmoUnlocked ? 1 : 0;
-            me.hou = (+v.ho | 0) & ((1 << HOUSES.length) - 1);                    // maisons possédées + coffres + point de réapparition
+            me.c4 = clamp(Math.floor(+v.c4) || 0, 0, C4_MAX); me.hou = (+v.ho | 0) & ((1 << HOUSES.length) - 1);                    // maisons possédées + coffres + point de réapparition
             if (Array.isArray(v.hb)) HOUSES.forEach((_, k) => { const q = v.hb[k]; if (Array.isArray(q)) me.hb[k] = { c: Math.max(0, Math.floor(+q[0]) || 0), a: [1, 2, 3, 4].map(n => clamp(Math.floor(+q[n]) || 0, 0, 9999)), v: clamp(+q[5] | 0, 0, 3) }; });
             { const hq = Number.isInteger(+v.hq) ? +v.hq : -1; me.hsp = hq >= 0 && hq < HOUSES.length && ((me.hou >> hq) & 1) ? hq : -1; }
           }
@@ -2562,6 +2657,7 @@ function frame(now) {
       dnOff = 0; unD = onValue(RF(`games/${c}/dn`), snap => { const v = snap.val(); dnOff = typeof v === "number" ? v : 0; }); unS = onValue(RF(`games/${c}/state`), onState); unP = onValue(RF(`games/${c}/p`), onP);
       timer = setInterval(simLoop, 50); raf = requestAnimationFrame(frame);
       env.played && env.played("sta", true);
+      me.c4 = 0; c4s = []; c4d = 0; c4p = ""; lastBd = {};
       nbtn = mkEl("button", "🆕", "alt mini"); nbtn.id = "staNewsBtn"; nbtn.type = "button"; nbtn.setAttribute("aria-label", "Quoi de neuf"); nbtn.title = "Quoi de neuf";
       nbtn.onclick = () => { nbtn.blur(); newsShow(); }; if (staHasNews()) nbtn.classList.add("fresh"); $("gbar").prepend(nbtn);
       if (staHasNews()) setTimeout(() => { if (active) newsShow(); }, 1200);   // première visite depuis la mise à jour : on l'affiche tout seul

@@ -157,6 +157,14 @@ export function createStaClient(env) {
     return lx.createPattern(c2, "repeat") || "#cfc89c"; })();
   const TOUCH = typeof matchMedia === "function" && matchMedia("(pointer:coarse)").matches;
   let active = false, raf = 0, timer = 0, tPrev = 0, c = "", myUid = "", unS = null, unP = null;
+  // --- une seule session par compte : si le même compte est ouvert ailleurs (autre onglet, appli installée + Safari, autre appareil), les deux sessions se prennent pour l'hôte et publient chacune SON monde → le jeu alterne entre deux mondes. La session la plus récente (sid le plus grand) garde la main, l'autre s'arrête.
+  let sid = "", dupe = false;
+  const newSid = () => Date.now().toString(36).padStart(10, "0") + Math.random().toString(36).slice(2, 6);
+  function dupeStop() {
+    if (!active || dupe) return; dupe = true; hostOn = false; clearInterval(timer);
+    toast("⚠️ Ce compte est ouvert dans un autre onglet ou appareil : cette session s'arrête");
+    setTimeout(() => { try { env.leave && env.leave(); } catch { } }, 1800);
+  }
   // --- état partagé reçu ---
   let ls = null, lastT = 0, lastH = "", lastEv = 0, pd = {};
   const dPeds = new Map(), dCars = new Map(), dP = new Map(), dCops = new Map(), dHelis = new Map();
@@ -366,7 +374,7 @@ export function createStaClient(env) {
   }
   function publish() {
     const r = Math.round, f2 = v => +v.toFixed(2);
-    const s = { k: "sta", t: Date.now(), h: myUid, pd: peds.map(q => [q.id, r(q.x), r(q.y), f2(q.h), q.sk, q.st]), cr: cars.filter(q => !q.rm).map(q => [q.id, r(q.x), r(q.y), f2(q.a), r(q.v), q.c, q.m, q.o, q.dm | 0, q.cp | 0]), co: cops.map(q => [q.id, r(q.x), r(q.y), f2(q.a), q.hp, q.car]), he: helis.map(q => [q.id, r(q.x), r(q.y), f2(q.a), r(q.hp), q.hit > 0 ? 1 : 0]), ev: evs };
+    const s = { k: "sta", t: Date.now(), h: myUid, sid, pd: peds.map(q => [q.id, r(q.x), r(q.y), f2(q.h), q.sk, q.st]), cr: cars.filter(q => !q.rm).map(q => [q.id, r(q.x), r(q.y), f2(q.a), r(q.v), q.c, q.m, q.o, q.dm | 0, q.cp | 0]), co: cops.map(q => [q.id, r(q.x), r(q.y), f2(q.a), q.hp, q.car]), he: helis.map(q => [q.id, r(q.x), r(q.y), f2(q.a), r(q.hp), q.hit > 0 ? 1 : 0]), ev: evs };
     set(RF(`games/${c}/state`), JSON.stringify(s)).catch(() => { });
   }
   function simLoop() {
@@ -380,6 +388,7 @@ export function createStaClient(env) {
   function onState(snap) {
     const v = snap.val(); if (!v) return; let s; try { s = JSON.parse(v); } catch { return; }
     if (s.k !== "sta" || !s.pd) return;
+    if (s.h === myUid && s.sid && sid && s.sid !== sid) { if (s.sid > sid) dupeStop(); return; }   // autre session du même compte
     if (s.h !== lastH) { lastH = s.h; lastT = 0; }
     if (s.h !== myUid && +s.t > 1e12) { const off = s.t - Date.now(); clockOff = clockOff === null ? off : clockOff * .9 + off * .1; }   // horloge commune : alignée sur celle de l'hôte
     if (s.t < lastT) return; lastT = s.t; const firstSnap = !ls; ls = s;
@@ -453,7 +462,8 @@ export function createStaClient(env) {
   function spawnAt(p) { me.hz = 0; me.land = 0; me.x = p[0] + rr(-30, 30); me.y = p[1]; me.vid = 0; me.v = 0; me.hp = 100; me.dead = 0; me.heat = 0; me.bust = 0; job = null; cam.x = me.x; cam.y = me.y; }
   function die(why, loss, where) { pwFail("tu es tombé"); me.hz = 0; me.land = 0; shop = ""; if (mis) missionFail("tu es tombé"); me.dead = 2.2; me.msg = why; me.wpn = 0; me.arm = 0; me.c4 = 0; me.ammo = [0, 0, 0, 0, 0]; me.vid = 0; me.v = 0; me.heat = 0; me.cash = Math.floor(me.cash * (1 - loss)); me.where = where; SND.wasted(); }
   const gStr = () => JSON.stringify({ g: me.g, c: me.gcar, g2: me.g2 ? 1 : 0, c2: me.gcar2, a: me.ammo.slice(1), w: me.wpn, h: me.hu ? 1 : 0, hh: Math.round(clamp(me.hh, 0, 100)), c4: me.c4 | 0, rp: me.rpgParts, rq: me.rpgQuest, aq: me.ammoQuest, rau: me.rpgAmmoUnlocked, ar: me.arm | 0, ho: me.hou | 0, hq: me.hsp, hb: me.hb.map(b => [Math.round(b.c), b.a[0], b.a[1], b.a[2], b.a[3], b.v]) });
-  function persist(force) {                                               // argent (users/<uid>/sta) + garage, voiture rangée, armes et munitions (users/<uid>/sta2) ; renvoie une promesse (résolue quand Firebase a tout reçu)
+  function persist(force) {
+    if (dupe) return Promise.resolve();                                               // argent (users/<uid>/sta) + garage, voiture rangée, armes et munitions (users/<uid>/sta2) ; renvoie une promesse (résolue quand Firebase a tout reçu)
     const cash = Math.round(me.cash), ps = [];
     if (force || cash !== savedCash) { savedCash = cash; ps.push(set(RF(`users/${myUid}/sta`), cash).catch(() => { })); }
     if (!gLoaded) return Promise.all(ps);                                 // on n'écrase jamais la sauvegarde avant de l'avoir lue
@@ -1703,7 +1713,7 @@ export function createStaClient(env) {
   function sendP(now) {
     const s = `${Math.round(me.x)},${Math.round(me.y)},${me.a.toFixed(2)},${me.vid},${me.wl},${Math.round(me.cash)},${Math.round(me.hp)},${Math.round(Math.abs(me.v))},${me.hs},${me.hid},${me.vid ? me.dm : 0},${me.wpn},${me.fc},${me.fw},${me.cs},${me.cid},${me.ca},${me.gn},${me.go},${me.gi},${me.gm},${me.hn | 0},${me.pg ? Math.round(me.pg.x) : 0},${me.pg ? Math.round(me.pg.y) : 0},${me.pg ? me.pg.a.toFixed(2) : 0},${inn ? 1 : 0},${me.vid === HELI ? me.hz.toFixed(2) : 0},${inn && jail ? Math.max(1, Math.ceil(jail.t)) : 0},${me.fuT > now ? me.fu : ""},${c4s.map(q => `${Math.round(q.x)}:${Math.round(q.y)}`).join(";")},${c4d},${c4p}`;
     if ((s === sentStr && now - sentAt < 700) || now - sentAt < 110) return;
-    sentStr = s; sentAt = now; set(RF(`games/${c}/p/${myUid}`), s).catch(() => { });
+    sentStr = s; sentAt = now; if (!dupe) set(RF(`games/${c}/p/${myUid}`), s).catch(() => { });
     if (now - saveAt > 8000) { saveAt = now; persist(false); }
   }
 
@@ -2636,7 +2646,7 @@ function frame(now) {
   return {
     save() { return active && myUid && gLoaded ? persist(true) : Promise.resolve(); },   // sauvegarde complète, appelée par app.js juste avant un rechargement (mise à jour)
     enter(code) {
-      active = true; c = code; myUid = getMe().uid; ls = null; lastT = 0; lastH = ""; lastEv = 0; pd = {}; hostOn = false; keys = new Set(); stick = null; brakeId = null; useReq = 0;
+      active = true; dupe = false; sid = newSid(); c = code; myUid = getMe().uid; ls = null; lastT = 0; lastH = ""; lastEv = 0; pd = {}; hostOn = false; keys = new Set(); stick = null; brakeId = null; useReq = 0;
       dPeds.clear(); dCars.clear(); dCops.clear(); dHelis.clear(); helis = []; dP.clear(); ejected = []; sPrevCash = 0; sPrevWl = 0; sAmbT = performance.now() + 8000; hornKey = false; hornId = null; me.pg = null; splats = []; floats = []; hitDone = new Set(); lastHs = {}; sentStr = ""; sentAt = 0; savedCash = -1; saveAt = performance.now(); gLoaded = false; savedG = ""; lastGn = {};
       Object.assign(me, { vid: 0, hp: 100, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, bust: 0, hurt: 0, v: 0, a: 0, cash: 0, cop: 0, wpn: 0, ammo: [0, 0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100, rpgParts: [], rpgQuest: 0, ammoQuest: 0, rpgAmmoUnlocked: 0, arm: 0, hou: 0, hsp: -1, hb: HOUSES.map(newBox), fu: "", fuT: 0, jT: 0 });
       inn = null; jail = null; mis = null; tgt = null; pw = 0; pwT = 0; shop = ""; killQ = []; carQ = []; pendingPedHits = new Map(); tracers = []; rockets = []; sparks = []; booms = []; wrecks = []; pickT = new Map(); lastFc = {}; lastCs = {}; fireKey = false; fireId = null;
@@ -2665,7 +2675,7 @@ function frame(now) {
       if (staHasNews()) setTimeout(() => { if (active) newsShow(); }, 1200);   // première visite depuis la mise à jour : on l'affiche tout seul
       return () => {
         active = false; clearInterval(timer); unS && unS(); unP && unP(); unD && unD(); unD = null; admOpen = false; if (raf) cancelAnimationFrame(raf); raf = 0; keys.clear(); stick = null; hostOn = false; fireKey = false; fireId = null;
-        SND.stop(); persist(true); remove(RF(`games/${c}/p/${myUid}`)).catch(() => { });
+        SND.stop(); persist(true); if (!dupe) remove(RF(`games/${c}/p/${myUid}`)).catch(() => { });
         newsClose(false); if (nbtn) { nbtn.remove(); nbtn = null; }
         x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; x.setLineDash([]); x.textAlign = "start";
       };

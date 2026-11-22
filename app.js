@@ -13,7 +13,7 @@ import {createVoice} from "./voice.js";
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="122";
+const VER="123";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -213,7 +213,7 @@ async function run(u){
         $("net").hidden=true;if(was)toast("Reconnecté ✅");was=true;
       }else if(was)nt=setTimeout(()=>{$("net").hidden=false},1200);
     }));
-    watchSocial();watchMaintenance();
+    watchSocial();watchMaintenance();resumeAfterUpdate();
   }catch(e){
     if(my!==seq)return;
     if(transient(e)){ // hors ligne : on garde la session et on réessaie, sans repasser par l'écran de connexion
@@ -283,7 +283,7 @@ const mkLobby=game=>async()=>{
   await set(R(`lobbies/${c}`),{host:me.uid,game,status:"lobby",opts:{sp:1,wr:0,bo:1},players:{[me.uid]:{name:me.name,color:COLORS[0],ready:true,...ownTag()}}});
   onDisconnect(R(`lobbies/${c}`)).remove();enter(c);
 };
-$("tsnake").onclick=mkLobby("snake");$("tsta").onclick=joinSta;$("tsurv").onclick=mkLobby("surv");$("tbr").onclick=mkLobby("br");$("ttk").onclick=mkLobby("tk");$("tlab").onclick=mkLobby("lab");$("tsim").onclick=mkLobby("sim");$("tsumo").onclick=mkLobby("sumo");$("tbarre").onclick=mkLobby("barre");$("tfruit").onclick=mkLobby("fruit");$("tamog").onclick=mkLobby("amog");$("tblockdash").onclick=mkLobby("blockdash");
+$("tsnake").onclick=mkLobby("snake");$("tsta").onclick=()=>joinSta();$("tsurv").onclick=mkLobby("surv");$("tbr").onclick=mkLobby("br");$("ttk").onclick=mkLobby("tk");$("tlab").onclick=mkLobby("lab");$("tsim").onclick=mkLobby("sim");$("tsumo").onclick=mkLobby("sumo");$("tbarre").onclick=mkLobby("barre");$("tfruit").onclick=mkLobby("fruit");$("tamog").onclick=mkLobby("amog");$("tblockdash").onclick=mkLobby("blockdash");
 $("join").onclick=()=>joinLobby($("joincode").value.trim().toUpperCase());
 $("joincode").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();$("join").click()}});
 async function joinLobby(c){
@@ -343,12 +343,14 @@ $("ready").onclick=()=>set(R(`lobbies/${code}/players/${me.uid}/ready`),!lobby.p
 $("leave").onclick=leaveLobby;
 // ---------- Sta I : serveur persistant (STA1, STA2…). Pas de lobby : on arrive directement dans la partie ; l'hôte = le plus ancien joueur ----------
 const STA_MAX=24;
-async function joinSta(){
+async function joinSta(pref){   // pref : serveur à essayer en premier (reprise après mise à jour), ex. "STA2"
   if(isMaintained("sta"))return toast(maintMsg("sta"));
   if(code)await leaveLobby();
   let c=null,err=null;
-  for(let i=1;i<=30&&!c;i++){
-    const k="STA"+i;
+  const ks=[];if(typeof pref==="string"&&/^STA\d{1,2}$/.test(pref)&&+pref.slice(3)<=30)ks.push(pref);
+  for(let i=1;i<=30;i++)if(!ks.includes("STA"+i))ks.push("STA"+i);
+  for(const k of ks){
+    if(c)break;
     try{   // une erreur sur UN serveur ne bloque plus tout : on essaie le suivant
       const l=(await get(R(`lobbies/${k}`))).val(),pl=(l&&l.players)||{},n=Object.keys(pl).length;
       if(l&&l.game!=="sta")continue;
@@ -406,6 +408,54 @@ let staC=null;
 function enterStaGame(c){staC=staC||createStaClient(simEnv());return staC.enter(c)}
 let bd=null;
 function enterBlockDashGame(c){bd=bd||createBlockDashClient(simEnv());return bd.enter(c)}
+// ---------- Mise à jour obligatoire et automatique : sauvegarde, rechargement, puis retour là où on était ----------
+// · accueil / stats / connexion (rien en cours de saisie) : rechargement direct
+// · lobby : on recharge puis on retourne dans le même lobby
+// · Sta I, Mine Simulator, Fruit Forager (mondes ouverts) : sauvegarde, rechargement, retour dans la partie
+// · autres jeux (manche en cours) : impossible de sauver une manche sans la casser pour tous les joueurs → rechargement dès la fin de la manche (retour au lobby)
+const RESUME_KEY="moda.resume",OPEN_GAMES=["sta","sim","fruit"];
+let updPending=false,updBusy=false,updToast=false;
+const within=(p,ms=3000)=>Promise.race([Promise.resolve(p),new Promise(r=>setTimeout(r,ms))]);
+async function stashResume(){   // sauvegarde (attend Firebase, 3 s max), puis note où revenir après le rechargement
+  if(!me||!code||!lobby)return;
+  const c=code,g=lobby.game,host=lobby.host===me.uid&&g!=="sta";
+  try{
+    if(g==="sta"&&staC&&staC.save)await within(staC.save());
+    else if(cur==="game"&&(g==="sim"||g==="fruit")){
+      const cl=g==="sim"?sc:fc;
+      if(cl&&cl.save)await within(cl.save());
+      else{unState&&unState();unState=null;await new Promise(r=>setTimeout(r,1500))}   // sortie normale du jeu = sa sauvegarde habituelle
+    }
+    if(host)await within(onDisconnect(R(`lobbies/${c}`)).cancel(),2000);   // l'hôte qui recharge ne doit pas fermer le lobby
+  }catch{}
+  try{localStorage.setItem(RESUME_KEY,JSON.stringify({g,c,u:me.uid,t:Date.now()}))}catch{}
+}
+async function tryUpdate(){
+  if(updBusy||!updPending)return;
+  const typing=cur!=="game"&&(/^(INPUT|TEXTAREA)$/.test(document.activeElement&&document.activeElement.tagName)||busy||["pseudo","email","pass","pass2"].some(i=>$(i).value));
+  if(typing)return;
+  let resume=false;
+  if(cur==="game"){
+    if(!code||!lobby||!OPEN_GAMES.includes(lobby.game)){if(!updToast){updToast=true;toast("🔄 Mise à jour : elle s'installera à la fin de la manche")}return}
+    resume=true;
+  }else if(cur==="lobby"){if(!code||!lobby)return;resume=true}
+  updBusy=true;
+  if(resume){toast("🔄 Mise à jour : sauvegarde puis rechargement…");await stashResume()}
+  location.reload();
+}
+setInterval(tryUpdate,3000);
+async function resumeAfterUpdate(){   // appelée une fois connecté : si on a rechargé pour une mise à jour, on retourne dans la partie / le lobby
+  let r=null;try{r=JSON.parse(localStorage.getItem(RESUME_KEY)||"null");localStorage.removeItem(RESUME_KEY)}catch{}
+  if(!r||r.u!==me.uid||!(Date.now()-r.t<120000)||code||cur==="game")return;
+  toast("✅ Mise à jour installée : retour dans ta partie…");
+  if(r.g==="sta")return joinSta(r.c).catch(err);
+  try{
+    const l=(await get(R(`lobbies/${r.c}`))).val();
+    if(!l||l.game!==r.g)return toast("La partie n'existe plus");
+    if(l.host===me.uid){onDisconnect(R(`lobbies/${r.c}`)).remove();enter(r.c)}   // hôte : le lobby est resté en place
+    else await joinLobby(r.c);
+  }catch(e){err(e)}
+}
 function local(){spec=false;specTag.hidden=true;voice&&voice.stop();unLobby&&unLobby();unState&&unState();unLobby=unState=null;code=lobby=null;if(me)showHome()}
 
 // ---------- Jeu : affichage (tous les joueurs) ----------
@@ -2141,21 +2191,19 @@ function renderAdmin(D){
 
 // ---------- Installation (PWA) ----------
 if("serviceWorker" in navigator&&location.protocol==="https:"){
-  addEventListener("load",()=>navigator.serviceWorker.register("sw.js?v=119",{updateViaCache:"none"}).catch(()=>{}));
-  // Nouvelle version détectée : on recharge seulement si ça ne coupe rien (jamais en lobby ni en partie, ni pendant la saisie)
+  addEventListener("load",()=>navigator.serviceWorker.register("sw.js?v=123",{updateViaCache:"none"}).catch(()=>{}));
+  // Nouvelle version détectée : rechargement obligatoire et automatique (sauvegarde + reprise gérées par tryUpdate)
   let notified=false;
   navigator.serviceWorker.addEventListener("message",e=>{
     if(!e.data||e.data.type!=="sw-update"||notified)return;
-    notified=true;
-    const typing=/^(INPUT|TEXTAREA)$/.test(document.activeElement&&document.activeElement.tagName)||busy||["pseudo","email","pass","pass2"].some(i=>$(i).value);
-    if(!typing&&(cur==="home"||cur==="stats"||cur==="auth")){location.reload();return}
-    $("upd").hidden=false;
+    notified=true;updPending=true;tryUpdate();   // la mise à jour n'est plus facultative : tryUpdate recharge dès que c'est possible (voir plus haut)
   });
   const check=()=>{navigator.serviceWorker.controller&&navigator.serviceWorker.controller.postMessage({type:"check"});navigator.serviceWorker.getRegistration().then(r=>r&&r.update()).catch(()=>{})};
   document.addEventListener("visibilitychange",()=>{if(!document.hidden)check()});
   setInterval(check,10*60*1000);setTimeout(check,4000);
   $("updbtn").onclick=async()=>{
-    const b=$("updbtn");b.disabled=true;b.textContent="Mise à jour…";
+    const b=$("updbtn");b.disabled=true;b.textContent="Mise à jour…";updBusy=true;
+    await stashResume();
     const purge=(async()=>{
       try{await Promise.all((await navigator.serviceWorker.getRegistrations()).map(r=>r.unregister()))}catch{}
       try{await Promise.all((await caches.keys()).map(k=>caches.delete(k)))}catch{}

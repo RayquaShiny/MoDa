@@ -453,11 +453,12 @@ export function createStaClient(env) {
   function spawnAt(p) { me.hz = 0; me.land = 0; me.x = p[0] + rr(-30, 30); me.y = p[1]; me.vid = 0; me.v = 0; me.hp = 100; me.dead = 0; me.heat = 0; me.bust = 0; job = null; cam.x = me.x; cam.y = me.y; }
   function die(why, loss, where) { pwFail("tu es tombé"); me.hz = 0; me.land = 0; shop = ""; if (mis) missionFail("tu es tombé"); me.dead = 2.2; me.msg = why; me.wpn = 0; me.arm = 0; me.c4 = 0; me.ammo = [0, 0, 0, 0, 0]; me.vid = 0; me.v = 0; me.heat = 0; me.cash = Math.floor(me.cash * (1 - loss)); me.where = where; SND.wasted(); }
   const gStr = () => JSON.stringify({ g: me.g, c: me.gcar, g2: me.g2 ? 1 : 0, c2: me.gcar2, a: me.ammo.slice(1), w: me.wpn, h: me.hu ? 1 : 0, hh: Math.round(clamp(me.hh, 0, 100)), c4: me.c4 | 0, rp: me.rpgParts, rq: me.rpgQuest, aq: me.ammoQuest, rau: me.rpgAmmoUnlocked, ar: me.arm | 0, ho: me.hou | 0, hq: me.hsp, hb: me.hb.map(b => [Math.round(b.c), b.a[0], b.a[1], b.a[2], b.a[3], b.v]) });
-  function persist(force) {                                               // argent (users/<uid>/sta) + garage, voiture rangée, armes et munitions (users/<uid>/sta2)
-    const cash = Math.round(me.cash);
-    if (force || cash !== savedCash) { savedCash = cash; set(RF(`users/${myUid}/sta`), cash).catch(() => { }); }
-    if (!gLoaded) return;                                                 // on n'écrase jamais la sauvegarde avant de l'avoir lue
-    const gs = gStr(); if (force || gs !== savedG) { savedG = gs; set(RF(`users/${myUid}/sta2`), gs).catch(() => { }); }
+  function persist(force) {                                               // argent (users/<uid>/sta) + garage, voiture rangée, armes et munitions (users/<uid>/sta2) ; renvoie une promesse (résolue quand Firebase a tout reçu)
+    const cash = Math.round(me.cash), ps = [];
+    if (force || cash !== savedCash) { savedCash = cash; ps.push(set(RF(`users/${myUid}/sta`), cash).catch(() => { })); }
+    if (!gLoaded) return Promise.all(ps);                                 // on n'écrase jamais la sauvegarde avant de l'avoir lue
+    const gs = gStr(); if (force || gs !== savedG) { savedG = gs; ps.push(set(RF(`users/${myUid}/sta2`), gs).catch(() => { })); }
+    return Promise.all(ps);
   }
   const inGarage = () => me.dead <= 0 && Math.hypot(me.x - GZ.x, me.y - GZ.y) < 62;
   const isOwner = () => { try { const o = env.isOwner; if (o !== undefined) return !!(typeof o === "function" ? o() : o); const m = getMe() || {}; return !!(m.owner || m.isOwner || m.role === "owner"); } catch { return false; } };
@@ -2633,6 +2634,7 @@ function frame(now) {
   cv.addEventListener("contextmenu", e => { if (active) e.preventDefault(); });
 
   return {
+    save() { return active && myUid && gLoaded ? persist(true) : Promise.resolve(); },   // sauvegarde complète, appelée par app.js juste avant un rechargement (mise à jour)
     enter(code) {
       active = true; c = code; myUid = getMe().uid; ls = null; lastT = 0; lastH = ""; lastEv = 0; pd = {}; hostOn = false; keys = new Set(); stick = null; brakeId = null; useReq = 0;
       dPeds.clear(); dCars.clear(); dCops.clear(); dHelis.clear(); helis = []; dP.clear(); ejected = []; sPrevCash = 0; sPrevWl = 0; sAmbT = performance.now() + 8000; hornKey = false; hornId = null; me.pg = null; splats = []; floats = []; hitDone = new Set(); lastHs = {}; sentStr = ""; sentAt = 0; savedCash = -1; saveAt = performance.now(); gLoaded = false; savedG = ""; lastGn = {};

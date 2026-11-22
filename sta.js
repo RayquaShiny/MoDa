@@ -104,6 +104,10 @@ const parseP = s => { const a = String(s).split(","); return { x: +a[0] || 0, y:
 // ajoute une entrée EN HAUT de la liste, avec un numéro « v » plus grand que le précédent, la date du jour et les nouveautés en clair.
 // Les joueurs qui n'ont pas vu cette version voient la fenêtre à l'entrée dans le jeu.
 const NEWS = [
+  { v: 6, d: "22 nov. 2026", t: [
+    "Intro refaite : plus rythmée, avec une mini-animation pour chaque scène (voitures, cash, poursuite, armes, maison, multijoueur), sans emojis",
+    "Correction : les boutons du haut ne passent plus par-dessus l'intro"
+  ] },
   { v: 5, d: "22 nov. 2026", t: [
     "🎬 Nouvelle intro : une animation avec musique te montre tout ce que tu peux faire dans STA I (elle se lance une fois pour tout le monde)",
     "Tu peux la revoir quand tu veux avec le bouton 🎬 en haut"
@@ -155,7 +159,9 @@ export const staHasNews = () => NEWS.length > 0 && NEWS[0].v > newsSeen();
 #staIntro canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 #staIntro button{position:absolute;bottom:14px;right:14px;padding:10px 18px;font-size:15px;background:#17152fcc;color:#fff;border:1px solid #ffffff55}
 #staIntro button.go{right:50%;transform:translateX(50%);padding:13px 34px;font-size:20px;font-weight:700;background:#ffd23f;color:#241a00;border:0;animation:staGo .9s ease-in-out infinite alternate}
-@keyframes staGo{to{transform:translateX(50%) scale(1.07)}}`;
+@keyframes staGo{to{transform:translateX(50%) scale(1.07)}}
+body.staIntroOn #gbar{visibility:hidden}
+#staIntro button::after{content:"";display:inline-block;margin-left:9px;border-left:9px solid currentColor;border-top:6px solid transparent;border-bottom:6px solid transparent}`;
   document.head.appendChild(st);
 })();
 
@@ -2642,12 +2648,12 @@ function frame(now) {
   const introSeen = () => { try { return localStorage.getItem(INTRO_KEY) === "1"; } catch { return false; } };
   let introOpen = false, im = null, iCv = null, iX = null, iRaf = 0, iT0 = 0, iMus = null, iBtn = null, iMode = "", rbtn = null;
   const IS = [
-    { e: "🚗", h: "VOLE DES VOITURES", s: ["Berlines, coupés, fourgons…", "et des supercars 🏎️ rares"] },
-    { e: "💰", h: "GAGNE DU CASH", s: ["Courses, livraisons, missions", "Écrase des piétons : +$50 chacun"] },
-    { e: "🚓", h: "FUIS LA POLICE", s: ["Plus tu fais le fou, plus tu as d'étoiles ★", "Flics, voitures de police, hélicos…"] },
-    { e: "🔫", h: "ARME-TOI", s: ["Pistolet, mitraillette, fusil à pompe", "RPG 🚀 et C4 💣 pour tout faire sauter"] },
-    { e: "🏠", h: "FAIS-TOI UNE VIE", s: ["Garage, maisons avec coffre, mécano", "Hélico 🚁 du Pilote · prison… et évasion !"] },
-    { e: "👥", h: "JOUE À PLUSIEURS", s: ["Jusqu'à 24 joueurs en même temps", "Monte en passager 👥 · finis 1er du classement 🏆"] }
+    { h: "VOLE DES VOITURES", s: ["Berlines, coupés, fourgons…", "et des supercars rares"] },
+    { h: "GAGNE DU CASH", s: ["Courses, livraisons, missions", "Écrase des piétons : +$50 chacun"] },
+    { h: "FUIS LA POLICE", s: ["Plus tu fais le fou, plus tu as d'étoiles", "Flics, voitures de police, hélicos…"] },
+    { h: "ARME-TOI", s: ["Pistolet, mitraillette, fusil à pompe", "RPG et C4 pour tout faire sauter"] },
+    { h: "FAIS-TOI UNE VIE", s: ["Garage, maisons avec coffre, mécano", "Hélico du Pilote · prison… et évasion !"] },
+    { h: "JOUE À PLUSIEURS", s: ["Jusqu'à 24 joueurs en même temps", "Monte en passager · finis 1er du classement"] }
   ];
   const SL = 3.75, F0 = SL * IS.length;                                   // durée d'une scène (2 mesures à 128 BPM) · début du final (le logo arrive sur le crash de la batterie)
   const IFONT = "\"Pricedown Bl\",Pricedown,Impact,sans-serif", fnt = (px, fam) => "700 " + px + "px " + fam;
@@ -2692,7 +2698,108 @@ function frame(now) {
     g.beginPath(); g.moveTo(x, y - hh); g.quadraticCurveTo(x - len * .5, y - hh * .9 + wob, x - len, y + wob * .6);
     g.quadraticCurveTo(x - len * .45, y + hh * .35, x, y + hh); g.closePath();
   }
-  const ICARS = [["#d94a4a", 0, 0], ["#3b82d9", 1, 70], ["#e6c229", 0, 160], ["#7a4fd0", 1, 240], ["#27ae7a", 0, 330], ["#e9edf0", 1, 400], ["#ff8a2a", 0, 490]];
+  // ---- outils de dessin de l'intro : tout est dessiné, aucun emoji (on réutilise drawCar, drawHeli et drawPick du jeu) ----
+  const iEaseB = p => { p = Math.min(1, Math.max(0, p)); return 1 + 2.9 * Math.pow(p - 1, 3) + 1.9 * Math.pow(p - 1, 2); };   // arrive en dépassant un peu (effet rebond)
+  const iWx = fn => { const o = x; x = iX; try { fn(); } finally { x = o; } };                                                 // drawCar/drawHeli dessinent sur « x » : on le pointe un instant sur le canvas de l'intro
+  const iCar = (g, px, py, a, col, id, sc, cop, now) => { g.save(); g.translate(px, py); g.scale(sc, sc); iWx(() => drawCar(0, 0, a, col, cop || 0, now, id, 0)); g.restore(); };
+  const iHeli = (g, px, py, a, sc, o, now) => { g.save(); g.translate(px, py); g.scale(sc, sc); iWx(() => drawHeli(0, 0, a, Object.assign({ now }, o))); g.restore(); };
+  const iPnl = (g, px, py, w, h, r) => { g.beginPath(); g.moveTo(px + r, py); g.arcTo(px + w, py, px + w, py + h, r); g.arcTo(px + w, py + h, px, py + h, r); g.arcTo(px, py + h, px, py, r); g.arcTo(px, py, px + w, py, r); g.closePath(); };
+  const iStarP = (g, cx, cy, r) => { g.beginPath(); for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, rr = k & 1 ? r * .42 : r, px = cx + Math.cos(a) * rr, py = cy + Math.sin(a) * rr; k ? g.lineTo(px, py) : g.moveTo(px, py); } g.closePath(); };
+  const iStar = (g, cx, cy, r, on) => { iStarP(g, cx, cy, r); g.lineJoin = "round"; g.lineWidth = Math.max(1.5, r * .24); g.strokeStyle = "#000"; g.stroke(); g.fillStyle = on ? "#fff" : "rgba(255,255,255,.2)"; g.fill(); };
+  const iLab = (g, s, px, py, sz, col, al) => { g.font = fnt(sz, IFONT); g.textAlign = al || "center"; g.lineJoin = "round"; g.lineWidth = sz * .22; g.strokeStyle = "#000"; g.strokeText(s, px, py); g.fillStyle = col || "#fff"; g.fillText(s, px, py); };
+  const iPed = (g, px, py, a, col) => { g.save(); g.translate(px, py); g.rotate(a); g.fillStyle = "rgba(0,0,0,.35)"; g.beginPath(); g.ellipse(1.5, 1.5, 3.4, 7.2, 0, 0, 7); g.fill(); g.fillStyle = col; g.beginPath(); g.ellipse(0, 0, 3.4, 7.2, 0, 0, 7); g.fill(); g.fillStyle = "#e8b98a"; g.beginPath(); g.arc(1, 0, 3.5, 0, 7); g.fill(); g.fillStyle = "#2a1c10"; g.beginPath(); g.arc(.2, 0, 3.6, 1.2, 5.1); g.fill(); g.restore(); };
+  const iRoad = (g, y0, hh, t, sp) => { g.fillStyle = "#4a4868"; g.fillRect(-104, y0, 208, hh); g.fillStyle = "#e3e2ef"; g.fillRect(-104, y0, 208, 2); g.fillRect(-104, y0 + hh - 2, 208, 2); for (let k = -1; k < 8; k++) g.fillRect(-104 + ((k * 32 - t * sp) % 256 + 256) % 256 - 24, y0 + hh / 2 - 1, 16, 2); };
+  const ICOL = ["#d94a4a", "#3b82d9", "#e6c229", "#7a4fd0", "#27ae7a", "#e9edf0", "#ff8a2a", "#d94aa8"];
+  // une petite vitrine animée par scène (repère 208 × 208 centré sur 0)
+  const IVS = [
+    (g, t, now) => {                                                                                  // VOLE DES VOITURES : les modèles arrivent en dérapant
+      g.fillStyle = "#34314f"; g.fillRect(-104, -104, 208, 208);
+      const cs = [["#d94a4a", 0, "BERLINE"], ["#3b82d9", 1, "COUPÉ"], ["#e6c229", 2, "FOURGON"], ["#ff8a2a", 11, "ROADSTER"], ["#7a4fd0", 10, "SUPERCAR"]];
+      cs.forEach(([col, id, nm], k) => {
+        const p = (t - .1 - k * .3) / .5; if (p <= 0) return; const e = ease3(p), y = -80 + k * 40, px = -28 + (1 - e) * 230, an = (1 - e) * (k & 1 ? .55 : -.55);
+        g.fillStyle = "rgba(255,255,255,.07)"; g.fillRect(-104, y - 17, 208, 34);
+        if (e < 1) { g.strokeStyle = "rgba(255,255,255,.5)"; g.lineWidth = 2; g.beginPath(); for (let j = -1; j <= 1; j++) { g.moveTo(px + 34, y + j * 6); g.lineTo(px + 34 + (1 - e) * 90, y + j * 6); } g.stroke(); }
+        iCar(g, px, y, an, col, id, 1.15, 0, now);
+        if (p > .85) iLab(g, nm, 18 + (1 - Math.min(1, (p - .85) * 5)) * 30, y + 5, 15, k === 4 ? "#ffd23f" : "#fff", "left");
+      });
+      if (t > 1.9) { const q = (t * 2.2) % 1; iStarP(g, -2 + 4, -40 + 4 * 40 - 62 + 40, 10 * Math.sin(q * 3.14)); g.fillStyle = "#fff"; g.fill(); }
+    },
+    (g, t, now) => {                                                                                  // GAGNE DU CASH : billets, compteur, piétons écrasés
+      g.fillStyle = "#22304a"; g.fillRect(-104, -104, 208, 208);
+      iRoad(g, 18, 56, t, 160);
+      const per = 1.7, tt = ((t - .2) % per + per) % per, u = t < .2 ? -1 : tt / per, cx = -130 + u * 290, py = 46;
+      [-50, 4, 58].forEach((px, k) => {
+        if (u < 0 || cx < px - 12) iPed(g, px, py + (k - 1) * 6, Math.sin(now / 200 + k) * .5 + 1.57, ["#d94a4a", "#3b82d9", "#e6c229"][k]);
+        else { const ag = (cx - px) / 290 * per; if (ag < .9) { g.fillStyle = "rgba(190,20,20," + (.85 - ag * .7) + ")"; g.beginPath(); g.ellipse(px, py + (k - 1) * 6, 8 + ag * 8, 5 + ag * 5, 0, 0, 7); g.fill(); iLab(g, "+$50", px, py + (k - 1) * 6 - 10 - ag * 34, 15, "#7ae582"); } }
+      });
+      if (u >= 0) iCar(g, cx, py, 0, "#e6c229", 1, 1.25, 0, now);
+      for (let k = 0; k < 16; k++) {                                                                  // pluie de billets
+        const ph = (t * (.55 + (k * 37 % 50) / 100) + k * .173) % 1, bx = -92 + (k * 53 % 184) + Math.sin(t * 3 + k) * 8, by = -110 + ph * 130, r = t * 3 + k, f = Math.abs(Math.cos(r * .7)) * .7 + .3;
+        g.save(); g.translate(bx, by); g.rotate(Math.sin(r) * .6); g.scale(1, f); g.globalAlpha = Math.min(1, ph * 6) * Math.min(1, (1 - ph) * 5); g.fillStyle = "#2f9e4f"; g.fillRect(-9, -5, 18, 10); g.strokeStyle = "#bff0c8"; g.lineWidth = 1; g.strokeRect(-7, -3.2, 14, 6.4); g.fillStyle = "#bff0c8"; g.beginPath(); g.arc(0, 0, 2.2, 0, 7); g.fill(); g.restore();
+      }
+      const v = Math.floor(ease3(t / 2.4) * 12450), bo = 1 + Math.max(0, Math.sin(t * 9)) * .06 * (t < 2.4 ? 1 : 0);
+      g.save(); g.translate(0, -62); g.scale(bo, bo); iLab(g, "$" + String(v).replace(/\B(?=(\d{3})+(?!\d))/g, " "), 0, 10, 34, "#ffd23f"); g.restore();
+    },
+    (g, t, now) => {                                                                                  // FUIS LA POLICE : étoiles, poursuite, hélico
+      g.fillStyle = "#2c2a44"; g.fillRect(-104, -104, 208, 208);
+      iRoad(g, -4, 104, t, 260);
+      const n = Math.max(0, Math.min(5, Math.floor((t - .2) / .5) + 1));
+      if (n >= 3) { g.fillStyle = Math.floor(now / 140) % 2 ? "rgba(255,40,40,.13)" : "rgba(40,90,255,.13)"; g.fillRect(-104, -104, 208, 208); }
+      const sx = Math.sin(t * 3) * 5;
+      for (let k = 0; k < 5; k++) { const on = k < n, r = on ? 9 + 7 * iEaseB((t - .2 - k * .5) / .3) : 9; iStar(g, (k - 2) * 36, -80, r, on); }
+      g.fillStyle = "rgba(220,220,230,.35)"; for (let k = 0; k < 7; k++) { const q = ((t * 1.6 + k / 7) % 1); g.beginPath(); g.arc(18 - q * 70, 46 + Math.sin(k * 2) * 6, 4 + q * 9, 0, 7); g.globalAlpha = (1 - q) * .8; g.fill(); } g.globalAlpha = 1;
+      iCar(g, -50 + Math.sin(t * 2.6) * 10, 22 + Math.sin(t * 4) * 3, Math.sin(t * 3.2) * .08, "#fff", 0, 1.2, 2, now);
+      iCar(g, -62 + Math.sin(t * 2.1 + 1) * 12, 70 + Math.sin(t * 3.7) * 3, Math.sin(t * 2.7) * .08, "#fff", 0, 1.2, 2, now);
+      iCar(g, 34 + sx, 46 + Math.sin(t * 5) * 3, Math.sin(t * 4) * .1, "#7a4fd0", 10, 1.3, 0, now);
+      if (t > 1.7) { const e = ease3((t - 1.7) / .5); iHeli(g, 20 + (1 - e) * 130, -22 + Math.sin(t * 2) * 5, .35, .85, { cop: 1, beam: 1 }, now); }
+    },
+    (g, t, now) => {                                                                                  // ARME-TOI : les armes tombent, tirent, puis le RPG explose
+      g.fillStyle = "#2b2b3a"; g.fillRect(-104, -104, 208, 208);
+      g.strokeStyle = "rgba(255,255,255,.06)"; g.lineWidth = 1; g.beginPath(); for (let k = -104; k <= 104; k += 26) { g.moveTo(k, -104); g.lineTo(k, 104); g.moveTo(-104, k); g.lineTo(104, k); } g.stroke();
+      const W = [[1, "PISTOLET", -50, -52], [2, "MITRAILLETTE", 50, -52], [3, "FUSIL À POMPE", -50, 20], [4, "RPG", 50, 20]];
+      W.forEach(([ty, nm, px, py], k) => {
+        const p = (t - .1 - k * .4) / .4; if (p <= 0) return;
+        g.save(); g.translate(px, py); g.scale(3.1 * iEaseB(p), 3.1 * iEaseB(p)); iWx(() => drawPick({ x: 0, y: 0, t: ty, id: k }, now)); g.restore();
+        iLab(g, nm, px, py + 36, nm.length > 9 ? 10 : 12, "#fff");
+        const q = p - 1.1;
+        if (q > 0 && q < 1 && ty !== 4) { g.fillStyle = "#ffe14d"; for (let j = 0; j < (ty === 2 ? 4 : 1); j++) { const bx = px + 22 + (q * 3 - j * .35) * 90; if (bx > px + 22) g.fillRect(bx, py - 7 + (ty === 3 ? (j - 1) * 3 : 0), 14, 2.4); } if (q < .12) { g.fillStyle = "#fff6c8"; g.beginPath(); g.arc(px + 24, py - 6, 7, 0, 7); g.fill(); } }
+      });
+      const e = t - 2.45;                                                                             // explosion du RPG
+      if (e > 0 && e < 1.1) {
+        const R = 24 + ease3(e / .5) * 52, a = 1 - e / 1.1, cx = 50, cy = 20;
+        g.globalAlpha = a; g.fillStyle = "#ff6a00"; g.beginPath(); g.arc(cx, cy, R, 0, 7); g.fill(); g.fillStyle = "#ffd23f"; g.beginPath(); g.arc(cx, cy, R * .64, 0, 7); g.fill(); g.fillStyle = "#fff6c8"; g.beginPath(); g.arc(cx, cy, R * .3, 0, 7); g.fill();
+        g.strokeStyle = "#ffd23f"; g.lineWidth = 3; g.beginPath(); for (let k = 0; k < 12; k++) { const an = k * .5236 + .2, r0 = R * .8, r1 = R * (1.1 + e); g.moveTo(cx + Math.cos(an) * r0, cy + Math.sin(an) * r0); g.lineTo(cx + Math.cos(an) * r1, cy + Math.sin(an) * r1); } g.stroke(); g.globalAlpha = 1;
+        if (e < .1) { g.fillStyle = "rgba(255,255,255," + (.7 * (1 - e / .1)) + ")"; g.fillRect(-104, -104, 208, 208); }
+      }
+    },
+    (g, t, now) => {                                                                                  // FAIS-TOI UNE VIE : maison, garage, prison, hélico
+      g.fillStyle = "#3f6e3b"; g.fillRect(-104, -104, 208, 208);
+      iRoad(g, 56, 36, t, 120);
+      g.fillStyle = "rgba(0,0,0,.3)"; g.fillRect(-90, -88, 80, 56); g.fillStyle = "#a33b3b"; g.fillRect(-94, -92, 80, 56); g.fillStyle = "#c25353"; g.fillRect(-94, -92, 80, 28); g.fillStyle = "#5e2424"; g.fillRect(-94, -64, 80, 3); g.fillStyle = "#7d7d86"; g.fillRect(-80, -86, 10, 12);   // maison
+      g.fillStyle = "rgba(255,210,63," + (.55 + Math.sin(now / 200) * .25) + ")"; g.fillRect(-64, -34, 22, 9); iLab(g, "MAISON", -54, -42, 10, "#fff");
+      g.fillStyle = "#1c1c24"; g.fillRect(-94, -10, 82, 56);                                           // garage : sol sombre, la voiture entre, le toit la cache
+      const per = 2.8, u = (t % per) / per, gx = 150 - ease3(Math.min(1, u * 1.4)) * 220;
+      if (u < .8) iCar(g, gx, 22, Math.PI, "#3b82d9", 1, 1.15, 0, now);
+      g.fillStyle = "#7d7d86"; g.fillRect(-94, -10, 62, 56); g.fillStyle = "#9a9aa5"; g.fillRect(-94, -10, 62, 6); g.fillStyle = "#55555d"; g.fillRect(-94, 40, 62, 6);
+      iLab(g, "GARAGE", -63, 18, 11, "#fff");
+      g.fillStyle = "#6f7480"; g.fillRect(26, -92, 66, 80); g.fillStyle = "#8d93a0"; g.fillRect(26, -92, 66, 8);   // prison
+      g.fillStyle = "#14141a"; for (let k = 0; k < 5; k++) g.fillRect(34 + k * 12, -78, 4, 36);
+      g.fillStyle = "#2a2a32"; g.fillRect(52, -30, 18, 14); iLab(g, "PRISON", 59, -2, 10, "#fff");
+      const sa = Math.sin(t * 1.6) * .7 + .8; g.fillStyle = "rgba(255,255,200,.16)"; g.beginPath(); g.moveTo(59, -23); g.lineTo(59 + Math.cos(sa) * 70, -23 + Math.sin(sa) * 70); g.lineTo(59 + Math.cos(sa + .35) * 70, -23 + Math.sin(sa + .35) * 70); g.closePath(); g.fill();
+      iHeli(g, 8 + Math.sin(t * 1.3) * 22, -8 + Math.cos(t * 1.7) * 10, Math.sin(t * 1.3 + 1.5) * .35, .62, {}, now);
+    },
+    (g, t, now) => {                                                                                  // JOUE À PLUSIEURS : la ville pleine de joueurs et le classement
+      g.fillStyle = "#2a2f4a"; g.fillRect(-104, -104, 208, 208);
+      const LN = [-48, -12, 24];
+      LN.forEach((ly, j) => { iRoad(g, ly - 14, 28, t, j & 1 ? -120 : 120); });
+      LN.forEach((ly, j) => { for (let k = 0; k < 3; k++) { const dir = j & 1 ? -1 : 1, sp = 46 + j * 22, px = ((t * sp * dir + k * 100 + j * 37) % 300 + 300) % 300 - 150; iCar(g, px, ly, dir > 0 ? 0 : Math.PI, ICOL[(j * 3 + k) % 8], (j * 3 + k * 4) % 12, .8, 0, now); iLab(g, "J" + (j * 3 + k + 1), px, ly - 11, 8, "#fff"); } });
+      const pu = 1 + Math.sin(t * 6) * .04; g.save(); g.translate(0, -80); g.scale(pu, pu); iLab(g, "24 JOUEURS", 0, 8, 24, "#ffd23f"); g.restore();
+      [["#ffd23f", 150, "1"], ["#cfd4dc", 118, "2"], ["#d08a48", 92, "3"]].forEach(([col, wd, nb], k) => {
+        const p = ease3((t - .3 - k * .3) / .5), ry = 50 + k * 17; if (p <= 0) return;
+        g.fillStyle = "rgba(0,0,0,.4)"; g.fillRect(-96, ry, 192, 14); g.fillStyle = col; g.fillRect(-82, ry + 2, wd * p, 10); iLab(g, nb, -89, ry + 12, 12, col);
+      });
+    }
+  ];
   function introDraw(now) {
     if (!introOpen) return;
     iRaf = requestAnimationFrame(introDraw);
@@ -2700,7 +2807,7 @@ function frame(now) {
     if (!w || !h) return;
     if (iCv.width !== Math.round(w * d) || iCv.height !== Math.round(h * d)) { iCv.width = Math.round(w * d); iCv.height = Math.round(h * d); }
     const g = iX; g.setTransform(d, 0, 0, d, 0, 0); g.globalAlpha = 1; g.textAlign = "left"; g.textBaseline = "alphabetic"; g.lineJoin = "round";
-    const t = Math.max(0, (now - iT0) / 1000), fin = t >= F0, ft = t - F0, off = t * (fin ? 70 : 150);
+    const t = Math.max(0, (now - iT0) / 1000), fin = t >= F0, ft = t - F0, off = fin ? t * 70 : t * 150 + t * t * 6;
     // décor : la ville vue du dessus (trottoir, immeubles à gauche, route violette avec des voitures)
     g.fillStyle = "#bfb583"; g.fillRect(0, 0, w, h);
     g.strokeStyle = "rgba(60,50,20,.18)"; g.lineWidth = 1; g.beginPath();
@@ -2712,22 +2819,42 @@ function frame(now) {
     const rw = Math.min(w * .3, 220), rx = Math.min(w * .74 - rw / 2, w - rw - 8);
     g.fillStyle = "#5a5878"; g.fillRect(rx, 0, rw, h); g.fillStyle = "#e3e2ef"; g.fillRect(rx, 0, 4, h); g.fillRect(rx + rw - 4, 0, 4, h);
     for (let y = -(off % 56); y < h; y += 56) g.fillRect(rx + rw / 2 - 2, y, 4, 28);
-    for (const [col, lane, o] of ICARS) {
-      const sp = lane ? 140 : 190, p = (t * sp + o * 3) % (h + 160), y = lane ? h + 80 - p : p - 80, x = rx + rw * (lane ? .73 : .27);
-      g.save(); g.translate(x, y); if (lane) g.rotate(Math.PI);
-      g.fillStyle = "rgba(0,0,0,.3)"; g.fillRect(-12, -22, 28, 52); g.fillStyle = col; g.fillRect(-13, -25, 26, 50); g.fillStyle = "rgba(0,0,0,.28)"; g.fillRect(-10, -12, 20, 20); g.fillStyle = "#9fd2ee"; g.fillRect(-10, 4, 20, 9); g.restore();
+    for (let k = 0; k < 7; k++) {                                                                    // circulation (les vraies voitures du jeu)
+      const lane = k & 1, sp = (lane ? 150 : 210) * (fin ? .5 : 1), p = (t * sp + k * 230) % (h + 200), y = lane ? h + 100 - p : p - 100;
+      iCar(g, rx + rw * (lane ? .73 : .27), y, lane ? -Math.PI / 2 : Math.PI / 2, ICOL[k], [0, 1, 2, 10, 11, 0, 1][k], 1.05, 0, now);
     }
-    g.fillStyle = "rgba(12,9,32," + (fin ? .74 : .5) + ")"; g.fillRect(0, 0, w, h);
+    g.fillStyle = "rgba(12,9,32," + (fin ? .74 : .6) + ")"; g.fillRect(0, 0, w, h);
     if (!fin) {
-      const i = Math.min(IS.length - 1, Math.floor(t / SL)), lt = t - i * SL, sc = IS[i], inn = ease3(lt / .45);
-      const a = Math.min(inn, lt > SL - .4 ? Math.max(0, (SL - lt) / .4) : 1), x0 = w * .07 - (1 - inn) * 70, fs = fitPx(g, sc.h, Math.min(w * .08, h * .13, 62), IFONT, w * .86 - (x0 - w * .07));
-      g.globalAlpha = a;
-      const es = Math.round(Math.min(h * .2, 120) * (1 + Math.sin(lt * 5) * .05)); g.font = es + "px sans-serif"; g.fillStyle = "#fff"; g.fillText(sc.e, x0, h * .3);
-      const ty = h * .46; g.font = fnt(fs, IFONT); g.lineWidth = fs * .16; g.strokeStyle = "#000"; g.strokeText(sc.h, x0, ty);
-      const gr = g.createLinearGradient(0, ty - fs, 0, ty); gr.addColorStop(0, "#fff27a"); gr.addColorStop(1, "#ff9a00"); g.fillStyle = gr; g.fillText(sc.h, x0, ty);
-      sc.s.forEach((line, k) => { const sf = fitPx(g, line, Math.min(w * .034, 26), "'DM Sans',sans-serif", w * .86 - (x0 - w * .07)), yy = ty + fs * .25 + (k + 1) * sf * 1.55; g.font = fnt(sf, "'DM Sans',sans-serif"); g.lineWidth = 4; g.strokeStyle = "#000"; g.strokeText(line, x0, yy); g.fillStyle = "#fff"; g.fillText(line, x0, yy); });
+      const i = Math.min(IS.length - 1, Math.floor(t / SL)), lt = t - i * SL, sc = IS[i], wide = w >= h * 1.15;
+      const kick = Math.max(0, 1 - lt / .35), shk = kick * 7, outA = lt > SL - .3 ? Math.max(0, (SL - lt) / .3) : 1;
+      g.save(); g.translate((Math.random() - .5) * shk, (Math.random() - .5) * shk); g.translate(w / 2, h / 2); g.scale(1 + kick * .035, 1 + kick * .035); g.translate(-w / 2, -h / 2);
+      g.strokeStyle = "rgba(255,255,255,.2)"; g.lineWidth = 2; g.lineCap = "round"; g.beginPath();   // lignes de vitesse
+      for (let k = 0; k < 12; k++) { const yy = (k * 97.3 + i * 31) % h, xx = w + 120 - ((t * (800 + i * 170) + k * 233) % (w + 300)); g.moveTo(xx, yy); g.lineTo(xx + 70 + (k % 3) * 40, yy); }
+      g.stroke(); g.lineCap = "butt";
+      const tx = w * .06, textW = wide ? w * .5 : w * .88, ty = wide ? h * .4 : h * .2;
+      const pIn = lt / .38, slam = iEaseB(pIn), fs = fitPx(g, sc.h, Math.min(w * .085, h * .14, 66), IFONT, textW);
+      g.globalAlpha = Math.min(1, pIn * 3) * outA;
+      iLab(g, "0" + (i + 1) + " / 0" + IS.length, tx, ty - fs - 8, Math.max(13, fs * .3), "#ffd23f", "left");
+      g.save(); g.translate(tx, ty); g.rotate((1 - slam) * -.07); g.scale(2 - slam, 2 - slam); g.font = fnt(fs, IFONT); g.lineJoin = "round";
+      g.lineWidth = fs * .16; g.strokeStyle = "#000"; g.strokeText(sc.h, 0, 0); const gr = g.createLinearGradient(0, -fs, 0, 0); gr.addColorStop(0, "#fff27a"); gr.addColorStop(1, "#ff9a00"); g.fillStyle = gr; g.fillText(sc.h, 0, 0); g.restore();
+      g.fillStyle = "#ffd23f"; g.fillRect(tx, ty + fs * .14, textW * .55 * ease3((lt - .2) / .45), 5);
+      sc.s.forEach((line, k) => {
+        const e = ease3((lt - .35 - k * .2) / .35), sf = fitPx(g, line, Math.min(w * .04, 23), "'DM Sans',sans-serif", textW - 24), yy = ty + fs * .14 + 26 + (k + 1) * sf * 1.8;
+        if (e <= 0) return; g.font = fnt(sf, "'DM Sans',sans-serif"); const lw = g.measureText(line).width;
+        g.globalAlpha = e * outA; g.fillStyle = "rgba(0,0,0,.5)"; g.fillRect(tx - 8 + (1 - e) * 140, yy - sf * 1.1, lw + 16, sf * 1.55);
+        g.fillStyle = "#ffd23f"; g.fillRect(tx - 8 + (1 - e) * 140, yy - sf * 1.1, 4, sf * 1.55); g.fillStyle = "#fff"; g.fillText(line, tx + 6 + (1 - e) * 140, yy);
+      });
       g.globalAlpha = 1;
-      for (let k = 0; k < IS.length; k++) { g.fillStyle = k === i ? "#ffd23f" : "rgba(255,255,255,.35)"; g.beginPath(); g.arc(w / 2 + (k - 2.5) * 18, h - 26, 4, 0, 6.283); g.fill(); }
+      const vs = (wide ? Math.min(w * .4, h * .82) : Math.min(w * .8, h * .42)) / 212, vcx = wide ? w * .73 : w / 2, vcy = wide ? h * .5 : h * .68, vin = iEaseB((lt - .12) / .45);
+      if (vin > .02) {
+        g.save(); g.globalAlpha = outA; g.translate(vcx, vcy); g.rotate((1 - Math.min(1, vin)) * .14); g.scale(vs * vin, vs * vin);
+        iPnl(g, -104, -104, 208, 208, 14); g.fillStyle = "#0c0920"; g.fill(); g.save(); g.clip(); IVS[i](g, lt, now); g.restore();
+        iPnl(g, -104, -104, 208, 208, 14); g.lineWidth = 4; g.strokeStyle = "#ffd23f"; g.stroke(); g.restore();
+      }
+      g.restore();
+      if (lt < .32) { const q = lt / .32, xa = -w * .3 + q * w * 1.7; g.fillStyle = "#ffd23f"; g.beginPath(); g.moveTo(xa, 0); g.lineTo(xa + w * .3, 0); g.lineTo(xa + w * .3 - h * .35, h); g.lineTo(xa - h * .35, h); g.closePath(); g.fill(); }
+      const pw = Math.min(w * .5, 260), px0 = w / 2 - pw / 2;                                        // barre de progression (6 scènes)
+      for (let k = 0; k < IS.length; k++) { g.fillStyle = "rgba(255,255,255,.25)"; g.fillRect(px0 + k * pw / IS.length + 2, h - 24, pw / IS.length - 4, 5); g.fillStyle = "#ffd23f"; g.fillRect(px0 + k * pw / IS.length + 2, h - 24, (pw / IS.length - 4) * (k < i ? 1 : k === i ? lt / SL : 0), 5); }
     } else {
       // le logo « SMALL THEFT AUTO » (flammes + étoiles)
       const L = ["SMALL", "THEFT", "AUTO"], OFF = [0, .55, .12];
@@ -2748,8 +2875,8 @@ function frame(now) {
         flameShape(g, fx, yy, len * .32, hh * .3, wob * .4); g.fillStyle = "#fff6c8"; g.fill();
       }
       line(1); line(2);
-      const sf = fs * .34, pul = 1 + Math.sin(ft * 6) * .06; g.font = fnt(sf, "sans-serif"); g.lineWidth = sf * .14; g.strokeStyle = "#000"; const sw = g.measureText("★★★").width;
-      const star = (x, y) => { g.save(); g.translate(x + sw / 2, y); g.scale(pul, pul); g.strokeText("★★★", -sw / 2, 0); g.fillStyle = "#fff"; g.fillText("★★★", -sw / 2, 0); g.restore(); };
+      const sf = fs * .34, pul = 1 + Math.sin(ft * 6) * .06, sw = sf * 2.7;
+      const star = (x, y) => { g.save(); g.translate(x + sw / 2, y); g.scale(pul, pul); for (let k = -1; k <= 1; k++) iStar(g, k * sf * .92, -sf * .3, sf * .44, true); g.restore(); };
       star(bx + (ws[0] + OFF[0]) * fs + fs * .12, by(0) - fs * .66); star(bx + OFF[2] * fs - sw - fs * .1, by(2) - fs * .5);
       g.restore();
       const ta = Math.min(1, Math.max(0, (ft - .8) / .5)), ty2 = h * .45 + fs * 1.95;
@@ -2757,13 +2884,13 @@ function frame(now) {
       if (ft < .5) { g.fillStyle = "rgba(255,255,255," + (.85 * (1 - ft / .5)) + ")"; g.fillRect(0, 0, w, h); }
     }
     const mode = fin && ft > 1.4 ? "go" : "skip";
-    if (mode !== iMode) { iMode = mode; iBtn.className = mode === "go" ? "go" : ""; iBtn.textContent = mode === "go" ? "▶ JOUER !" : "Passer ▶"; }
+    if (mode !== iMode) { iMode = mode; iBtn.className = mode === "go" ? "go" : ""; iBtn.textContent = mode === "go" ? "JOUER !" : "PASSER"; }
   }
   function introEnd(mark) {
     if (iRaf) cancelAnimationFrame(iRaf); iRaf = 0;
     if (iMus) { iMus.stop(); iMus = null; }
     if (im) { im.remove(); im = null; } iCv = iX = iBtn = null;
-    const was = introOpen; introOpen = false;
+    const was = introOpen; introOpen = false; document.body.classList.remove("staIntroOn");
     keys.clear(); stick = null; fireKey = false; fireId = null; hornKey = false; hornId = null; brakeId = null;
     if (mark) { try { localStorage.setItem(INTRO_KEY, "1"); } catch { } }
     if (was && active && staHasNews()) setTimeout(() => { if (active && !introOpen) newsShow(); }, 300);   // puis les nouveautés, si tu ne les as pas vues
@@ -2772,7 +2899,7 @@ function frame(now) {
     if (introOpen || !active) return;
     newsClose(false);
     try { document.fonts && document.fonts.load("700 40px \"Pricedown Bl\""); } catch { }
-    introOpen = true; keys.clear(); stick = null; fireKey = false; fireId = null; hornKey = false; hornId = null; brakeId = null; iMode = "";
+    introOpen = true; document.body.classList.add("staIntroOn"); keys.clear(); stick = null; fireKey = false; fireId = null; hornKey = false; hornId = null; brakeId = null; iMode = "";
     im = mkEl("div"); im.id = "staIntro"; im.setAttribute("role", "dialog"); im.setAttribute("aria-label", "Bienvenue dans STA I");
     iCv = mkEl("canvas"); iX = iCv.getContext("2d"); iBtn = mkEl("button"); iBtn.type = "button"; iBtn.onclick = () => introEnd(true);
     im.appendChild(iCv); im.appendChild(iBtn);

@@ -2269,8 +2269,8 @@ function frame(now) {
   raf = requestAnimationFrame(frame);
   const dt = Math.min(.05, (now - (tPrev || now)) / 1000); tPrev = now; tNow = now;
   const k = 1 - Math.exp(-13 * dt);
-  for (const d of dPeds.values()) { d.x += (d.tx - d.x) * k; d.y += (d.ty - d.y) * k; d.a = angLerp(d.a, d.ta, k); }
-  for (const d of dCops.values()) { d.x += (d.tx - d.x) * k; d.y += (d.ty - d.y) * k; d.a = angLerp(d.a, d.ta, k); }
+  for (const d of dPeds.values()) { if (Math.abs(d.tx - d.x) + Math.abs(d.ty - d.y) > 70) { d.x = d.tx; d.y = d.ty; d.a = d.ta; } else { d.x += (d.tx - d.x) * k; d.y += (d.ty - d.y) * k; d.a = angLerp(d.a, d.ta, k); } }   // un PNJ recyclé (déplacé loin par l'hôte) apparaît d'un coup à sa nouvelle place au lieu de « glisser » à travers l'écran
+  for (const d of dCops.values()) { if (Math.abs(d.tx - d.x) + Math.abs(d.ty - d.y) > 120) { d.x = d.tx; d.y = d.ty; d.a = d.ta; } else { d.x += (d.tx - d.x) * k; d.y += (d.ty - d.y) * k; d.a = angLerp(d.a, d.ta, k); } }
   for (const d of dHelis.values()) { if (Math.abs(d.tx - d.x) + Math.abs(d.ty - d.y) > 300) { d.x = d.tx; d.y = d.ty; } else { d.x += (d.tx - d.x) * k; d.y += (d.ty - d.y) * k; } d.a = angLerp(d.a, d.ta, k); }
   for (const d of dCars.values()) { if (Math.abs(d.tx - d.x) + Math.abs(d.ty - d.y) > 250) { d.x = d.tx; d.y = d.ty; } else { d.x += (d.tx - d.x) * k; d.y += (d.ty - d.y) * k; } d.a = angLerp(d.a, d.ta, k); }
   const lp = lobbyP();

@@ -97,7 +97,7 @@ function push(p, r) {
   return hit;
 }
 const C4_MAX = 4, C4_PRICE = 350, C4_R = 84, C4_CAR = 75, C4_PVP = 70, C4_SELF = 90, C4_LIFE = 150000;   // C4 : charges max (portées ET posées) · prix · rayon du souffle (px) · dégâts voitures / joueurs & flics / sur soi · durée de vie d'une charge posée (ms)
-const parseP = s => { const a = String(s).split(","); return { x: +a[0] || 0, y: +a[1] || 0, a: +a[2] || 0, vid: +a[3] || 0, wl: +a[4] || 0, cash: +a[5] || 0, hp: +a[6] || 0, v: +a[7] || 0, hs: +a[8] || 0, hid: +a[9] || 0, dm: +a[10] || 0, wpn: +a[11] || 0, fc: +a[12] || 0, fw: +a[13] || 0, cs: +a[14] || 0, cid: +a[15] || 0, ca: +a[16] || 0, gn: +a[17] || 0, go: +a[18] || 0, gi: +a[19] || 0, gm: +a[20] || 0, hn: +a[21] || 0, pgx: +a[22] || 0, pgy: +a[23] || 0, pga: +a[24] || 0, ib: +a[25] || 0, hz: +a[26] || 0, jl: +a[27] || 0, fu: a[28] || "", c4: a[29] || "", bd: +a[30] || 0, bp: a[31] || "" }; };
+const parseP = s => { const a = String(s).split(","); return { x: +a[0] || 0, y: +a[1] || 0, a: +a[2] || 0, vid: +a[3] || 0, wl: +a[4] || 0, cash: +a[5] || 0, hp: +a[6] || 0, v: +a[7] || 0, hs: +a[8] || 0, hid: +a[9] || 0, dm: +a[10] || 0, wpn: +a[11] || 0, fc: +a[12] || 0, fw: +a[13] || 0, cs: +a[14] || 0, cid: +a[15] || 0, ca: +a[16] || 0, gn: +a[17] || 0, go: +a[18] || 0, gi: +a[19] || 0, gm: +a[20] || 0, hn: +a[21] || 0, pgx: +a[22] || 0, pgy: +a[23] || 0, pga: +a[24] || 0, ib: +a[25] || 0, hz: +a[26] || 0, jl: +a[27] || 0, fu: a[28] || "", c4: a[29] || "", bd: +a[30] || 0, bp: a[31] || "", rd: a[32] || "" }; };
 
 // ===== QUOI DE NEUF (STA I) =====
 // À CHAQUE MISE À JOUR DE STA I : ajoute une entrée EN HAUT de la liste, avec un numéro « v » plus grand que le précédent.
@@ -171,7 +171,7 @@ export function createStaClient(env) {
   // --- simulation de l'hôte ---
   let cops = [], helis = [], heliCd = 0, hostOn = false, peds = [], cars = [], nid = 1, evs = [], evId = 0, lastHs = {}, spawnCd = 0, streamCd = 0, pubAt = 0, hostT = 0, cleanCd = 0, lastGn = {};
   // --- moi ---
-  const me = { x: 0, y: 0, a: 0, v: 0, vid: 0, hp: 100, cash: 0, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, msg: "", hurt: 0, bust: 0, carT: 99, wpn: 0, ammo: [0, 0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100, rpgParts: [], rpgQuest: 0, ammoQuest: 0, rpgAmmoUnlocked: 0, arm: 0 };
+  const me = { x: 0, y: 0, a: 0, v: 0, vid: 0, hp: 100, cash: 0, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, msg: "", hurt: 0, bust: 0, carT: 99, wpn: 0, ammo: [0, 0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100, rpgParts: [], rpgQuest: 0, ammoQuest: 0, rpgAmmoUnlocked: 0, arm: 0, rd: "", rdv: 0 };
   // --- gilets pare-balles : un seul gilet porté (me.arm = 0 aucun · 1 · 2 · 3), il réduit TOUS les dégâts reçus (balles, explosions, chocs). Perdu à la mort comme les armes.
   const VEST = [{ n: "GILET −10%", r: .10, p: 250 }, { n: "GILET −25%", r: .25, p: 600 }, { n: "GILET −50%", r: .50, p: 1200 }];
   const armK = () => 1 - (me.arm ? VEST[me.arm - 1].r : 0);
@@ -459,8 +459,8 @@ export function createStaClient(env) {
 
   // ================= MOI =================
   const col = i => CCOL[(i | 0) % 8];
-  function spawnAt(p) { me.hz = 0; me.land = 0; me.x = p[0] + rr(-30, 30); me.y = p[1]; me.vid = 0; me.v = 0; me.hp = 100; me.dead = 0; me.heat = 0; me.bust = 0; job = null; cam.x = me.x; cam.y = me.y; }
-  function die(why, loss, where) { pwFail("tu es tombé"); me.hz = 0; me.land = 0; shop = ""; if (mis) missionFail("tu es tombé"); me.dead = 2.2; me.msg = why; me.wpn = 0; me.arm = 0; me.c4 = 0; me.ammo = [0, 0, 0, 0, 0]; me.vid = 0; me.v = 0; me.heat = 0; me.cash = Math.floor(me.cash * (1 - loss)); me.where = where; SND.wasted(); }
+  function spawnAt(p) { me.hz = 0; me.land = 0; me.x = p[0] + rr(-30, 30); me.y = p[1]; me.vid = 0; me.rd = ""; me.rdv = 0; me.v = 0; me.hp = 100; me.dead = 0; me.heat = 0; me.bust = 0; job = null; cam.x = me.x; cam.y = me.y; }
+  function die(why, loss, where) { pwFail("tu es tombé"); me.hz = 0; me.land = 0; shop = ""; if (mis) missionFail("tu es tombé"); me.dead = 2.2; me.msg = why; me.wpn = 0; me.arm = 0; me.c4 = 0; me.ammo = [0, 0, 0, 0, 0]; me.vid = 0; me.rd = ""; me.rdv = 0; me.v = 0; me.heat = 0; me.cash = Math.floor(me.cash * (1 - loss)); me.where = where; SND.wasted(); }
   const gStr = () => JSON.stringify({ g: me.g, c: me.gcar, g2: me.g2 ? 1 : 0, c2: me.gcar2, a: me.ammo.slice(1), w: me.wpn, h: me.hu ? 1 : 0, hh: Math.round(clamp(me.hh, 0, 100)), c4: me.c4 | 0, rp: me.rpgParts, rq: me.rpgQuest, aq: me.ammoQuest, rau: me.rpgAmmoUnlocked, ar: me.arm | 0, ho: me.hou | 0, hq: me.hsp, hb: me.hb.map(b => [Math.round(b.c), b.a[0], b.a[1], b.a[2], b.a[3], b.v]) });
   function persist(force) {
     if (dupe) return Promise.resolve();                                               // argent (users/<uid>/sta) + garage, voiture rangée, armes et munitions (users/<uid>/sta2) ; renvoie une promesse (résolue quand Firebase a tout reçu)
@@ -582,10 +582,35 @@ export function createStaClient(env) {
       x.globalAlpha = 1;
     }
   }
+  // ===== PASSAGER : chaque voiture a 2 places (conducteur + 1 passager). Le passager ne fait rien : il suit la voiture du conducteur (fantôme compris).
+  function nearRide(maxD) {
+    let rb = "", rbd = maxD;
+    const ap = activeP();
+    for (const [u, p] of ap) {
+      if (u === myUid || !p.vid || p.vid === HELI || p.ib) continue;
+      const d = dP.get(u); if (!d || !d.vid) continue;
+      if (ap.some(([, o]) => o.rd === u)) continue;                       // place passager déjà prise
+      const dd = Math.hypot(d.x - me.x, d.y - me.y); if (dd < rbd) { rbd = dd; rb = u; }
+    }
+    return rb;
+  }
+  function rideLeave() {
+    const d = dP.get(me.rd) || pd[me.rd] || { x: me.x, y: me.y, a: me.a };
+    me.rd = ""; me.rdv = 0; me.v = 0; me.x = d.x; me.y = d.y;
+    for (const sg of [1, -1]) { const t = { x: d.x + Math.cos(d.a + sg * 1.5708) * 30, y: d.y + Math.sin(d.a + sg * 1.5708) * 30 }, q = { x: t.x, y: t.y }; if (!push(q, 8)) { me.x = t.x; me.y = t.y; break; } }
+    SND.door();
+  }
+  function rideStep() {
+    const p = pd[me.rd], d = dP.get(me.rd);
+    if (!p || !d || !lobbyP()[me.rd] || !p.vid || p.vid === HELI || p.vid !== me.rdv || p.ib) { rideLeave(); return; }   // le conducteur est descendu / a changé de véhicule
+    me.x = d.x; me.y = d.y; me.a = d.a; me.v = d.v;
+    me.hp = 100; me.hurt = 0; me.bust = 0;                                // le passager est à l'abri
+  }
   function useKey() {
     if (me.dead > 0) return;
     if (shop) { shop = ""; return; }
     if (inn) { innUse(); return; }
+    if (me.rd) { rideLeave(); return; }
     if (me.vid === HELI) { heliLand(); return; }
     if (!me.vid) {
       if (nearBM()) { shop = "bm"; beep(660, .06, "triangle", .05); return; }
@@ -604,6 +629,8 @@ export function createStaClient(env) {
     }
     let best = 0, bd = 48, bc = null;
     for (const [id, d] of dCars) if ((d.m === "d" || d.m === "p") && Math.hypot(d.x - me.x, d.y - me.y) < bd) { bd = Math.hypot(d.x - me.x, d.y - me.y); best = id; bc = d; }
+    const rb = nearRide(bd);                                                // un joueur conduit tout près (et plus près qu'une voiture PNJ) : on monte à côté
+    if (rb) { const d = dP.get(rb); me.rd = rb; me.rdv = pd[rb].vid; me.x = d.x; me.y = d.y; me.a = d.a; me.v = d.v; job = null; SND.door(); floats.push({ x: me.x, y: me.y - 22, t: tNow, s: "👥 PASSAGER", c: "#9ad8ff" }); return; }
     if (!best) return;
     SND.door(); SND.ignition(); me.vid = best; me.x = bc.x; me.y = bc.y; me.a = bc.a; me.v = bc.m === "d" ? bc.v : 0; myCol = bc.c; me.carT = 0; me.dm = dmx(bc.dm | 0, wear(best));
     me.cop = bc.cp | 0; if (bc.cp) { me.heat += 1.2; floats.push({ x: me.x, y: me.y - 20, t: tNow, s: "🚓 Voiture de police volée !", c: "#ffd23f" }); }
@@ -1711,7 +1738,7 @@ export function createStaClient(env) {
     if (me.vid && job && Math.hypot(job.x - me.x, job.y - me.y) < 60) { const r = 200 + Math.round(job.d / 6); me.cash += r; floats.push({ x: me.x, y: me.y - 20, t: tNow, s: `+$${r} livraison !`, c: "#ffd23f" }); beep(660, .12, "triangle", .06); newJob(); }
   }
   function sendP(now) {
-    const s = `${Math.round(me.x)},${Math.round(me.y)},${me.a.toFixed(2)},${me.vid},${me.wl},${Math.round(me.cash)},${Math.round(me.hp)},${Math.round(Math.abs(me.v))},${me.hs},${me.hid},${me.vid ? me.dm : 0},${me.wpn},${me.fc},${me.fw},${me.cs},${me.cid},${me.ca},${me.gn},${me.go},${me.gi},${me.gm},${me.hn | 0},${me.pg ? Math.round(me.pg.x) : 0},${me.pg ? Math.round(me.pg.y) : 0},${me.pg ? me.pg.a.toFixed(2) : 0},${inn ? 1 : 0},${me.vid === HELI ? me.hz.toFixed(2) : 0},${inn && jail ? Math.max(1, Math.ceil(jail.t)) : 0},${me.fuT > now ? me.fu : ""},${c4s.map(q => `${Math.round(q.x)}:${Math.round(q.y)}`).join(";")},${c4d},${c4p}`;
+    const s = `${Math.round(me.x)},${Math.round(me.y)},${me.a.toFixed(2)},${me.vid},${me.wl},${Math.round(me.cash)},${Math.round(me.hp)},${Math.round(Math.abs(me.v))},${me.hs},${me.hid},${me.vid ? me.dm : 0},${me.wpn},${me.fc},${me.fw},${me.cs},${me.cid},${me.ca},${me.gn},${me.go},${me.gi},${me.gm},${me.hn | 0},${me.pg ? Math.round(me.pg.x) : 0},${me.pg ? Math.round(me.pg.y) : 0},${me.pg ? me.pg.a.toFixed(2) : 0},${inn ? 1 : 0},${me.vid === HELI ? me.hz.toFixed(2) : 0},${inn && jail ? Math.max(1, Math.ceil(jail.t)) : 0},${me.fuT > now ? me.fu : ""},${c4s.map(q => `${Math.round(q.x)}:${Math.round(q.y)}`).join(";")},${c4d},${c4p},${me.rd || ""}`;
     if ((s === sentStr && now - sentAt < 700) || now - sentAt < 110) return;
     sentStr = s; sentAt = now; if (!dupe) set(RF(`games/${c}/p/${myUid}`), s).catch(() => { });
     if (now - saveAt > 8000) { saveAt = now; persist(false); }
@@ -2284,22 +2311,23 @@ function frame(now) {
   for (const d of dHelis.values()) { if (Math.abs(d.tx - d.x) + Math.abs(d.ty - d.y) > 300) { d.x = d.tx; d.y = d.ty; } else { d.x += (d.tx - d.x) * k; d.y += (d.ty - d.y) * k; } d.a = angLerp(d.a, d.ta, k); }
   for (const d of dCars.values()) { if (Math.abs(d.tx - d.x) + Math.abs(d.ty - d.y) > 250) { d.x = d.tx; d.y = d.ty; } else { d.x += (d.tx - d.x) * k; d.y += (d.ty - d.y) * k; } d.a = angLerp(d.a, d.ta, k); }
   const lp = lobbyP();
-  for (const [u, p] of activeP()) { if (u === myUid) continue; let d = dP.get(u); if (!d) dP.set(u, d = { x: p.x, y: p.y, a: p.a }); if (Math.abs(p.x - d.x) + Math.abs(p.y - d.y) > 300) { d.x = p.x; d.y = p.y; } else { d.x += (p.x - d.x) * k; d.y += (p.y - d.y) * k; } d.a = angLerp(d.a, p.a, k); d.vid = p.vid; d.cash = p.cash; d.wl = p.wl; d.v = p.v; d.dm = p.dm; d.wpn = p.wpn; d.hn = p.hn; d.ib = p.ib; d.hz = p.hz; }
+  for (const [u, p] of activeP()) { if (u === myUid) continue; let d = dP.get(u); if (!d) dP.set(u, d = { x: p.x, y: p.y, a: p.a }); if (Math.abs(p.x - d.x) + Math.abs(p.y - d.y) > 300) { d.x = p.x; d.y = p.y; } else { d.x += (p.x - d.x) * k; d.y += (p.y - d.y) * k; } d.a = angLerp(d.a, p.a, k); d.vid = p.vid; d.cash = p.cash; d.wl = p.wl; d.v = p.v; d.dm = p.dm; d.wpn = p.wpn; d.hn = p.hn; d.rd = p.rd; d.ib = p.ib; d.hz = p.hz; }
   for (const u of dP.keys()) if (!lp[u]) dP.delete(u);
   if (me.dead > 0) { me.dead -= dt; if (me.dead <= 0) { if (me.where === "police") startJail(); else if (me.hsp >= 0 && owns(me.hsp)) spawnAtHouse(me.hsp); else spawnAt(SPAWN[me.where || "hosp"]); } }
-  else { if (useReq) { useReq = 0; useKey(); } if (inn) { innControl(dt); missions(dt); } else { control(dt); interact(dt); weapons(dt, now); missions(dt); } }
+  else { if (useReq) { useReq = 0; useKey(); } if (me.rd) rideStep(); else if (inn) { innControl(dt); missions(dt); } else { control(dt); interact(dt); weapons(dt, now); missions(dt); } }
   stepRockets(dt, now); c4Step();                                                  // les roquettes volent même si je suis mort ou dans un bâtiment
   useReq = 0; if (me.vid) me.carT += dt;
   sendP(now); sndFrame(now);
   if (inn) { frameInside(now); return; }
   // caméra (zoom fixe par paliers : l'image pixelisée reste nette)
-  const spd = me.vid ? Math.abs(me.v) : 0, tz = me.vid ? 1.1 - Math.min(.2, spd / 230 * .2) : 1.45;
+  const rv = me.vid || me.rd, spd = rv ? Math.abs(me.v) : 0, tz = rv ? 1.1 - Math.min(.2, spd / 230 * .2) : 1.45;
   cam.z += (tz - cam.z) * Math.min(1, 3 * dt);
-  cam.x += (me.x + (me.vid ? Math.cos(me.a) * me.v * .12 : 0) - cam.x) * Math.min(1, 9 * dt); cam.y += (me.y + (me.vid ? Math.sin(me.a) * me.v * .12 : 0) - cam.y) * Math.min(1, 9 * dt);
+  cam.x += (me.x + (rv ? Math.cos(me.a) * me.v * .12 : 0) - cam.x) * Math.min(1, 9 * dt); cam.y += (me.y + (rv ? Math.sin(me.a) * me.v * .12 : 0) - cam.y) * Math.min(1, 9 * dt);
   const S = cv.width / W, z = cam.z, vw = W / z, vh = H / z, vx0 = cam.x - vw / 2, vy0 = cam.y - vh / 2, vx1 = vx0 + vw, vy1 = vy0 + vh;
   const boomPower = booms.reduce((v,b)=>{const age=now-b.t,dist=Math.hypot(b.x-me.x,b.y-me.y),power=1.65;return age>=0&&age<680?Math.max(v,(1-age/680)*Math.max(0,1-dist/1250)*power):v;},0), shake=boomPower*8;
    const tx = Math.round((W / 2 - cam.x * z) / LR + (shake?Math.sin(now*.12)*shake:0)), ty = Math.round((H / 2 - cam.y * z) / LR + (shake?Math.cos(now*.15)*shake*.7:0)), sxy = (wx, wy) => [wx * z + tx * LR, wy * z + ty * LR];
   const labels = [];
+  const ridden = new Set(); for (const [, p] of activeP()) if (p.rd) ridden.add(p.rd);   // conducteurs qui ont un passager
   x = lx; x.setTransform(z / LR, 0, 0, z / LR, tx, ty);                              // le monde est dessiné en basse résolution…
   drawWorld(vx0, vy0, vx1, vy1);
   const inV = (px, py) => px > vx0 - 60 && px < vx1 + 60 && py > vy0 - 60 && py < vy1 + 60;
@@ -2356,8 +2384,8 @@ function frame(now) {
   for (const [id, d] of dCars) if (d.m !== "t" && id !== me.vid && inV(d.x, d.y)) drawCar(d.x, d.y, d.a, col(d.c), d.m === "c" || d.m === "s" ? 2 : d.cp ? 1 : false, now, id, dmx(d.dm | 0, wear(id)));
   if (me.pg && inV(me.pg.x, me.pg.y)) drawCar(me.pg.x, me.pg.y, me.pg.a, "#cfeeff", false, now, GHOST, 0);   // fantômes garés (le tien et ceux des autres owners)
   for (const [u, p] of activeP()) if (u !== myUid && p.pgx && inV(p.pgx, p.pgy)) drawCar(p.pgx, p.pgy, p.pga, "#cfeeff", false, now, GHOST, 0);
-  for (const [u, d] of dP) if (!d.ib && inV(d.x, d.y)) { const pl = lp[u] || {}; if (d.vid === HELI) { } else if (d.vid) { const cc = dCars.get(d.vid); drawCar(d.x, d.y, d.a, col(cc ? cc.c : 0), cc && cc.cp ? 1 : false, now, d.vid, d.dm); } else drawWalker(d.x, d.y, d.a, pl.color || "#fff", "#f1c27d", d.v > 0 ? now / 85 : null, d.wpn, now - (d.flash || -1e9) < 70, false, d.wpn === 4 && d.fw === 4 ? clamp((now - (d.flash || -1e9)) / 920, 0, 1) : 1); labels.push([pl.name || "?", d.x, d.y - (d.vid ? 20 : 12), "#fff"]); }
-  if (me.dead <= 0) { if (me.vid === HELI) { } else if (me.vid) drawCar(me.x, me.y, me.a, col(myCol), me.cop ? 1 : false, now, me.vid, me.dm); else drawWalker(me.x, me.y, me.a, (lp[myUid] || {}).color || "#fff", "#f1c27d", me.v > 0 ? now / 85 : null, me.wpn, me.flash > 0, false, me.wpn === 4 && me.fw === 4 && me.cd > 0 ? clamp(1 - me.cd / .92, 0, 1) : 1); x.fillStyle = "#ffe14d"; const ay = me.y - (me.vid === HELI ? 46 : me.vid ? 24 : 15) + Math.sin(now / 160) * 2; x.beginPath(); x.moveTo(me.x, ay + 6); x.lineTo(me.x - 5, ay - 2); x.lineTo(me.x + 5, ay - 2); x.fill(); }
+  for (const [u, d] of dP) if (!d.ib && !d.rd && inV(d.x, d.y)) { const pl = lp[u] || {}; if (d.vid === HELI) { } else if (d.vid) { const cc = dCars.get(d.vid); drawCar(d.x, d.y, d.a, col(cc ? cc.c : 0), cc && cc.cp ? 1 : false, now, d.vid, d.dm); } else drawWalker(d.x, d.y, d.a, pl.color || "#fff", "#f1c27d", d.v > 0 ? now / 85 : null, d.wpn, now - (d.flash || -1e9) < 70, false, d.wpn === 4 && d.fw === 4 ? clamp((now - (d.flash || -1e9)) / 920, 0, 1) : 1); labels.push([(pl.name || "?") + (ridden.has(u) ? " 👥" : ""), d.x, d.y - (d.vid ? 20 : 12), "#fff"]); }
+  if (me.dead <= 0 && !me.rd) { if (me.vid === HELI) { } else if (me.vid) drawCar(me.x, me.y, me.a, col(myCol), me.cop ? 1 : false, now, me.vid, me.dm); else drawWalker(me.x, me.y, me.a, (lp[myUid] || {}).color || "#fff", "#f1c27d", me.v > 0 ? now / 85 : null, me.wpn, me.flash > 0, false, me.wpn === 4 && me.fw === 4 && me.cd > 0 ? clamp(1 - me.cd / .92, 0, 1) : 1); x.fillStyle = "#ffe14d"; const ay = me.y - (me.vid === HELI ? 46 : me.vid ? 24 : 15) + Math.sin(now / 160) * 2; x.beginPath(); x.moveTo(me.x, ay + 6); x.lineTo(me.x - 5, ay - 2); x.lineTo(me.x + 5, ay - 2); x.fill(); }
   // ----- ciel : hélicoptères (au-dessus de tout, bâtiments compris) -----
   for (const [u, d] of dP) if (!d.ib && d.vid === HELI && inV(d.x, d.y)) { drawHeli(d.x, d.y, d.a, { alt: d.hz, accent: (lp[u] || {}).color || "#ffd23f", rot: now / 38 + u.length * 1.7, now }); if (d.dm > 55 && d.vid === HELI && !d.ib && inV(d.x, d.y)) heliSmoke(d.x, d.y, d.a, now, u.length); }
   if (me.dead <= 0 && me.vid === HELI) { drawHeli(me.x, me.y, me.a, { alt: me.hz, accent: (lp[myUid] || {}).color || "#ffd23f", now }); if (me.hh < 45) heliSmoke(me.x, me.y, me.a, now, 0); }
@@ -2467,7 +2495,7 @@ function frame(now) {
   for (const d of dCars.values()) if (d.m === "c") { const fl = Math.floor(now / 200) % 2; dot(d.x, d.y, fl ? "#ff2a2a" : "#2a5bff", 2.8); }
   for (const d of dCops.values()) dot(d.x, d.y, "#7da2ff", 1.8);
   for (const d of dHelis.values()) { const fl = Math.floor(now / 200) % 2; dot(d.x, d.y, fl ? "#ff2a2a" : "#2a5bff", 3.6); }
-  for (const d of dP.values()) if (!d.ib) arrow(d.x, d.y, d.a, "#ff3b30");                                         // les autres joueurs : flèches rouges
+  for (const d of dP.values()) if (!d.ib && !d.rd) arrow(d.x, d.y, d.a, "#ff3b30");                                         // les autres joueurs : flèches rouges
   if (job) dot(job.x, job.y, "#ffd23f", 3.5, 1);
   if (me.rpgQuest && me.rpgParts.length < 3) RPG_PART_SPOTS.forEach((q, i) => { if (!me.rpgParts.includes(i)) { ping(q.x, q.y, "#ffd23f", 3, 1); dot(q.x, q.y, "#ffd23f", 3, 1); } });
   if (me.ammoQuest && !me.rpgAmmoUnlocked && pw === 1) { ping(POWDER_SPOT.x, POWDER_SPOT.y, "#ff9a3d", 4, 1); dot(POWDER_SPOT.x, POWDER_SPOT.y, "#ff9a3d", 4, 1); }
@@ -2496,8 +2524,10 @@ function frame(now) {
     if (d > 120) { const ax = W / 2 + Math.cos(a) * 96, ay = H / 2 + Math.sin(a) * 78; x.save(); x.translate(ax, ay); x.rotate(a); x.fillStyle = "#ff9a3d"; x.strokeStyle = "#000"; x.lineWidth = 2; x.beginPath(); x.moveTo(15, 0); x.lineTo(-9, -9); x.lineTo(-9, 9); x.closePath(); x.fill(); x.stroke(); x.restore(); } }
   if (shop) drawShop(now);
   if (me.vid && TOUCH) { const bb = brakeId !== null; x.fillStyle = bb ? "#ff5a4d" : "#b3261e"; x.beginPath(); x.arc(W - 140, H - 48, 34, 0, 7); x.fill(); x.stroke(); txt("FREIN", W - 140, H - 44, 13); x.fillStyle = "#2f4f9f"; x.beginPath(); x.arc(W - 224, H - 48, 28, 0, 7); x.fill(); x.stroke(); txt("RADIO", W - 224, H - 44, 11); x.fillStyle = hornId !== null ? "#ffd23f" : "#8a6d1a"; x.beginPath(); x.arc(W - 196, H - 106, 28, 0, 7); x.fill(); x.stroke(); txt("KLAXON", W - 196, H - 102, 10); }
-  if (!me.vid && me.dead <= 0 && me.pg && isOwner() && Math.hypot(me.pg.x - me.x, me.pg.y - me.y) < 52) txt("E : REMONTER DANS LE FANTÔME 👻", W / 2, H - 44, 14, "#9ad8ff");
-  if (!me.vid && me.dead <= 0) { let near = false; for (const d of dCars.values()) if ((d.m === "d" || d.m === "p") && Math.hypot(d.x - me.x, d.y - me.y) < 48) near = true; if (near) txt("E : MONTER DANS LA VOITURE", W / 2, H - 24, 14, "#ffe14d"); }
+  if (me.rd && me.dead <= 0) txt("E : DESCENDRE 👥 (tu es passager)", W / 2, H - 24, 14, "#9ad8ff");
+  if (!me.vid && !me.rd && me.dead <= 0 && me.pg && isOwner() && Math.hypot(me.pg.x - me.x, me.pg.y - me.y) < 52) txt("E : REMONTER DANS LE FANTÔME 👻", W / 2, H - 44, 14, "#9ad8ff");
+  if (!me.vid && !me.rd && me.dead <= 0 && nearRide(48)) txt("E : MONTER COMME PASSAGER 👥", W / 2, H - 24, 14, "#9ad8ff");
+  if (!me.vid && !me.rd && me.dead <= 0) { let near = false; for (const d of dCars.values()) if ((d.m === "d" || d.m === "p") && Math.hypot(d.x - me.x, d.y - me.y) < 48) near = true; if (near) txt("E : MONTER DANS LA VOITURE", W / 2, H - 24, 14, "#ffe14d"); }
   if (me.vid && me.dead <= 0) {
     { const ro = radio.st > 0, fresh = now - radio.nameT < 2500; txt(`📻 ${ro ? STN[radio.st - 1].n : "RADIO COUPÉE"}${TOUCH ? "" : "  ·  R : CHANGER  ·  H : KLAXON"}`, W / 2, H - 34, fresh ? 15 : 12, ro ? "#9be7ff" : "#9a9aa5"); }
     const kmh = Math.round(Math.abs(me.v) * .5);
@@ -2648,7 +2678,7 @@ function frame(now) {
     enter(code) {
       active = true; dupe = false; sid = newSid(); c = code; myUid = getMe().uid; ls = null; lastT = 0; lastH = ""; lastEv = 0; pd = {}; hostOn = false; keys = new Set(); stick = null; brakeId = null; useReq = 0;
       dPeds.clear(); dCars.clear(); dCops.clear(); dHelis.clear(); helis = []; dP.clear(); ejected = []; sPrevCash = 0; sPrevWl = 0; sAmbT = performance.now() + 8000; hornKey = false; hornId = null; me.pg = null; splats = []; floats = []; hitDone = new Set(); lastHs = {}; sentStr = ""; sentAt = 0; savedCash = -1; saveAt = performance.now(); gLoaded = false; savedG = ""; lastGn = {};
-      Object.assign(me, { vid: 0, hp: 100, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, bust: 0, hurt: 0, v: 0, a: 0, cash: 0, cop: 0, wpn: 0, ammo: [0, 0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100, rpgParts: [], rpgQuest: 0, ammoQuest: 0, rpgAmmoUnlocked: 0, arm: 0, hou: 0, hsp: -1, hb: HOUSES.map(newBox), fu: "", fuT: 0, jT: 0 });
+      Object.assign(me, { vid: 0, hp: 100, heat: 0, wl: 0, hs: 0, hid: 0, dead: 0, bust: 0, hurt: 0, v: 0, a: 0, cash: 0, cop: 0, wpn: 0, ammo: [0, 0, 0, 0, 0], dm: 0, fc: 0, fw: 0, cs: 0, cid: 0, ca: 0, cd: 0, flash: 0, dmCd: 0, scr: 0, lastCar: 0, lastCarT: 0, gunT: -1e9, g: 0, g2: 0, gcar: null, gcar2: null, gn: 0, go: 0, gi: 0, gm: 0, hu: 0, hz: 0, land: 0, w5: 0, hvx: 0, hvy: 0, hh: 100, rpgParts: [], rpgQuest: 0, ammoQuest: 0, rpgAmmoUnlocked: 0, arm: 0, rd: "", rdv: 0, hou: 0, hsp: -1, hb: HOUSES.map(newBox), fu: "", fuT: 0, jT: 0 });
       inn = null; jail = null; mis = null; tgt = null; pw = 0; pwT = 0; shop = ""; killQ = []; carQ = []; pendingPedHits = new Map(); tracers = []; rockets = []; sparks = []; booms = []; wrecks = []; pickT = new Map(); lastFc = {}; lastCs = {}; fireKey = false; fireId = null;
       const ix = 2 + Math.floor(Math.random() * 5), iy = 2 + Math.floor(Math.random() * 5); spawnAt([ix * CELL, iy * CELL]);
       $("ghelp").textContent = "ZQSD / flèches : bouger · E ou Espace : monter / descendre d'une voiture · en voiture ↑ accélère, ↓ freine, ←→ tourne · livre les colis 📦, écrase des piétons, évite la police ! · Sans arme tu frappes avec tes poings 👊 (F : 3 coups pour un piéton) ; ramasse les armes au sol : F tirer, X changer d'arme (0 = poings, 1-2-3) · en hélico : mitraillette à munitions infinies (F) · les voitures se cabossent ! · garage ($3500 ; à l'intérieur, un 2e emplacement pour une voiture de plus : $2500) : va sur la zone jaune et appuie sur E (owners : voiture fantôme 👻 invincible qui traverse les bâtiments, tu peux en descendre : elle reste garée et seuls les owners peuvent y remonter (E) ; au garage : ranger le fantôme (E), G pour en sortir un) · R : changer de radio (4 stations), H : klaxon · missions : parle au BOSS ❗ au bord ouest de la carte (E) : missions aléatoires (voitures, cavale, contrat, camion blindé 🚚), M pour abandonner · armurerie et distributeur de soins (hôpital) : va sur leur zone et appuie sur E · 🏎️ des voitures de sport (Supercar, Roadster) roulent en ville : bien plus rapides, vole-les et range-les au garage ! · 🚁 hélicoptère : un pilote mystérieux traîne quelque part en ville (il n'est PAS sur la carte) : trouve-le et réussis sa quête pour débloquer un hélico, rangé sur le toit de ton garage (échelle dans le garage) ; E pour te poser sur la zone 🅷 du toit · à 5★ la police envoie des hélicos : abats-les ! · 🔒 arrêté = PRISON (≈30 s, plus avec plus d'étoiles) : attends, corromps le gardien, creuse le mur (E) ou un ami te fait évader depuis la zone PRISON, devant la prison (grand bâtiment gris au sud-est de la carte) · 🏠 quartier résidentiel à l'est de la carte : achète UNE maison (une seule par joueur ; E à la porte) : coffre pour ranger argent, armes et gilet, et lit = point de réapparition";

@@ -9,7 +9,7 @@
    Rendu : moteur 3D en perspective (caméra, faces éclairées, tri en profondeur, personnages en 3D, particules) sur le canvas 2D existant.
    Entrées réseau : "mx,mz,compteurSaut,compteurPlongeon" (mx/mz ∈ [-1,1], mz>0 = vers les blocs). */
 const W=800,H=560,DT=1/30;
-const HX=7,HZ=8,N=14,D=1,RAD=.32,RUN=6.2,DIVE=10.5,G=27,JV=9.2,DJV=8.3;
+const HX=7,HZ=8,N=14,D=1,RAD=.32,RUN=7.4,DIVE=12,G=32,JV=10.6,DJV=9.4;
 const GATEZ=HZ+1.5,SPAWNZ=HZ+5.2,EXITZ=-HZ-3.4,SLIME=-7.5;
 const colX=i=>-HX+.5+i,ri=(a,b)=>a+Math.floor(Math.random()*(b-a+1)),mk=f=>Array.from({length:N},(_,i)=>f(i)),inR=(i,a,w)=>i>=a&&i<a+w;
 /* Une case = 0 vide · 1 bloc bas · 2 bloc haut (double saut) · 11 / 12 bloc fissuré bas / haut (à briser en plongeant) */
@@ -24,6 +24,15 @@ const PAT=[
  ()=>{const o=ri(0,3);return[{dz:0,row:mk(i=>(i+o)%4<2?0:1)},{dz:2.4,row:mk(i=>(i+o+2)%4<2?0:1)}]},
  ()=>{const g=ri(1,N-5);return[{dz:0,row:mk(()=>1)},{dz:2.6,row:mk(i=>inR(i,g,3)?11:2)},{dz:5.2,row:mk(i=>i%5<2?0:2)}]},
  ()=>{const g=ri(0,3);return[{dz:0,row:mk(i=>i<g+4?0:i<g+8?1:i<g+11?2:12)},{dz:2.6,row:mk(()=>1)}]}
+ ,
+ /* 10 · escalier : le trou se décale d'une rangée à l'autre (sens aléatoire) */
+ ()=>{const g=ri(0,4),f=Math.random()<.5;return[0,1,2].map(k=>({dz:k*2.6,row:mk(i=>inR(i,f?g+k*3:g+(2-k)*3,4)?0:1)}))},
+ /* 11 · piliers : on slalome entre des colonnes hautes et basses */
+ ()=>{const o=ri(0,3);return[{dz:0,row:mk(i=>(i+o)%4===0?2:0)},{dz:2.4,row:mk(i=>(i+o+1)%4===0?1:0)},{dz:4.8,row:mk(i=>(i+o+2)%4===0?2:0)}]},
+ /* 12 · saute-mouton : trois barres basses à enchaîner */
+ ()=>[0,1,2].map(k=>({dz:k*3.2,row:mk(()=>1)})),
+ /* 13 · faille : mur de fissurés percé de trous, puis mur haut à trou */
+ ()=>{const g=ri(2,9);return[{dz:0,row:mk(i=>i%4===0?0:11)},{dz:3,row:mk(i=>inR(i,g,3)?0:2)}]}
 ];
 
 /* ───────────────────────────── HÔTE : simulation ───────────────────────────── */
@@ -33,17 +42,17 @@ export async function startBlockDash(env){
  await remove(ref(`games/${c}`));await update(ref(`lobbies/${c}`),{status:"playing"});
  const P={},I={},seen={},walls=[];
  ids.forEach((u,i)=>{
-  P[u]={n:players[u].name,c:players[u].color,x:ids.length>1?-5+10*i/(ids.length-1):0,y:0,z:-3+(i%2)*1.3,vx:0,vy:0,vz:0,a:1,g:1,jc:0,cy:0,dv:0,cd:0,sl:0,pu:0,ddx:0,ddz:1,td:0};
+  P[u]={n:players[u].name,c:players[u].color,x:ids.length>1?-5+10*i/(ids.length-1):0,y:0,z:-3+(i%2)*1.3,vx:0,vy:0,vz:0,a:1,g:1,jc:0,cy:0,dv:0,cd:0,sl:0,pu:0,ddx:0,ddz:1,td:0,kx:0,kz:0,ht:-9,cs:0};
   I[u]={mx:0,mz:0,j:0,s:0,jn:0,sn:0,bot:String(u).startsWith("bot_"),sk:.55+Math.random()*.4,nt:0,tw:0,tk:0,done:0};
  });
- let t=0,speed=3.3,next=0,rid=0,pubN=0,ended=false,wave=0,first=true;
+ let t=0,speed=3.8,trav=0,nd=0,sg=0,sgn=25,rid=0,pubN=0,ended=false,wave=0,first=true;
  const spawn=()=>{
-  const d=first?0:Math.min(9,1+Math.floor(t/10)),pat=PAT[ri(Math.max(0,d-5),d)](),dm=Math.max(...pat.map(p=>p.dz)),off=first?SPAWNZ-7:0;
+  const d=first?0:Math.min(PAT.length-1,1+Math.floor(t/8)),pat=PAT[ri(Math.max(0,d-5),d)](),dm=Math.max(...pat.map(p=>p.dz)),off=first?SPAWNZ-7:0;
   first=false;wave++;pat.forEach(p=>walls.push({id:++rid,z:SPAWNZ+p.dz-off,row:p.row.slice()}));return dm;
  };
  const pub=extra=>Promise.resolve(set(ref(`games/${c}/state`),JSON.stringify({k:"blockdash",t:+t.toFixed(2),v:+speed.toFixed(2),w:wave,
-  walls:walls.map(w=>[w.id,+w.z.toFixed(2),w.row]),
-  p:ids.map(u=>{const q=P[u];return[u,+q.x.toFixed(2),+q.y.toFixed(2),+q.z.toFixed(2),q.a,q.dv>0?2:!q.g?1:q.pu>0?3:0,q.c,q.n]}),...extra}))).catch(()=>{});
+  sg:sg>0?1:0,walls:walls.map(w=>[w.id,+w.z.toFixed(2),w.row]),
+  p:ids.map(u=>{const q=P[u];return[u,+q.x.toFixed(2),+q.y.toFixed(2),+q.z.toFixed(2),q.a,q.dv>0?2:!q.g?1:q.pu>0?3:0,q.c,q.n,+(q.vx+q.kx).toFixed(1),+(q.vz+q.kz-q.cs).toFixed(1)]}),...extra}))).catch(()=>{});
  const inputUn=onValue(ref(`games/${c}/inputs`),s=>Object.entries(s.val()||{}).forEach(([u,v])=>{
   const i=I[u];if(!i||i.bot||seen[u]===v)return;seen[u]=v;const a=String(v).split(",").map(Number);
   if(Number.isFinite(a[0]))i.mx=Math.max(-1,Math.min(1,a[0]));if(Number.isFinite(a[1]))i.mz=Math.max(-1,Math.min(1,a[1]));
@@ -74,11 +83,13 @@ export async function startBlockDash(env){
   if(n===3)step0();
   await pub({cd:n});await new Promise(r=>setTimeout(r,1000));if(getCode()!==c){inputUn();return}
  }
- function step0(){next=t+(8.2+spawn())/speed}
+ function step0(){nd=8.2+spawn()}
  let last=performance.now(),acc=0,raf=0;
  const step=()=>{
-  t+=DT;speed=Math.min(7,3.3+t*.05);
-  if(t>=next)next=t+(Math.max(5,8.2-t*.035)+spawn())/speed;
+  t+=DT;if(sg>0)sg-=DT;
+  const bs=Math.min(7.6,3.8+t*.06),en=sg>0?Math.min(1,(4-sg)*2,sg*2):0;speed=bs*(1+.25*Math.max(0,en));   // montée en vitesse + « accélérations » ponctuelles
+  trav+=speed*DT;                                                                                          // les vagues sont espacées en DISTANCE (écart constant même quand ça accélère)
+  if(trav>=nd){if(t>=sgn&&sg<=0&&Math.random()<.22){sg=4;sgn=t+14}nd=trav+Math.max(5,7-t*.045)+spawn()}
   for(const w of walls)w.z-=speed*DT;
   for(let k=walls.length-1;k>=0;k--)if(walls[k].z<EXITZ)walls.splice(k,1);
   for(const u of ids){
@@ -87,18 +98,18 @@ export async function startBlockDash(env){
    if(i.bot)ai(q,i);
    q.dv=Math.max(0,q.dv-DT);q.cd=Math.max(0,q.cd-DT);q.sl=Math.max(0,q.sl-DT);q.cy=Math.max(0,q.cy-DT);q.pu=Math.max(0,q.pu-DT);
    let mx=i.mx,mz=i.mz;const l=Math.hypot(mx,mz);if(l>1){mx/=l;mz/=l}
-   while(i.jn>0){i.jn--;if(q.dv>0)continue;if(q.g||q.cy>0){q.vy=JV;q.g=0;q.cy=0;q.jc=1}else if(q.jc<2){q.vy=DJV;q.jc=2}}   // saut, puis double saut en l'air
-   while(i.sn>0){i.sn--;if(q.dv<=0&&q.cd<=0){q.dv=.42;q.cd=1;q.sl=.8;let dx=mx,dz=mz;const ll=Math.hypot(dx,dz);if(ll<.25){dx=0;dz=1}else{dx/=ll;dz/=ll}q.ddx=dx;q.ddz=dz;q.vy=Math.max(q.vy,3.4);q.g=0;q.cy=0}}   // plongeon
+   while(i.jn>0&&q.dv<=0){i.jn--;if(q.g||q.cy>0){q.vy=JV;q.g=0;q.cy=0;q.jc=1}else if(q.jc<2){q.vy=DJV;q.jc=2}}   // saut, puis double saut en l'air
+   while(i.sn>0){i.sn--;if(q.dv<=0&&q.cd<=0){q.dv=.38;q.cd=.8;q.sl=.35;let dx=mx,dz=mz;const ll=Math.hypot(dx,dz);if(ll<.25){dx=0;dz=1}else{dx/=ll;dz/=ll}q.ddx=dx;q.ddz=dz;q.vy=Math.max(q.vy,q.g||q.cy>0?4.2:1.5);q.g=0;q.cy=0}}   // plongeon
    if(q.dv>0){q.vx=q.ddx*DIVE;q.vz=q.ddz*DIVE}
-   else{const k=q.g?.45:.16,f=q.sl>0?.4:1;q.vx+=(mx*RUN*f-q.vx)*k;q.vz+=(mz*RUN*f-q.vz)*k}
-   q.x+=q.vx*DT;q.z+=q.vz*DT;q.vy-=G*DT;q.y+=q.vy*DT;
+   else{const k=q.g?.6:.3,f=q.sl>0?.6:1;q.vx+=(mx*RUN*f-q.vx)*k;q.vz+=(mz*RUN*f-q.vz)*k}
+   q.x+=(q.vx+q.kx)*DT;q.z+=(q.vz+q.kz)*DT;q.kx*=.86;q.kz*=.86;q.vy-=G*DT;q.y+=q.vy*DT;
    /* collisions avec les blocs */
    let stand=-99;
    for(const w of walls){
     if(Math.abs(q.z-w.z)>=D/2+RAD+.05)continue;
     for(let k=0;k<N;k++){
      const v=w.row[k];if(!v)continue;const h=v%10,cx=colX(k);if(Math.abs(q.x-cx)>=.5+RAD)continue;
-     if(q.y>=h-.28&&q.vy<=3){stand=Math.max(stand,h);continue}          // on est au-dessus : on marche sur le bloc
+     if(q.y>=h-.4){if(h>stand)stand=h;continue}                          // pieds au niveau du dessus (même en montée) : on grimpe, on n'est plus repoussé
      if(v>=10&&q.dv>0){w.row[k]=0;continue}                              // bloc fissuré brisé par le plongeon
      const pf=q.z+RAD-(w.z-D/2),pb=w.z+D/2-(q.z-RAD),pl=q.x+RAD-(cx-.5),pr=cx+.5-(q.x-RAD),m=Math.min(pf,pb,pl,pr);
      if(m===pf){q.z=w.z-D/2-RAD;if(q.vz>-speed)q.vz=-speed;q.pu=.25}      // poussé / traîné par le mur
@@ -107,10 +118,20 @@ export async function startBlockDash(env){
      else{q.x=cx+.5+RAD;if(q.vx<0)q.vx=0}
     }
    }
-   const fl=Math.abs(q.x)<=HX&&q.z>=-HZ&&q.z<=HZ?0:-99,gh=Math.max(fl,stand);q.g=0;
-   if(gh>-99&&q.y<=gh+.001&&q.vy<=0){q.y=gh;q.vy=0;q.g=1;q.jc=0;q.cy=.1;if(stand>fl)q.z-=speed*DT}
+   const fl=Math.abs(q.x)<=HX&&q.z>=-HZ&&q.z<=HZ?0:-99,gh=Math.max(fl,stand);q.g=0;q.cs=0;
+   if(gh>-99&&q.y<=gh+.001&&q.vy<=0){q.y=gh;q.vy=0;q.g=1;q.jc=0;q.cy=.1;if(stand>fl){q.z-=speed*DT;q.cs=speed}}
    if(gh<=-99&&q.y<-.2){q.a=0;q.td=t;q.vx*=.6;q.vz*=.6}                      // hors plateforme : chute dans le slime
   }
+  /* bousculades : les joueurs ne se traversent plus ; un plongeon qui touche un rival l'éjecte */
+  for(let a=0;a<ids.length;a++){const p=P[ids[a]];if(!p.a)continue;
+   for(let b=a+1;b<ids.length;b++){const o=P[ids[b]];if(!o.a||Math.abs(p.y-o.y)>.9)continue;
+    let dx=o.x-p.x,dz=o.z-p.z,d=Math.hypot(dx,dz);if(d>=RAD*2)continue;
+    if(d<.001){dx=Math.random()-.5;dz=Math.random()-.5;d=Math.hypot(dx,dz)||1}
+    const nx=dx/d,nz=dz/d,ov=(RAD*2-d)/2;
+    p.x-=nx*ov;p.z-=nz*ov;o.x+=nx*ov;o.z+=nz*ov;p.kx-=nx*1.5;p.kz-=nz*1.5;o.kx+=nx*1.5;o.kz+=nz*1.5;
+    const ko=(s,v)=>{if(s.dv>0&&v.dv<=0&&t-v.ht>.6){v.ht=t;v.kx=s.ddx*14;v.kz=s.ddz*14;v.pu=.35;v.vy=Math.max(v.vy,3.2);v.g=0;v.cy=0}};
+    ko(p,o);ko(o,p);
+   }}
   const alive=ids.filter(u=>P[u].a);
   if(alive.length<=1||t>240){
    ended=true;
@@ -128,32 +149,33 @@ export async function startBlockDash(env){
 /* ───────────────────────────── CLIENT : rendu 3D ───────────────────────────── */
 export function createBlockDashClient(env){
  const {R:ref,set,onValue,getMe,$}=env,cv=$("cv"),x=cv.getContext("2d"),ov=$("ov"),help=$("ghelp");
- let active=false,un=()=>{},raf=0,state=null,snapT=0,me="",code="",jump=0,dive=0,last="",lastSend=0,tm=0,lastT=0,joy=null,rowsPrev=new Map();
- const keys=new Set(),btn=new Map(),rend=new Map(),parts=[],cam={x:0,y:9.6,z:-14.2,p:.5};
+ let active=false,un=()=>{},raf=0,state=null,snapT=0,me="",code="",jump=0,dive=0,last="",lastSend=0,tm=0,lastT=0,joy=null,rowsPrev=new Map(),shk=0;
+ let kc=0;const keys=new Map(),btn=new Map(),rend=new Map(),parts=[],cam={x:0,y:9.6,z:-14.2,p:.5};
  const FOC=520,CY=225,NEAR=.4,cp=Math.cos(cam.p),sp=Math.sin(cam.p),BJ={x:712,y:462,r:58},BD={x:596,y:500,r:44},PAL=[[335,85,60],[190,85,52],[40,95,58],[268,70,64],[150,70,48]];
  /* ---- entrées ---- */
  const vec=()=>{
-  let kx=(keys.has("R")?1:0)-(keys.has("L")?1:0),kz=(keys.has("U")?1:0)-(keys.has("B")?1:0);
+  const ax=(a,b)=>keys.has(a)&&keys.has(b)?(keys.get(a)>keys.get(b)?1:-1):(keys.has(a)?1:0)-(keys.has(b)?1:0);
+  let kx=ax("R","L"),kz=ax("U","B");
   if(kx||kz){const l=Math.hypot(kx,kz);return[kx/l,kz/l]}
   if(joy){const dx=joy.px-joy.ox,dy=joy.py-joy.oy,l=Math.hypot(dx,dy);if(l>8){const m=Math.min(1,l/42);return[dx/l*m,-dy/l*m]}}
   return[0,0];
  };
  const send=force=>{
-  if(!active)return;const [a,b]=vec(),v=`${a.toFixed(1)},${b.toFixed(1)},${jump},${dive}`;if(v===last)return;
+  if(!active)return;const [a,b]=vec(),v=`${a.toFixed(2)},${b.toFixed(2)},${jump},${dive}`;if(v===last)return;
   const n=performance.now();if(!force&&n-lastSend<55){if(!tm)tm=setTimeout(()=>{tm=0;send()},60);return}
   last=v;lastSend=n;Promise.resolve(set(ref(`games/${code}/inputs/${me}`),v)).catch(()=>{});
  };
  const MV={ArrowUp:"U",KeyW:"U",ArrowDown:"B",KeyS:"B",ArrowLeft:"L",KeyA:"L",ArrowRight:"R",KeyD:"R"};    // e.code : marche aussi en AZERTY (ZQSD)
- const kd=e=>{if(!active)return;const m=MV[e.code];if(m){keys.add(m);e.preventDefault();return}
+ const kd=e=>{if(!active)return;const m=MV[e.code];if(m){if(!keys.has(m))keys.set(m,++kc);e.preventDefault();return}
   if(e.code==="Space"){e.preventDefault();if(!e.repeat){jump++;send(true)}}
   else if(e.code==="ShiftLeft"||e.code==="ShiftRight"||e.code==="KeyX"||e.code==="KeyC"){e.preventDefault();if(!e.repeat){dive++;send(true)}}};
  const ku=e=>{const m=MV[e.code];if(m)keys.delete(m)};
- const blur=()=>{keys.clear();joy=null};
+ const blur=()=>{keys.clear();joy=null;btn.clear()};
  const toC=e=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left)*W/r.width,(e.clientY-r.top)*H/r.height]};
  const hit=(p,b)=>Math.hypot(p[0]-b.x,p[1]-b.y)<=b.r+10;
  const pd=e=>{if(!active||e.target.closest("button"))return;e.preventDefault();const p=toC(e);try{cv.setPointerCapture(e.pointerId)}catch{}
   if(hit(p,BJ)){btn.set(e.pointerId,"j");jump++;send(true)}else if(hit(p,BD)){btn.set(e.pointerId,"d");dive++;send(true)}
-  else if(!joy)joy={id:e.pointerId,ox:p[0],oy:p[1],px:p[0],py:p[1]}};
+  else if(!joy&&p[0]<W*.55)joy={id:e.pointerId,ox:p[0],oy:p[1],px:p[0],py:p[1]}};
  const pm=e=>{if(joy&&joy.id===e.pointerId){const p=toC(e);joy.px=p[0];joy.py=p[1]}};
  const pu=e=>{btn.delete(e.pointerId);if(joy&&joy.id===e.pointerId)joy=null};
  /* ---- moteur 3D ---- */
@@ -174,11 +196,12 @@ export function createBlockDashClient(env){
  const hexc={},rgb=h=>hexc[h]||(hexc[h]=[1,3,5].map(i=>parseInt(String(h).slice(i,i+2),16)||180));
  const sh=(h,f)=>{const [r,g,b]=rgb(h),t=f>0?255:0,a=Math.abs(f);return`rgb(${Math.round(r+(t-r)*a)},${Math.round(g+(t-g)*a)},${Math.round(b+(t-b)*a)})`};
  /* ---- particules ---- */
- const burst=(px,py,pz,cols,n,sp0)=>{for(let i=0;i<n;i++){const a=Math.random()*6.28,s=(sp0||3)*(.4+Math.random());parts.push({x:px,y:py,z:pz,vx:Math.cos(a)*s,vy:2+Math.random()*(sp0||3),vz:Math.sin(a)*s,l:.6+Math.random()*.5,c:cols[i%cols.length],s:.07+Math.random()*.07})}};
+ const burst=(px,py,pz,cols,n,sp0)=>{if(parts.length>320)return;for(let i=0;i<n;i++){const a=Math.random()*6.28,s=(sp0||3)*(.4+Math.random());parts.push({x:px,y:py,z:pz,vx:Math.cos(a)*s,vy:2+Math.random()*(sp0||3),vz:Math.sin(a)*s,l:.6+Math.random()*.5,c:cols[i%cols.length],s:.07+Math.random()*.07})}};
  const splash=(px,py,pz)=>burst(px,py,pz,["#ff7be5","#ffd1f7","#c14bff","#ffffff"],22,5);
+ const dust=(r,n,s)=>burst(r.x,r.y+.05,r.z,["#ffffff","#e9d6ff","#c9a8ff"],n,s);
  /* ---- décor ---- */
  const background=now=>{
-  const g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,"#1d0b44");g.addColorStop(.5,"#3b1272");g.addColorStop(1,"#8a1f94");x.fillStyle=g;x.fillRect(0,0,W,H);
+  const g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,"#1d0b44");g.addColorStop(.5,"#3b1272");g.addColorStop(1,"#8a1f94");x.fillStyle=g;x.fillRect(-16,-16,W+32,H+32);
   for(let r=0;r<11;r++){const z=-14+r*5.5;let pr=null;x.lineWidth=2;x.strokeStyle=`rgba(255,160,255,${.1+.2*(1-r/11)})`;x.beginPath();
    for(let k=0;k<=22;k++){const wx=-44+k*4,wy=SLIME+Math.sin(wx*.35+now/700+r*1.7)*.35,c=cs(wx,wy,z);if(c[2]<NEAR){pr=null;continue}const s=sc(c);pr?x.lineTo(s[0],s[1]):x.moveTo(s[0],s[1]);pr=1}x.stroke()}
   for(let i=0;i<16;i++){const bx=((i*37)%60)-30,bz=-6+((i*53)%40),by=SLIME+.2+Math.abs(Math.sin(now/900+i))*.8,c=cs(bx,by,bz);if(c[2]<NEAR)continue;const s=sc(c),rr=Math.max(1.5,.28*FOC/c[2]);x.fillStyle="rgba(255,200,255,.18)";x.beginPath();x.arc(s[0],s[1],rr,0,7);x.fill();x.strokeStyle="rgba(255,255,255,.35)";x.lineWidth=1;x.stroke()}
@@ -231,17 +254,30 @@ export function createBlockDashClient(env){
  function frame(now){
   if(!active)return;raf=requestAnimationFrame(frame);
   const dt=Math.min(.05,Math.max(.001,(now-lastT)/1000||.016));lastT=now;send();
-  x.setTransform(cv.width/W,0,0,cv.height/H,0,0);
+  const k0=cv.width/W,k1=cv.height/H;
   const S=state,ex=S&&!S.o?Math.min(.3,(now-snapT)/1000):0,pl=S?S.p:[];
   pl.forEach(t=>{
-   let r=rend.get(t[0]);if(!r){r={x:t[1],y:t[2],z:t[3],fa:0,pt:0,ph:0,sp:0,fell:0};rend.set(t[0],r)}
-   const k=1-Math.exp(-dt*(t[0]===me?18:13)),ox=r.x,oz=r.z;r.x+=(t[1]-r.x)*k;r.z+=(t[3]-r.z)*k;r.y+=(t[2]-r.y)*Math.min(1,k*1.4);
-   const vx=(r.x-ox)/dt,vz=(r.z-oz)/dt;r.sp+=(Math.hypot(vx,vz)-r.sp)*.25;r.a=t[4];r.st=t[5];r.c=t[6];r.n=t[7];
+   let r=rend.get(t[0]);if(!r){r={x:t[1],y:t[2],z:t[3],fa:0,pt:0,ph:0,sp:0,fell:0,lt:0};rend.set(t[0],r)}
+   /* position cible = dernier état reçu + vitesse × temps écoulé (extrapolation) → plus de « retard » ni d'effet élastique */
+   const k=1-Math.exp(-dt*(t[0]===me?26:17)),ox=r.x,oz=r.z,e2=Math.min(.22,ex),tx=t[1]+(t[8]||0)*e2,tz=t[3]+(t[9]||0)*e2;
+   if(Math.abs(tx-r.x)>3||Math.abs(tz-r.z)>3){r.x=tx;r.z=tz}else{r.x+=(tx-r.x)*k;r.z+=(tz-r.z)*k}
+   r.y+=(t[2]-r.y)*Math.min(1,k*1.4);
+   const vx=(r.x-ox)/dt,vz=(r.z-oz)/dt;r.sp+=(Math.hypot(vx,vz)-r.sp)*.25;r.a=t[4];const pst=r.st;r.st=t[5];r.c=t[6];r.n=t[7];
    if(r.a){r.ph+=r.sp*dt*2.1;if(r.sp>.9&&r.st!==3){let d=Math.atan2(vx,vz)-r.fa;d=Math.atan2(Math.sin(d),Math.cos(d));r.fa+=d*Math.min(1,dt*12)}
     r.pt+=((r.st===2?1.15:r.st===3?-.3:r.st===1?.12:0)-r.pt)*Math.min(1,dt*14)}else r.pt+=dt*6;
+   if(r.a&&r.y>SLIME+.4&&pst!==undefined){   // effets : poussière, impacts, traînée de plongeon
+    if((pst===0||pst===3)&&r.st===1)dust(r,6,1.7);
+    else if((pst===1||pst===2)&&(r.st===0||r.st===3))dust(r,9,2.4);
+    if(r.st===2&&pst!==2)dust(r,10,2.8);
+    if(r.st===3&&pst!==3&&t[0]===me)shk=Math.max(shk,.8);
+    if(r.st===2&&now-r.lt>40){burst(r.x,r.y+.3,r.z,["#ffffff","#ffd1f7"],2,1.4);r.lt=now}
+    else if(r.st===0&&r.sp>3.5&&now-r.lt>130){dust(r,2,1);r.lt=now}
+   }
    if(r.y<SLIME+.4&&!r.fell){r.fell=1;splash(r.x,SLIME,r.z)}
   });
   const mr=rend.get(me);cam.x+=((mr&&mr.a?Math.max(-2.6,Math.min(2.6,mr.x*.45)):0)-cam.x)*(1-Math.exp(-dt*3));
+  shk=Math.max(0,shk-dt*2.2);if(S&&S.sg&&!S.o)shk=Math.max(shk,.1);const sa=shk*7;
+  x.setTransform(k0,0,0,k1,(sa?(Math.random()-.5)*2*sa:0)*k0,(sa?(Math.random()-.5)*2*sa:0)*k1);   // tremblement d'écran (monde seulement, pas l'interface)
   background(now);arena();
   /* ombres */ rend.forEach((r,u)=>{if(r.fell===0||r.y>SLIME+.4)shadow(r)});
   /* objets triés de l'arrière vers l'avant */
@@ -261,6 +297,8 @@ export function createBlockDashClient(env){
   /* particules */
   for(let i=parts.length-1;i>=0;i--){const p=parts[i];p.l-=dt;if(p.l<=0||p.y<SLIME-1){parts.splice(i,1);continue}p.vy-=16*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.z+=p.vz*dt;
    const c=cs(p.x,p.y,p.z);if(c[2]<NEAR)continue;const s=sc(c),rr=Math.max(1.2,p.s*FOC/c[2]);x.globalAlpha=Math.min(1,p.l*2.5);x.fillStyle=p.c;x.fillRect(s[0]-rr,s[1]-rr,rr*2,rr*2);x.globalAlpha=1}
+  if(S&&S.sg&&!S.o){x.save();x.lineWidth=2;for(let i=0;i<22;i++){const a=i*2.399,rr=140+((now*.9+i*131)%360),l=40+((i*57)%60);x.strokeStyle=`rgba(255,255,255,${.1+.05*(i%3)})`;x.beginPath();x.moveTo(W/2+Math.cos(a)*rr*1.5,CY+Math.sin(a)*rr*.9);x.lineTo(W/2+Math.cos(a)*(rr+l)*1.5,CY+Math.sin(a)*(rr+l)*.9);x.stroke()}x.restore()}   // lignes de vitesse
+  x.setTransform(k0,0,0,k1,0,0);
   hud(now,S,mr);
   ov.textContent=S?(S.o?S.msg||"Fin de partie":S.cd?String(S.cd):""):"";
  }
@@ -271,6 +309,7 @@ export function createBlockDashClient(env){
   rounded(650,16,132,58,13,"#120b2ddd","#ffffff33");x.fillStyle="#d9baff";x.font="700 10px system-ui";x.fillText("SURVIVANTS",664,36);x.fillStyle="#fff";x.font="900 22px system-ui";x.fillText(al+" / "+(S?S.p.length:0),664,62);
   rounded(18,87,222,34,10,"#120b2dcc","#ffffff33");x.font="11px system-ui";x.fillStyle="#ff8ab4";x.fillText("■ BAS : saute",30,109);x.fillStyle="#ffcf62";x.fillText("■ HAUT : 2 sauts",104,109);x.fillStyle="#9b86c4";x.fillText("■ FISSURÉ : plonge",176,109);
   if(me2&&!me2[4]&&S&&!S.o){rounded(280,16,240,34,14,"#3a0c2aee","#ff7be5");x.fillStyle="#fff";x.font="800 14px system-ui";x.textAlign="center";x.fillText("💦 Éliminé — tu regardes la suite",400,38);x.textAlign="left"}
+  if(S&&S.sg&&!S.o){rounded(290,56,220,30,14,`rgba(255,106,43,${.78+.2*Math.sin(now/80)})`,"#ffd9a8");x.fillStyle="#fff";x.font="800 14px system-ui";x.textAlign="center";x.fillText("⚡ ACCÉLÉRATION !",400,76);x.textAlign="left"}
   if(S&&S.t<7&&!S.o){rounded(130,518,540,32,14,"#120b2ddd","#ffffff33");x.fillStyle="#f1eaff";x.font="600 11px system-ui";x.textAlign="center";x.fillText("Cherche le trou · saute les blocs bas · double saut sur les hauts · plonge dans les fissurés",400,538);x.textAlign="left"}
   /* commandes tactiles */
   const pj=[...btn.values()].includes("j"),pd2=[...btn.values()].includes("d");
@@ -278,17 +317,17 @@ export function createBlockDashClient(env){
   if(joy){x.beginPath();x.arc(joy.ox,joy.oy,42,0,7);x.strokeStyle="#ffffff55";x.lineWidth=3;x.stroke();const dx=joy.px-joy.ox,dy=joy.py-joy.oy,l=Math.hypot(dx,dy),m=l>42?42/l:1;x.beginPath();x.arc(joy.ox+dx*m,joy.oy+dy*m,20,0,7);x.fillStyle="#ffffffaa";x.fill()}
  }
  return {enter(c){
-  active=true;code=c;me=getMe().uid;jump=0;dive=0;last="";lastSend=0;state=null;joy=null;parts.length=0;rend.clear();rowsPrev=new Map();keys.clear();btn.clear();cam.x=0;
-  help.textContent="Déplace-toi : ZQSD / flèches (ou glisse) · Espace : saut (2× = double saut) · Maj / X : plongeon (brise les blocs fissurés)";
+  active=true;code=c;me=getMe().uid;jump=0;dive=0;last="";lastSend=0;state=null;joy=null;parts.length=0;rend.clear();rowsPrev=new Map();keys.clear();btn.clear();cam.x=0;shk=0;
+  help.textContent="Déplace-toi : ZQSD / flèches (ou glisse) · Espace : saut (2× = double saut) · Maj / X : plongeon (brise les blocs fissurés et fait voler les rivaux)";
   Promise.resolve(set(ref(`games/${c}/inputs/${me}`),"0.0,0.0,0,0")).catch(()=>{});
   un=onValue(ref(`games/${c}/state`),s=>{const v=s.val();if(!v)return;try{const q=JSON.parse(v);if(q.k!=="blockdash")return;
-   const nr=new Map();q.walls.forEach(w=>{nr.set(w[0],w[2].slice());const pv=rowsPrev.get(w[0]);if(pv)for(let k=0;k<N;k++)if(pv[k]>=10&&!w[2][k])burst(colX(k),(pv[k]%10)/2,w[1],["#ffb347","#6f5c8f","#ffffff"],14,3.5)});
+   const nr=new Map();q.walls.forEach(w=>{nr.set(w[0],w[2].slice());const pv=rowsPrev.get(w[0]);if(pv)for(let k=0;k<N;k++)if(pv[k]>=10&&!w[2][k]){burst(colX(k),(pv[k]%10)/2,w[1],["#ffb347","#6f5c8f","#ffffff"],14,3.5);const m=rend.get(me);if(m&&Math.hypot(m.x-colX(k),m.z-w[1])<4)shk=Math.max(shk,.45)}});
    rowsPrev=nr;state=q;snapT=performance.now()}catch{}});
   addEventListener("keydown",kd);addEventListener("keyup",ku);addEventListener("blur",blur);
-  cv.style.touchAction="none";cv.addEventListener("pointerdown",pd);cv.addEventListener("pointermove",pm);cv.addEventListener("pointerup",pu);cv.addEventListener("pointercancel",pu);
+  cv.style.touchAction="none";cv.addEventListener("pointerdown",pd);cv.addEventListener("pointermove",pm);cv.addEventListener("pointerup",pu);cv.addEventListener("pointercancel",pu);cv.addEventListener("lostpointercapture",pu);
   lastT=performance.now();raf=requestAnimationFrame(frame);
   return()=>{active=false;un();cancelAnimationFrame(raf);clearTimeout(tm);tm=0;removeEventListener("keydown",kd);removeEventListener("keyup",ku);removeEventListener("blur",blur);
-   cv.removeEventListener("pointerdown",pd);cv.removeEventListener("pointermove",pm);cv.removeEventListener("pointerup",pu);cv.removeEventListener("pointercancel",pu);cv.style.touchAction="";
+   cv.removeEventListener("pointerdown",pd);cv.removeEventListener("pointermove",pm);cv.removeEventListener("pointerup",pu);cv.removeEventListener("pointercancel",pu);cv.removeEventListener("lostpointercapture",pu);cv.style.touchAction="";
    joy=null;btn.clear();keys.clear();ov.textContent="";help.textContent=""}
  }};
 }

@@ -798,7 +798,7 @@ function frame(now){
 }
 const KEYS={ArrowUp:"U",w:"U",z:"U",ArrowDown:"D",s:"D",ArrowLeft:"L",a:"L",q:"L",ArrowRight:"R",d:"R"};
 const held=new Set();let seqN=0;
-const mv=()=>{if(cur!=="game"||!code||!me||gk==="lab"||gk==="sim"||gk==="sumo"||gk==="barre"||gk==="fruit"||gk==="amog"||gk==="sta")return;if(isAim())return brSend();const m=`${(held.has("R")?1:0)-(held.has("L")?1:0)},${(held.has("D")?1:0)-(held.has("U")?1:0)}`;if(m!==lastMv){lastMv=m;set(R(`games/${code}/inputs/${me.uid}`),m+","+(++seqN)).catch(()=>{})}};
+const mv=()=>{if(cur!=="game"||!code||!me||gk==="lab"||gk==="sim"||gk==="sumo"||gk==="barre"||gk==="fruit"||gk==="amog"||gk==="sta"||gk==="blockdash")return;if(isAim())return brSend();const m=`${(held.has("R")?1:0)-(held.has("L")?1:0)},${(held.has("D")?1:0)-(held.has("U")?1:0)}`;if(m!==lastMv){lastMv=m;set(R(`games/${code}/inputs/${me.uid}`),m+","+(++seqN)).catch(()=>{})}};
 const send=d=>{if(cur!=="game"||gk!=="snake"||d===lastDir)return;lastDir=d;set(R(`games/${code}/inputs/${me.uid}`),d+(++seqN)).catch(()=>{})};
 addEventListener("keydown",e=>{if(cur!=="game"||/^(INPUT|TEXTAREA)$/.test(e.target.tagName))return;const d=KEYS[e.key.length>1?e.key:e.key.toLowerCase()];if(d){e.preventDefault();if(gk!=="snake"){held.add(d);mv()}else send(d)}});
 addEventListener("keyup",e=>{const d=KEYS[e.key.length>1?e.key:e.key.toLowerCase()];if(d&&(gk!=="snake")&&cur==="game"){held.delete(d);mv()}});
@@ -832,7 +832,7 @@ function endStick(k){const s=tp[k];if(!s)return;tp[k]=null;s.el.classList.remove
   if(k==="mv")setHeld(0,0,0,0);else{ptrDown=0;aimLock=0;if(cur==="game"&&isAim())setFire()}}
 function resetTouch(){["mv","aim"].forEach(endStick);tp.sw=null;held.clear();ptrDown=0;aimLock=0;if(cur==="game"){if(isAim())setFire();else if(gk==="surv"||gk==="lab")mv()}}
 gameEl.addEventListener("pointerdown",e=>{
-  if(!touchy(e)||cur!=="game"||gk==="sim"||gk==="sumo"||gk==="barre"||gk==="fruit"||gk==="amog"||gk==="sta"||e.target.closest("button"))return;
+  if(!touchy(e)||cur!=="game"||gk==="sim"||gk==="sumo"||gk==="barre"||gk==="fruit"||gk==="amog"||gk==="sta"||gk==="blockdash"||e.target.closest("button"))return;
   e.preventDefault();const x=e.clientX,y=e.clientY;
   if(gk==="snake"){if(tp.sw)return;tp.sw={id:e.pointerId,ox:x,oy:y}}
   else if(isAim()&&(ctlMode==="pad"||x>=innerWidth*.5)){if(tp.aim)return;tp.aim=mkStick(sR,x,y,e.pointerId);ptrDown=1;setFire()}

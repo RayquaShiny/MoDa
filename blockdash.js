@@ -83,15 +83,16 @@ export async function startBlockDash(env){
  const P={},I={},seen={},walls=[];
  ids.forEach((u,i)=>{
   P[u]={n:players[u].name,c:players[u].color,x:ids.length>1?-5+10*i/(ids.length-1):0,y:0,z:-3+(i%2)*1.3,vx:0,vy:0,vz:0,a:1,g:1,jc:0,cy:0,dv:0,cd:0,sl:0,pu:0,ddx:0,ddz:1,td:0,kx:0,kz:0,ht:-9,cs:0};
-  I[u]={mx:0,mz:0,j:0,s:0,jn:0,sn:0,bot:String(u).startsWith("bot_"),sk:.55+Math.random()*.4,nt:0,tw:0,tk:0,done:0,rp:0};
+  I[u]={mx:0,mz:0,j:0,s:0,jn:0,sn:0,bot:String(u).startsWith("bot_"),sk:.55+Math.random()*.4,hx:(ids.length>1?-5+10*i/(ids.length-1):0)+(Math.random()-.5)*2,hz:-5+Math.random()*4,wt:0,nt:0,tw:0,tk:0,done:0,rp:0};
  });
  const elim=[];let t=0,speed=3.8,trav=0,nd=0,sg=0,sgn=0,lv=1,lastP=-1,rid=0,pubN=0,ended=false,wave=0,first=true;GS=0;
+ const cz=Math.random()<.1;if(cz){lv=8;GS=LV[7].gs}   // MODE RARE (1 chance sur 10) : la partie démarre directement au palier 8, CHAOS
  const spawn=(base=0)=>{
    const pl=LV[lv-1].pool;let k=0;if(!first){do{k=pl[ri(0,pl.length-1)]}while(k===lastP&&pl.length>1)}
    lastP=k;const pat=PAT[k](),dm=Math.max(...pat.map(p=>p.dz)),off=first?SPAWNZ-7:0;
    first=false;wave++;pat.forEach(p=>walls.push({id:++rid,z:SPAWNZ+base+p.dz-off,row:p.row.slice(),mv:p.mv||null,age:0,ox:0,vo:0,cg:p.cg||0}));return dm;
  };
- const pub=extra=>Promise.resolve(set(ref(`games/${c}/state`),JSON.stringify({k:"blockdash",t:+t.toFixed(2),v:+speed.toFixed(2),w:wave,
+ const pub=extra=>Promise.resolve(set(ref(`games/${c}/state`),JSON.stringify({k:"blockdash",cz:cz?1:0,t:+t.toFixed(2),v:+speed.toFixed(2),w:wave,
   sg:sg>0?1:0,lv,lp:+(lv<8?(t-LVT[lv-1])/(LVT[lv]-LVT[lv-1]):1).toFixed(2),el:elim.slice(-3).map(e=>[e.n,+(t-e.t).toFixed(1)]),walls:walls.map(w=>[w.id,+w.z.toFixed(2),w.row,+w.ox.toFixed(2),+w.vo.toFixed(2),w.mv?1:0,w.cg||0]),
   p:ids.map(u=>{const q=P[u];return[u,+q.x.toFixed(2),+q.y.toFixed(2),+q.z.toFixed(2),q.a,q.dv>0?2:!q.g?1:q.pu>0?3:0,q.c,q.n,+(q.vx+q.kx).toFixed(1),+(q.vz+q.kz-q.cs).toFixed(1)]}),...extra}))).catch(()=>{});
  const inputUn=onValue(ref(`games/${c}/inputs`),s=>Object.entries(s.val()||{}).forEach(([u,v])=>{
@@ -105,7 +106,9 @@ export async function startBlockDash(env){
  const ai=(q,i)=>{
   if(t<i.nt)return;i.nt=t+.06+Math.random()*.06;
   let w=null,dist=99;for(const v of walls){const d=v.z-D/2-(q.z+RAD);if(d>-.7&&d<dist){dist=d;w=v}}
-  i.mz=Math.max(-1,Math.min(1,(-1.2-q.z)*.9));
+  if(t>i.wt){i.wt=t+1.2+Math.random()*2.8;i.hx=(Math.random()*2-1)*(HX-1.2);i.hz=-5.6+Math.random()*5}   // chaque bot a son coin de l'arène et en change régulièrement : plus de groupe
+  let sx=0,sz=0;for(const u2 of ids){const o=P[u2];if(o===q||!o.a||Math.abs(o.y-q.y)>1)continue;const dx=q.x-o.x,dz=q.z-o.z,d=Math.hypot(dx,dz);if(d<1.7){const f=(1.7-d)/(d||1);sx+=dx*f;sz+=dz*f}}   // écarte-toi des autres joueurs
+  i.mz=Math.max(-1,Math.min(1,(i.hz-q.z)*.9+sz*.8));
   if(q.g&&q.y>.05){   // sur un bloc : on traverse vers l'arrière du mur, rangée par rangée (obby : choisit le pilier suivant, saute au bon moment)
    i.mz=1;let cr=null,cd=9,nx=null;
    for(const v of walls){const d=Math.abs(v.z-q.z);if(d<cd){cd=d;cr=v}}
@@ -119,11 +122,13 @@ export async function startBlockDash(env){
    const gap=nx.z-D/2-(q.z+RAD);
    if(i.ok&&hv&&hv>cur+.25&&gap<.75&&Math.abs(tx-q.x)<.6)i.jn=Math.max(i.jn,1);
    return}
-  if(!w||dist>8){i.mx=Math.max(-1,Math.min(1,-q.x*.5));return}
+  if(!w||dist>8){i.mx=Math.max(-1,Math.min(1,(i.hx-q.x)*.6+sx*.8));return}
   dist=Math.max(0,dist);
   if(i.tw!==w.id||(w.mv&&t>i.rp)){i.rp=t+.3;
    i.tw=w.id;const w2=walls.find(v=>v!==w&&v.z>w.z&&v.z-w.z<3.4);let bc=1e9;
-   for(let k=0;k<N;k++){let cst=Math.abs(colX(k)+w.ox-q.x)*.8+pen(w.row[k])+(w2?pen(w2.row[k])*.45:0)+(Math.abs(colX(k))>HX-1?1.5:0)+Math.random()*(1-i.sk)*3.2;if(cst<bc){bc=cst;i.tk=k}}
+   for(let k=0;k<N;k++){const cx=colX(k)+w.ox;let cst=Math.abs(cx-q.x)*.8+Math.abs(cx-i.hx)*.2+pen(w.row[k])+(w2?pen(w2.row[k])*.45:0)+(Math.abs(colX(k))>HX-1?1.5:0)+Math.random()*(1-i.sk)*3.2+Math.random()*1.2;
+   for(const u2 of ids){const o=P[u2];if(o===q||!o.a)continue;const j=I[u2];if(j.bot&&j.tw===w.id&&Math.abs(j.tk-k)<=1)cst+=j.tk===k?3:1.2;else if(!j.bot&&Math.abs(o.x-cx)<.9&&Math.abs(o.z-q.z)<3)cst+=1.5}   // évite le trou déjà visé par un autre bot (ou occupé par un joueur)
+  if(cst<bc){bc=cst;i.tk=k}}
   }
   const tx=colX(i.tk)+w.ox,v=w.row[i.tk];i.mx=Math.max(-1,Math.min(1,(tx-q.x)*3));
   if(Math.abs(tx-q.x)>.5||!v)return;
@@ -139,8 +144,8 @@ export async function startBlockDash(env){
  let last=performance.now(),acc=0,raf=0;
  const step=()=>{
   t+=DT;if(sg>0)sg-=DT;
-  let nl=1;while(nl<8&&t>=LVT[nl])nl++;if(nl!==lv){lv=nl;GS=LV[nl-1].gs}   // changement de palier
-  const L=LV[lv-1],bs=Math.min(8,3.8+t*.045),en=sg>0?Math.min(1,(4-sg)*2,sg*2):0;speed=bs*(1+Math.min(.3,.12+.03*lv)*Math.max(0,en));   // montée en vitesse + « accélérations » ponctuelles
+  let nl=1;while(nl<8&&t>=LVT[nl])nl++;if(cz)nl=8;if(nl!==lv){lv=nl;GS=LV[nl-1].gs}   // changement de palier
+  const L=LV[lv-1],bs=cz?Math.min(8,5.4+t*.04):Math.min(8,3.8+t*.045),en=sg>0?Math.min(1,(4-sg)*2,sg*2):0;speed=bs*(1+Math.min(.3,.12+.03*lv)*Math.max(0,en));   // montée en vitesse + « accélérations » ponctuelles
   trav+=speed*DT;                                                                                          // les vagues sont espacées en DISTANCE (écart constant même quand ça accélère)
   if(trav>=nd){
    if(L.sp&&t>=sgn&&sg<=0&&Math.random()<L.sp){sg=4;sgn=t+Math.max(8,16-lv)}
@@ -207,7 +212,7 @@ export async function startBlockDash(env){
 export function createBlockDashClient(env){
  const {R:ref,set,onValue,getMe,$}=env,cv=$("cv"),x=cv.getContext("2d"),ov=$("ov"),help=$("ghelp");
  let active=false,un=()=>{},raf=0,state=null,snapT=0,me="",code="",jump=0,dive=0,last="",lastSend=0,tm=0,lastT=0,joy=null,rowsPrev=new Map(),shk=0,lvSeen=0,lvT=0;
- let kc=0;const keys=new Map(),btn=new Map(),rend=new Map(),parts=[],cam={x:0,y:9.6,z:-14.2,p:.5};
+ let kc=0,touch=!!(window.matchMedia&&matchMedia("(pointer:coarse)").matches);const keys=new Map(),btn=new Map(),rend=new Map(),parts=[],cam={x:0,y:9.6,z:-14.2,p:.5};
  const FOC=520,CY=225,NEAR=.4,cp=Math.cos(cam.p),sp=Math.sin(cam.p),BJ={x:712,y:462,r:58},BD={x:596,y:500,r:44},PAL=[[335,85,60],[190,85,52],[40,95,58],[268,70,64],[150,70,48]];
  /* ---- entrées ---- */
  const vec=()=>{
@@ -230,7 +235,7 @@ export function createBlockDashClient(env){
  const blur=()=>{keys.clear();joy=null;btn.clear()};
  const toC=e=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left)*W/r.width,(e.clientY-r.top)*H/r.height]};
  const hit=(p,b)=>Math.hypot(p[0]-b.x,p[1]-b.y)<=b.r+10;
- const pd=e=>{if(!active||e.target.closest("button"))return;e.preventDefault();const p=toC(e);try{cv.setPointerCapture(e.pointerId)}catch{}
+ const pd=e=>{if(!active||e.target.closest("button"))return;e.preventDefault();if(e.pointerType!=="mouse")touch=true;const p=toC(e);try{cv.setPointerCapture(e.pointerId)}catch{}
   if(hit(p,BJ)){btn.set(e.pointerId,"j");jump++;send(true)}else if(hit(p,BD)){btn.set(e.pointerId,"d");dive++;send(true)}
   else if(!joy&&p[0]<W*.55)joy={id:e.pointerId,ox:p[0],oy:p[1],px:p[0],py:p[1]}};
  const pm=e=>{if(joy&&joy.id===e.pointerId){const p=toC(e);joy.px=p[0];joy.py=p[1]}};
@@ -360,22 +365,40 @@ export function createBlockDashClient(env){
   hud(now,S,mr);
   const rk=S&&S.o&&S.rk?S.rk.indexOf(me)+1:0;ov.textContent=S?(S.o?(S.msg||"Fin de partie")+(rk?` · Tu finis ${rk}${rk===1?"er":"e"} sur ${S.p.length}`:""):S.cd?String(S.cd):""):"";
  }
+ /* ---- interface (HUD) : refaite. Zones fixes, rien ne se chevauche : haut-gauche = partie + palier, haut-droite = survivants + éliminés,
+        haut-centre = statut (éliminé / accélération), centre = annonces de palier, bas = aide (début) + boutons tactiles ---- */
+ const T=(t,px,py,font,col,al)=>{x.font=font;x.fillStyle=col;x.textAlign=al||"left";x.fillText(t,px,py);x.textAlign="left"};
+ const fit=(t,mw,font)=>{x.font=font;t=String(t);if(x.measureText(t).width<=mw)return t;while(t.length>1&&x.measureText(t+"…").width>mw)t=t.slice(0,-1);return t+"…"};
+ const card=(px,py,w,h,r,bg,bd)=>rounded(px,py,w,h,r,bg||"#120b2de6",bd||"#ffffff3a");
  function hud(now,S,mr){
-  const al=S?S.p.filter(q=>q[4]).length:0,me2=S&&S.p.find(q=>q[0]===me);
-  if(mr&&mr.a&&S&&!S.o&&(Math.abs(mr.x)>HX-1.2||mr.z<-HZ+1.2||mr.z>HZ-1.2)){x.fillStyle=`rgba(255,60,90,${.1+.07*Math.sin(now/90)})`;x.fillRect(0,0,W,16);x.fillRect(0,H-16,W,16);x.fillRect(0,0,16,H);x.fillRect(W-16,0,16,H)}
-  rounded(18,16,210,58,13,"#120b2ddd","#ffffff33");x.fillStyle="#fff";x.font="900 23px system-ui";x.fillText("BLOCK DASH",32,43);x.fillStyle="#d9baff";x.font="700 11px system-ui";x.fillText("VAGUE "+(S?S.w:0)+" · "+(S?fmt(S.t):"0:00"),34,62);
-  rounded(650,16,132,58,13,"#120b2ddd","#ffffff33");x.fillStyle="#d9baff";x.font="700 10px system-ui";x.fillText("SURVIVANTS",664,36);x.fillStyle="#fff";x.font="900 22px system-ui";x.fillText(al+" / "+(S?S.p.length:0),664,62);
-  rounded(18,87,380,34,10,"#120b2dcc","#ffffff33");x.font="11px system-ui";x.fillStyle="#ff8ab4";x.fillText("■ MUR : 2 sauts",30,109);x.fillStyle="#ffcf62";x.fillText("■ HAUT : un trou",120,109);x.fillStyle="#9b86c4";x.fillText("■ FISSURÉ : plonge",213,109);x.fillStyle="#4fd8ee";x.fillText("■ MOBILE",312,109);x.fillStyle="#6aa8ff";x.fillText("■ OBBY",368,109);
-  if(me2&&!me2[4]&&S&&!S.o){rounded(280,16,240,34,14,"#3a0c2aee","#ff7be5");x.fillStyle="#fff";x.font="800 14px system-ui";x.textAlign="center";x.fillText("💦 Éliminé — tu regardes la suite",400,38);x.textAlign="left"}
-  if(S&&S.lv&&!S.o){rounded(18,126,150,20,9,"#120b2dcc","#ffffff33");x.fillStyle="#7be7ff";x.font="800 10px system-ui";x.fillText("PALIER "+S.lv+" / 8",28,139);x.fillStyle="#ffffff22";x.fillRect(100,133,56,4);x.fillStyle="#7be7ff";x.fillRect(100,133,56*(S.lp||0),4)}
-  if(S&&!S.o&&lvSeen&&now-lvT<3600){const a=Math.max(0,Math.min(1,(3600-(now-lvT))/600,(now-lvT)/200)),nm=LNM[Math.min(7,lvSeen-1)];x.globalAlpha=a;rounded(190,150,420,66,16,"#120b2df0","#7be7ff88");x.textAlign="center";x.fillStyle="#7be7ff";x.font="800 12px system-ui";x.fillText("PALIER "+lvSeen+" / 8",400,172);x.fillStyle="#fff";x.font="900 22px system-ui";x.fillText(nm[0],400,196);x.fillStyle="#d9baff";x.font="600 12px system-ui";x.fillText(nm[1],400,212);x.textAlign="left";x.globalAlpha=1}
-  if(S&&S.el&&!S.o){let li=0;S.el.forEach(e=>{if(e[1]>4)return;x.globalAlpha=Math.max(0,Math.min(1,(4-e[1])*1.5));rounded(640,84+li*26,142,22,8,"#3a0c2acc","#ff7be566");x.fillStyle="#ffd1f7";x.font="600 11px system-ui";x.fillText("💦 "+String(e[0]).slice(0,14),650,99+li*26);x.globalAlpha=1;li++})}
-  if(S&&S.sg&&!S.o){rounded(290,56,220,30,14,`rgba(255,106,43,${.78+.2*Math.sin(now/80)})`,"#ffd9a8");x.fillStyle="#fff";x.font="800 14px system-ui";x.textAlign="center";x.fillText("⚡ ACCÉLÉRATION !",400,76);x.textAlign="left"}
-  if(S&&S.t<7&&!S.o){rounded(130,518,540,32,14,"#120b2ddd","#ffffff33");x.fillStyle="#f1eaff";x.font="600 11px system-ui";x.textAlign="center";x.fillText("Passe par les trous · double saut sur les murs de 2 · plonge dans les fissurés · bouscule les rivaux",400,538);x.textAlign="left"}
-  /* commandes tactiles */
-  const pj=[...btn.values()].includes("j"),pd2=[...btn.values()].includes("d");
-  [[BJ,"SAUT",pj],[BD,"PLONGE",pd2]].forEach(([b,l,on])=>{x.beginPath();x.arc(b.x,b.y,b.r,0,7);x.fillStyle=on?"#ffffff55":"#120b2d99";x.fill();x.strokeStyle=on?"#fff":"#ffffff66";x.lineWidth=3;x.stroke();x.fillStyle="#fff";x.font="800 13px system-ui";x.textAlign="center";x.fillText(l,b.x,b.y+5);x.textAlign="left"});
-  if(joy){x.beginPath();x.arc(joy.ox,joy.oy,42,0,7);x.strokeStyle="#ffffff55";x.lineWidth=3;x.stroke();const dx=joy.px-joy.ox,dy=joy.py-joy.oy,l=Math.hypot(dx,dy),m=l>42?42/l:1;x.beginPath();x.arc(joy.ox+dx*m,joy.oy+dy*m,20,0,7);x.fillStyle="#ffffffaa";x.fill()}
+  const al=S?S.p.filter(q=>q[4]).length:0,me2=S&&S.p.find(q=>q[0]===me),live=S&&!S.o,fnt="system-ui";
+  /* bords rouges : tu es près du vide */
+  if(mr&&mr.a&&live&&(Math.abs(mr.x)>HX-1.2||mr.z<-HZ+1.2||mr.z>HZ-1.2)){x.fillStyle=`rgba(255,60,90,${.1+.07*Math.sin(now/90)})`;x.fillRect(0,0,W,16);x.fillRect(0,H-16,W,16);x.fillRect(0,0,16,H);x.fillRect(W-16,0,16,H)}
+  /* haut-gauche : partie + palier */
+  card(16,14,206,58,13);T("BLOCK DASH",30,41,"900 22px "+fnt,"#fff");T("VAGUE "+(S?S.w:0)+" · "+(S?fmt(S.t):"0:00"),31,61,"700 12px "+fnt,"#d9baff");
+  if(S&&S.lv){card(16,78,206,28,10);T("PALIER "+S.lv+"/8",28,96,"800 12px "+fnt,"#7be7ff");T(fit(LNM[Math.min(7,S.lv-1)][0],86,"700 12px "+fnt),98,96,"700 12px "+fnt,"#fff");
+   x.fillStyle="#ffffff22";x.fillRect(24,100,190,3);x.fillStyle="#7be7ff";x.fillRect(24,100,190*Math.max(0,Math.min(1,S.lp||0)),3)}
+  /* haut-droite : survivants + éliminés récents */
+  card(W-16-140,14,140,58,13);T("SURVIVANTS",W-16-140+14,34,"700 11px "+fnt,"#d9baff");T(al+" / "+(S?S.p.length:0),W-16-140+14,62,"900 24px "+fnt,"#fff");
+  if(S&&S.el&&live){let li=0;S.el.forEach(e=>{if(e[1]>4)return;x.globalAlpha=Math.max(0,Math.min(1,(4-e[1])*1.5));card(W-16-140,80+li*26,140,22,8,"#3a0c2add","#ff7be566");
+   T("💦 "+fit(e[0],100,"600 12px "+fnt),W-16-140+10,96+li*26,"600 12px "+fnt,"#ffd1f7");x.globalAlpha=1;li++})}
+  /* haut-centre : statut */
+  let cy=14;
+  if(me2&&!me2[4]&&live){card(270,cy,260,32,14,"#3a0c2aee","#ff7be5");T("💦 Éliminé : tu regardes la suite",400,cy+21,"800 14px "+fnt,"#fff","center");cy+=38}
+  if(S&&S.sg&&live){rounded(290,cy,220,30,14,`rgba(255,106,43,${.82+.16*Math.sin(now/80)})`,"#ffd9a8");T("⚡ ACCÉLÉRATION !",400,cy+20,"800 14px "+fnt,"#fff","center")}
+  /* centre : annonce de palier (3,6 s) puis mode rare */
+  if(live&&lvSeen&&now-lvT<3600){const a=Math.max(0,Math.min(1,(3600-(now-lvT))/600,(now-lvT)/200)),nm=LNM[Math.min(7,lvSeen-1)];x.globalAlpha=a;card(190,150,420,68,16,"#120b2df2","#7be7ff88");
+   T("PALIER "+lvSeen+" / 8",400,172,"800 12px "+fnt,"#7be7ff","center");T(nm[0],400,196,"900 22px "+fnt,"#fff","center");T(fit(nm[1],390,"600 12px "+fnt),400,212,"600 12px "+fnt,"#d9baff","center");x.globalAlpha=1}
+  if(S&&S.cz&&live&&S.t<6){x.globalAlpha=Math.max(0,Math.min(1,(6-S.t)/.8));card(170,226,460,28,12,"#4a0c3af2","#ff4fd8");T("🌪️ MODE RARE : CHAOS DIRECT ! (1 chance sur 10)",400,245,"800 13px "+fnt,"#ffd1f7","center");x.globalAlpha=1}
+  /* aide du début : légende des blocs (haut) puis consigne (bas, à gauche des boutons) */
+  if(S&&live&&S.t<12){x.globalAlpha=Math.max(0,Math.min(1,(12-S.t)/1.5));card(150,112,500,26,10,"#120b2dd9");
+   [["#ff8ab4","■ MUR : 2 sauts",168],["#ffcf62","■ HAUT : un trou",290],["#9b86c4","■ FISSURÉ : plonge",412],["#4fd8ee","■ MOBILE",546],["#6aa8ff","■ OBBY",610]].forEach(l=>T(l[1],l[2],129,"700 12px "+fnt,l[0]));x.globalAlpha=1}
+  if(S&&live&&S.t<7){x.globalAlpha=Math.max(0,Math.min(1,(7-S.t)/1));card(30,482,500,52,12,"#120b2de0");
+   T("Passe par les trous · double saut sur les murs de 2",280,504,"600 13px "+fnt,"#f1eaff","center");T("plonge dans les fissurés · bouscule les rivaux",280,524,"600 13px "+fnt,"#f1eaff","center");x.globalAlpha=1}
+  /* commandes tactiles (cachées sur ordinateur tant qu'on n'a pas touché l'écran) */
+  if(touch){const pj=[...btn.values()].includes("j"),pd2=[...btn.values()].includes("d");
+   [[BJ,"SAUT",pj],[BD,"PLONGE",pd2]].forEach(([b,l,on])=>{x.beginPath();x.arc(b.x,b.y,b.r,0,7);x.fillStyle=on?"#ffffff55":"#120b2d99";x.fill();x.strokeStyle=on?"#fff":"#ffffff66";x.lineWidth=3;x.stroke();T(l,b.x,b.y+5,"800 14px "+fnt,"#fff","center")});
+   if(joy){x.beginPath();x.arc(joy.ox,joy.oy,42,0,7);x.strokeStyle="#ffffff55";x.lineWidth=3;x.stroke();const dx=joy.px-joy.ox,dy=joy.py-joy.oy,l=Math.hypot(dx,dy),m=l>42?42/l:1;x.beginPath();x.arc(joy.ox+dx*m,joy.oy+dy*m,20,0,7);x.fillStyle="#ffffffaa";x.fill()}}
  }
  return {enter(c){
   active=true;code=c;me=getMe().uid;jump=0;dive=0;last="";lastSend=0;state=null;joy=null;parts.length=0;rend.clear();rowsPrev=new Map();keys.clear();btn.clear();cam.x=0;shk=0;lvSeen=0;lvT=0;

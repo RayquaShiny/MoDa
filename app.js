@@ -8,18 +8,20 @@ import {startBarre,createBarreClient} from "./barre.js";
 import {startAmog,createAmogClient} from "./amog.js";
 import {createStaClient} from "./sta.js";
 import {startBlockDash,createBlockDashClient} from "./blockdash.js";
+import {createFishClient} from "./fishgrow.js";
 import {createVoice} from "./voice.js";
 
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="138";
+const VER="141";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
 const h=(t,txt,fn)=>{const e=document.createElement(t);if(txt!=null)e.textContent=txt;if(fn)e.onclick=fn;return e};
 const R=p=>ref(db,p);
 const TOUCH=matchMedia("(hover:none) and (pointer:coarse)").matches,LOW=TOUCH||(navigator.hardwareConcurrency||8)<=4; // écran tactile : mode plein écran + effets allégés
+const SRV=g=>g==="sta"||g==="fish";   // serveurs ouverts persistants (pas de lobby) : Sta I, Feed & Grow: Fish
 const COLORS=["#ff4d6d","#3ee6c4","#ffd23f","#6c8cff","#ff9f1c","#c77dff","#80ed99","#f8f9fa","#ff7ab6","#00b4d8"];
 const VIEWS=["auth","home","stats","lobby","game"];
 const OW=["rayqua","8x"],ownerMail=n=>`${n}@moda.owner`;
@@ -209,7 +211,7 @@ async function run(u){
           console.warn("Presence onDisconnect",e);
           set(presenceRef,true).catch(()=>{});
         });
-        if(code&&lobby)onDisconnect(R(lobby.host===u.uid&&lobby.game!=="sta"?`lobbies/${code}`:`lobbies/${code}/players/${u.uid}`)).remove(); // ré-armé après une coupure
+        if(code&&lobby)onDisconnect(R(lobby.host===u.uid&&!SRV(lobby.game)?`lobbies/${code}`:`lobbies/${code}/players/${u.uid}`)).remove(); // ré-armé après une coupure
         $("net").hidden=true;if(was)toast("Reconnecté ✅");was=true;
       }else if(was)nt=setTimeout(()=>{$("net").hidden=false},1200);
     }));
@@ -283,7 +285,7 @@ const mkLobby=game=>async()=>{
   await set(R(`lobbies/${c}`),{host:me.uid,game,status:"lobby",opts:{sp:1,wr:0,bo:1},players:{[me.uid]:{name:me.name,color:COLORS[0],ready:true,...ownTag()}}});
   onDisconnect(R(`lobbies/${c}`)).remove();enter(c);
 };
-$("tsnake").onclick=mkLobby("snake");$("tsta").onclick=()=>joinSta();$("tsurv").onclick=mkLobby("surv");$("tbr").onclick=mkLobby("br");$("ttk").onclick=mkLobby("tk");$("tlab").onclick=mkLobby("lab");$("tsim").onclick=mkLobby("sim");$("tsumo").onclick=mkLobby("sumo");$("tbarre").onclick=mkLobby("barre");$("tfruit").onclick=mkLobby("fruit");$("tamog").onclick=mkLobby("amog");$("tblockdash").onclick=mkLobby("blockdash");
+$("tsnake").onclick=mkLobby("snake");$("tsta").onclick=()=>joinSta();$("tsurv").onclick=mkLobby("surv");$("tbr").onclick=mkLobby("br");$("ttk").onclick=mkLobby("tk");$("tlab").onclick=mkLobby("lab");$("tsim").onclick=mkLobby("sim");$("tsumo").onclick=mkLobby("sumo");$("tbarre").onclick=mkLobby("barre");$("tfruit").onclick=mkLobby("fruit");$("tamog").onclick=mkLobby("amog");$("tblockdash").onclick=mkLobby("blockdash");$("tfish").onclick=()=>joinFish();
 $("join").onclick=()=>joinLobby($("joincode").value.trim().toUpperCase());
 $("joincode").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();$("join").click()}});
 async function joinLobby(c){
@@ -305,8 +307,8 @@ function enter(c){
     lobby=l;
     if(spec&&l.status==="lobby")spec=false;   // la partie est finie / pas lancée : l'admin redevient un joueur du lobby
     if(isMaintained(l.game)){toast(maintMsg(l.game));leaveLobby();return}
-    if(((l.status==="lobby"||l.game==="sim"||l.game==="fruit")&&l.host!==me.uid||l.game==="sta")&&!(l.players&&l.players[me.uid])&&!spec){ // coupure puis retour : on se réinscrit
-      set(R(`lobbies/${c}/players/${me.uid}`),{name:me.name,color:firstColor(l.players),ready:false,...(l.game==="sta"?{j:Date.now()}:{}),...ownTag()});onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();return}
+    if(((l.status==="lobby"||l.game==="sim"||l.game==="fruit")&&l.host!==me.uid||SRV(l.game))&&!(l.players&&l.players[me.uid])&&!spec){ // coupure puis retour : on se réinscrit
+      set(R(`lobbies/${c}/players/${me.uid}`),{name:me.name,color:firstColor(l.players),ready:false,...(SRV(l.game)?{j:Date.now()}:{}),...ownTag()});onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();return}
     renderLobby();
     if(l.status==="playing"&&cur!=="game")enterGame(c);
     if(l.status==="lobby"&&cur==="game"){unState&&unState();unState=null;show("lobby")}
@@ -318,7 +320,7 @@ function renderLobby(){
   Object.entries(pl).forEach(([u,p])=>{const r=h("div",null);r.className="pl";const sw=h("span");sw.className="sw";sw.style.background=p.color;
     r.append(sw,h("span",(p.ow?"🛡️ ":"")+p.name+(u===lobby.host?" (hôte)":"")+(p.wins?` 🏆${p.wins}`:"")),h("span",p.ready?"✔ prêt":"…"));b.append(r)});
   $("ready").hidden=host;$("ready").textContent=pl[me.uid]?.ready?"Pas prêt":"Prêt";
-  $("ltitle").textContent={snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",tk:"💥 Tanks",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",barre:"🌀 La barre malicieuse",fruit:"🍎 Fruit Forager",sta:"STA I",amog:"🚀 Amog Us",blockdash:"🧱 Block Dash"}[lobby.game]||"Lobby";
+  $("ltitle").textContent=(rawHide(lobby.game)&&!(me&&me.owner))?"❓ ???":{snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",tk:"💥 Tanks",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",barre:"🌀 La barre malicieuse",fruit:"🍎 Fruit Forager",sta:"STA I",amog:"🚀 Amog Us",blockdash:"🧱 Block Dash",fish:"🐟 Feed & Grow: Fish"}[lobby.game]||"Lobby";
   $("opts").style.display=lobby.game==="snake"?"":"none";
   const op=lobby.opts||{};$("oSp").textContent="⚡ Vitesse : "+["lente","normale","rapide"][op.sp??1];
   $("oWr").textContent=op.wr?"🌀 Murs : traversables":"🧱 Murs : mortels";$("oBo").textContent=op.bo===0?"🎁 Bonus : non":"🎁 Bonus : oui";
@@ -369,6 +371,34 @@ async function joinSta(pref){   // pref : serveur à essayer en premier (reprise
   if(!c)return toast(err?`Impossible de rejoindre STA I (${err.code||"erreur"})`:"Tous les serveurs STA I sont pleins");
   onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();enter(c);
 }
+// ---------- Feed & Grow: Fish : serveur persistant (FISH1, FISH2…), même principe que Sta I : on arrive directement dans le récif ; l'hôte = le plus ancien joueur ----------
+const FISH_MAX=24;
+async function joinFish(pref){
+  if(isMaintained("fish"))return toast(maintMsg("fish"));
+  if(code)await leaveLobby();
+  let c=null,err=null;
+  const ks=[];if(typeof pref==="string"&&/^FISH\d{1,2}$/.test(pref)&&+pref.slice(4)<=30)ks.push(pref);
+  for(let i=1;i<=30;i++)if(!ks.includes("FISH"+i))ks.push("FISH"+i);
+  for(const k of ks){
+    if(c)break;
+    try{
+      const l=(await get(R(`lobbies/${k}`))).val(),pl=(l&&l.players)||{},n=Object.keys(pl).length;
+      if(l&&l.game!=="fish")continue;
+      if(l&&n>=FISH_MAX&&!pl[me.uid])continue;
+      if(l&&l.kick&&l.kick[me.uid])continue;
+      const mine={name:me.name,color:firstColor(pl),ready:true,j:Date.now(),...ownTag()};
+      if(l&&n)await set(R(`lobbies/${k}/players/${me.uid}`),mine);   // serveur déjà occupé : on s'ajoute seulement dans players/<uid>
+      else{                                                          // serveur inexistant ou vide : on le (re)crée avec un récif neuf
+        if(l)await remove(R(`games/${k}`)).catch(()=>{});
+        try{await update(R(`lobbies/${k}`),{host:me.uid,game:"fish",status:"playing",opts:{},[`players/${me.uid}`]:mine})}
+        catch{if(!l)throw 0;await set(R(`lobbies/${k}/players/${me.uid}`),mine)}
+      }
+      c=k;
+    }catch(e){err=e||{}}
+  }
+  if(!c)return toast(err?`Impossible de rejoindre Feed & Grow (${err.code||"erreur"})`:"Tous les serveurs Feed & Grow sont pleins");
+  onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();enter(c);
+}
 // Admin (owners) : rejoindre un lobby, jouer dans une partie ouverte (STA I, Mine Simulator, Fruit Forager) ou observer une partie déjà lancée
 async function admJoin(c){
   if(!me||!me.owner)return;
@@ -376,8 +406,8 @@ async function admJoin(c){
   let l;try{l=(await get(R(`lobbies/${c}`))).val()}catch{return admErr()}
   if(!l)return toast("Lobby introuvable");
   try{if(l.kick&&l.kick[me.uid])await remove(R(`lobbies/${c}/kick/${me.uid}`))}catch{}   // un owner n'est jamais bloqué
-  if(l.game==="sta"){
-    const pl=l.players||{};if(Object.keys(pl).length>=STA_MAX&&!pl[me.uid])return toast("Serveur plein");
+  if(SRV(l.game)){
+    const pl=l.players||{};if(Object.keys(pl).length>=(l.game==="fish"?FISH_MAX:STA_MAX)&&!pl[me.uid])return toast("Serveur plein");
     try{await update(R(`lobbies/${c}`),{[`players/${me.uid}`]:{name:me.name,color:firstColor(pl),ready:true,j:Date.now(),...ownTag()}})}catch{return admErr()}
     onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();return enter(c);
   }
@@ -385,7 +415,7 @@ async function admJoin(c){
   spec=true;enter(c);toast("👁️ Mode observateur : tu regardes la partie sans jouer");
 }
 async function leaveLobby(){
-  if(!code)return;const c=code,sta=!!lobby&&lobby.game==="sta",host=lobby&&lobby.host===me.uid&&!sta;local();
+  if(!code)return;const c=code,sta=!!lobby&&SRV(lobby.game),host=lobby&&lobby.host===me.uid&&!sta;local();
   onDisconnect(R(`lobbies/${c}`)).cancel();onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).cancel();
   try{if(host){await remove(R(`games/${c}`));await remove(R(`lobbies/${c}`))}else{await remove(R(`lobbies/${c}/players/${me.uid}`));if(sta&&!(await get(R(`lobbies/${c}/players`))).val())await remove(R(`games/${c}`))}}catch{}
 }
@@ -408,17 +438,19 @@ let staC=null;
 function enterStaGame(c){staC=staC||createStaClient(simEnv());return staC.enter(c)}
 let bd=null;
 function enterBlockDashGame(c){bd=bd||createBlockDashClient(simEnv());return bd.enter(c)}
+let fg=null;
+function enterFishGame(c){fg=fg||createFishClient(simEnv());return fg.enter(c)}
 // ---------- Mise à jour obligatoire et automatique : sauvegarde, rechargement, puis retour là où on était ----------
 // · accueil / stats / connexion (rien en cours de saisie) : rechargement direct
 // · lobby : on recharge puis on retourne dans le même lobby
 // · Sta I, Mine Simulator, Fruit Forager (mondes ouverts) : sauvegarde, rechargement, retour dans la partie
 // · autres jeux (manche en cours) : impossible de sauver une manche sans la casser pour tous les joueurs → rechargement dès la fin de la manche (retour au lobby)
-const RESUME_KEY="moda.resume",OPEN_GAMES=["sta","sim","fruit"];
+const RESUME_KEY="moda.resume",OPEN_GAMES=["sta","fish","sim","fruit"];
 let updPending=false,updBusy=false,updToast=false;
 const within=(p,ms=3000)=>Promise.race([Promise.resolve(p),new Promise(r=>setTimeout(r,ms))]);
 async function stashResume(){   // sauvegarde (attend Firebase, 3 s max), puis note où revenir après le rechargement
   if(!me||!code||!lobby)return;
-  const c=code,g=lobby.game,host=lobby.host===me.uid&&g!=="sta";
+  const c=code,g=lobby.game,host=lobby.host===me.uid&&!SRV(g);
   try{
     if(g==="sta"&&staC&&staC.save)await within(staC.save());
     else if(cur==="game"&&(g==="sim"||g==="fruit")){
@@ -449,6 +481,7 @@ async function resumeAfterUpdate(){   // appelée une fois connecté : si on a r
   if(!r||r.u!==me.uid||!(Date.now()-r.t<120000)||code||cur==="game")return;
   toast("✅ Mise à jour installée : retour dans ta partie…");
   if(r.g==="sta")return joinSta(r.c).catch(err);
+  if(r.g==="fish")return joinFish(r.c).catch(err);
   try{
     const l=(await get(R(`lobbies/${r.c}`))).val();
     if(!l||l.game!==r.g)return toast("La partie n'existe plus");
@@ -537,6 +570,7 @@ function enterGame(c){
   if(lobby&&lobby.game==="sta"){show("game");st=pv=null;gk="sta";held.clear();lastMv="";scoreKey="";document.body.dataset.g="sta";wake();orientHint();unState=enterStaGame(c);return}
   if(lobby&&lobby.game==="barre"){show("game");st=pv=null;gk="barre";held.clear();lastMv="";scoreKey="";document.body.dataset.g="barre";wake();orientHint();unState=enterBarreGame(c);return}
   if(lobby&&lobby.game==="amog"){show("game");st=pv=null;gk="amog";held.clear();lastMv="";scoreKey="";document.body.dataset.g="amog";wake();orientHint();unState=enterAmogGame(c);return}
+  if(lobby&&lobby.game==="fish"){show("game");st=pv=null;gk="fish";held.clear();lastMv="";scoreKey="";document.body.dataset.g="fish";wake();orientHint();unState=enterFishGame(c);return}
   if(lobby&&lobby.game==="blockdash"){show("game");st=pv=null;gk="blockdash";held.clear();lastMv="";scoreKey="";document.body.dataset.g="blockdash";wake();orientHint();unState=enterBlockDashGame(c);return}
   if(lobby&&lobby.game==="sumo"){show("game");st=pv=null;gk="sumo";held.clear();lastMv="";scoreKey="";document.body.dataset.g="sumo";wake();orientHint();unState=enterSumoGame(c);return}
   if(lobby&&lobby.game==="fruit"){show("game");st=pv=null;gk="fruit";held.clear();lastMv="";scoreKey="";document.body.dataset.g="fruit";wake();orientHint();unState=enterFruitGame(c);return}
@@ -798,7 +832,7 @@ function frame(now){
 }
 const KEYS={ArrowUp:"U",w:"U",z:"U",ArrowDown:"D",s:"D",ArrowLeft:"L",a:"L",q:"L",ArrowRight:"R",d:"R"};
 const held=new Set();let seqN=0;
-const mv=()=>{if(cur!=="game"||!code||!me||gk==="lab"||gk==="sim"||gk==="sumo"||gk==="barre"||gk==="fruit"||gk==="amog"||gk==="sta"||gk==="blockdash")return;if(isAim())return brSend();const m=`${(held.has("R")?1:0)-(held.has("L")?1:0)},${(held.has("D")?1:0)-(held.has("U")?1:0)}`;if(m!==lastMv){lastMv=m;set(R(`games/${code}/inputs/${me.uid}`),m+","+(++seqN)).catch(()=>{})}};
+const mv=()=>{if(cur!=="game"||!code||!me||gk==="lab"||gk==="sim"||gk==="sumo"||gk==="barre"||gk==="fruit"||gk==="amog"||gk==="sta"||gk==="blockdash"||gk==="fish")return;if(isAim())return brSend();const m=`${(held.has("R")?1:0)-(held.has("L")?1:0)},${(held.has("D")?1:0)-(held.has("U")?1:0)}`;if(m!==lastMv){lastMv=m;set(R(`games/${code}/inputs/${me.uid}`),m+","+(++seqN)).catch(()=>{})}};
 const send=d=>{if(cur!=="game"||gk!=="snake"||d===lastDir)return;lastDir=d;set(R(`games/${code}/inputs/${me.uid}`),d+(++seqN)).catch(()=>{})};
 addEventListener("keydown",e=>{if(cur!=="game"||/^(INPUT|TEXTAREA)$/.test(e.target.tagName))return;const d=KEYS[e.key.length>1?e.key:e.key.toLowerCase()];if(d){e.preventDefault();if(gk!=="snake"){held.add(d);mv()}else send(d)}});
 addEventListener("keyup",e=>{const d=KEYS[e.key.length>1?e.key:e.key.toLowerCase()];if(d&&(gk!=="snake")&&cur==="game"){held.delete(d);mv()}});
@@ -832,7 +866,7 @@ function endStick(k){const s=tp[k];if(!s)return;tp[k]=null;s.el.classList.remove
   if(k==="mv")setHeld(0,0,0,0);else{ptrDown=0;aimLock=0;if(cur==="game"&&isAim())setFire()}}
 function resetTouch(){["mv","aim"].forEach(endStick);tp.sw=null;held.clear();ptrDown=0;aimLock=0;if(cur==="game"){if(isAim())setFire();else if(gk==="surv"||gk==="lab")mv()}}
 gameEl.addEventListener("pointerdown",e=>{
-  if(!touchy(e)||cur!=="game"||gk==="sim"||gk==="sumo"||gk==="barre"||gk==="fruit"||gk==="amog"||gk==="sta"||gk==="blockdash"||e.target.closest("button"))return;
+  if(!touchy(e)||cur!=="game"||gk==="sim"||gk==="sumo"||gk==="barre"||gk==="fruit"||gk==="amog"||gk==="sta"||gk==="blockdash"||gk==="fish"||e.target.closest("button"))return;
   e.preventDefault();const x=e.clientX,y=e.clientY;
   if(gk==="snake"){if(tp.sw)return;tp.sw={id:e.pointerId,ox:x,oy:y}}
   else if(isAim()&&(ctlMode==="pad"||x>=innerWidth*.5)){if(tp.aim)return;tp.aim=mkStick(sR,x,y,e.pointerId);ptrDown=1;setFire()}
@@ -1779,7 +1813,7 @@ function startStats(){
 function renderStats(D){
   const pr=D.presence||{},us=D.users||{},lobs=Object.entries(D.lobbies||{}),fr=D.friends||{},now=Date.now();
   const online=Object.keys(pr).filter(u=>pr[u]),made=Object.values(us).map(u=>u.createdAt||0),nUsers=Object.keys(us).length;
-  const GN={tk:["💥","Tanks"],snake:["🐍","Snake"],surv:["🧟","Survie coop"],br:["🔫","Battle Royale"],lab:["🧩","Évasion coop"],sim:["⛏️","Mine Simulator"],sumo:["🤼","Sumo Arena"],barre:["🌀","La barre malicieuse"],fruit:["🍎","Fruit Forager"],amog:["🚀","Amog Us"],blockdash:["🧱","Block Dash"],sta:["","STA I"]};
+  const GN={tk:["💥","Tanks"],snake:["🐍","Snake"],surv:["🧟","Survie coop"],br:["🔫","Battle Royale"],lab:["🧩","Évasion coop"],sim:["⛏️","Mine Simulator"],sumo:["🤼","Sumo Arena"],barre:["🌀","La barre malicieuse"],fruit:["🍎","Fruit Forager"],amog:["🚀","Amog Us"],blockdash:["🧱","Block Dash"],fish:["🐟","Feed & Grow: Fish"],sta:["","STA I"]};
   const ago=t=>{if(!t)return"date inconnue";const m=Math.floor((now-t)/6e4);return m<1?"à l'instant":m<60?`il y a ${m} min`:m<1440?`il y a ${Math.floor(m/60)} h`:`il y a ${Math.floor(m/1440)} j`};
   const card=([ic,v,l])=>{const d=h("div");d.className="stat";const i=h("span",ic);i.className="ic";d.append(i,h("b",String(v)),h("span",l));return d};
   const playing=lobs.filter(([,l])=>l&&l.status==="playing"),open=lobs.filter(([,l])=>l&&l.status==="lobby");
@@ -1805,7 +1839,7 @@ function renderStats(D){
    const recent=Object.entries(us).map(([uid,user])=>({uid,name:user?.name||"Joueur inconnu",time:ips[uid]?.lastConnectedAt||0})).filter(x=>x.time).sort((a,b)=>b.time-a.time).slice(0,3);
    $("stlastlogins").replaceChildren(...(recent.length?recent.map((x,i)=>{const row=h("div");row.className="lrow";const rank=h("b",["🥇","🥈","🥉"][i]);const nm=h("span",x.name);nm.className="g";const dt=h("small",new Date(x.time).toLocaleString("fr-FR"));row.append(rank,nm,dt);return row}):[h("span","Aucune connexion enregistrée pour le moment")]));
    $("onl").replaceChildren(...(online.length?online.map(u=>{const c=h("span");c.className="chip";const p=h("i");p.className="on";c.append(p,(us[u]?.name||"?")+" ("+(latestIP(ips[u])||"IP inconnue")+")");return c}):[h("span","Personne en ligne")]));
-  const rows=[...playing,...open].map(([c,l])=>{const g=GN[l.game]||["🎲",l.game||"Jeu"],n=Object.keys(l.players||{}).length,r=h("div");r.className="lrow";
+  const rows=[...playing,...open].map(([c,l])=>{const g=(rawHide(l.game)&&!(me&&me.owner))?["❓","???"]:GN[l.game]||["🎲",l.game||"Jeu"],n=Object.keys(l.players||{}).length,r=h("div");r.className="lrow";
     const t=h("span",`${g[0]} ${g[1]}`);t.className="g";const cd=h("code",c);const b=h("span",l.status==="playing"?"En partie":"Lobby");b.className="badge"+(l.status==="playing"?" pl2":"");
     r.append(t,cd,h("small",`${n} joueur${n>1?"s":""}`),b);return r});
   $("stlob").replaceChildren(...(rows.length?rows:[Object.assign(h("span","Aucun lobby pour l'instant"),{className:"empty"})]));
@@ -2057,24 +2091,29 @@ function drawTk(now){
 
 // ---------- Panneau admin (owners) : onglet 2 du menu Stats ----------
 
-const GAME_NAMES={snake:"Snake",surv:"Survie coop",br:"Battle Royale",lab:"Évasion coop",sim:"Mine Simulator",tk:"Tanks",sumo:"Sumo Arena",barre:"La barre malicieuse",fruit:"Fruit Forager",amog:"Amog Us",blockdash:"Block Dash",sta:"STA I"};
-const GAME_TILES={snake:"tsnake",surv:"tsurv",br:"tbr",lab:"tlab",sim:"tsim",tk:"ttk",sumo:"tsumo",barre:"tbarre",fruit:"tfruit",amog:"tamog",blockdash:"tblockdash",sta:"tsta"};
+const GAME_NAMES={snake:"Snake",surv:"Survie coop",br:"Battle Royale",lab:"Évasion coop",sim:"Mine Simulator",tk:"Tanks",sumo:"Sumo Arena",barre:"La barre malicieuse",fruit:"Fruit Forager",amog:"Amog Us",blockdash:"Block Dash",fish:"Feed & Grow: Fish",sta:"STA I"};
+const GAME_TILES={snake:"tsnake",surv:"tsurv",br:"tbr",lab:"tlab",sim:"tsim",tk:"ttk",sumo:"tsumo",barre:"tbarre",fruit:"tfruit",amog:"tamog",blockdash:"tblockdash",fish:"tfish",sta:"tsta"};
 // État de maintenance : variable À PART (stD est vidé à chaque ouverture du panneau stats, ce qui effaçait la maintenance)
 let maint=null,unMaint=null,maintTry=0,maintRetry=0;   // maint=null : pas encore lu
 const DEFAULT_MAINT={sta:true};                       // jeux en maintenance tant qu'un owner ne les a pas ouverts
 const maintenance=()=>({...DEFAULT_MAINT,...(maint||{})});
 const rawMaint=g=>!!maintenance()[g];                                  // état réel (panneau admin)
 const isMaintained=g=>rawMaint(g)&&!(me&&me.owner);                  // accès bloqué : les owners passent toujours
-const maintMsg=g=>`${GAME_NAMES[g]||"Ce jeu"} est actuellement en maintenance.`;
+const rawHide=g=>!!maintenance()[g+"_h"];                              // nom caché (« ??? ») : clé stats/maintenance/<jeu>_h, indépendante de la maintenance
+const gname=g=>rawHide(g)&&!(me&&me.owner)?"???":(GAME_NAMES[g]||"Ce jeu");   // les owners voient toujours le vrai nom
+const maintMsg=g=>`${gname(g)} est actuellement en maintenance.`;
 function paintMaintenance(){
  const state=maintenance();
  Object.entries(GAME_TILES).forEach(([g,id])=>{
   const el=$(id);if(!el)return;const on=!!state[g],ow=!!(me&&me.owner);el.classList.toggle("soon",on);el.setAttribute("aria-disabled",String(on&&!ow));
-  const small=el.querySelector("small");if(small){if(!small.dataset.normal)small.dataset.normal=small.textContent;small.textContent=on?(ow?"Maintenance · accès owner":"Sous maintenance"):small.dataset.normal;}
+  const hid=rawHide(g),mask=hid&&!ow,tn=[...el.childNodes].find(n=>n.nodeType===3);
+  if(tn){if(!el.dataset.nm)el.dataset.nm=tn.textContent;tn.textContent=mask?"???":el.dataset.nm+(hid?" 🙈":"")}   // « ??? » pour les joueurs ; les owners gardent le vrai nom + 🙈
+  const small=el.querySelector("small");if(small){if(!small.dataset.normal)small.dataset.normal=small.textContent;small.textContent=on?(ow?"Maintenance · accès owner":"Sous maintenance"):mask?"???":small.dataset.normal;}
  });
 }
 function onMaintChange(){
  paintMaintenance();
+ if(code&&lobby&&cur==="lobby")renderLobby();
  if(me&&me.owner&&adm)renderMaintenanceAdmin();
  if(code&&lobby&&isMaintained(lobby.game)){toast(maintMsg(lobby.game));leaveLobby()}   // joueurs déjà dans un lobby / une partie : sortie propre
 }
@@ -2151,7 +2190,7 @@ function renderMaintenanceAdmin(){
  const state=maintenance();
  root.replaceChildren(...Object.entries(GAME_NAMES).map(([g,name])=>{
   const row=h("div");row.className="adl";row.style.cssText="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap";
-  const label=h("span",name+(state[g]?" · Sous maintenance":" · Disponible"));label.className="g";
+  const label=h("span",name+(state[g]?" · Sous maintenance":" · Disponible")+(state[g+"_h"]?" · 🙈 Nom caché":""));label.className="g";
   const btn=h("button",state[g]?"Désactiver la maintenance":"Mettre en maintenance");btn.type="button";btn.className=state[g]?"alt mini":"danger mini";
   btn.onclick=async()=>{
    const next=!rawMaint(g);   // état lu au moment du clic (pas celui du rendu)
@@ -2166,7 +2205,14 @@ function renderMaintenanceAdmin(){
     toast(name+(next?" : maintenance activée.":" : maintenance désactivée."));
    }catch{admErr()}finally{btn.disabled=false}
   };
-  row.append(label,btn);return row;
+  const hb=h("button",rawHide(g)?"Afficher le nom":"Cacher le nom (???)");hb.type="button";hb.className="alt mini";
+  hb.onclick=async()=>{
+   const next=!rawHide(g);hb.disabled=true;
+   try{await set(R("stats/maintenance/"+g+"_h"),next);maint={...(maint||{}),[g+"_h"]:next};onMaintChange();toast(name+(next?" : nom caché (???).":" : nom visible."))}
+   catch{admErr()}finally{hb.disabled=false}
+  };
+  const bx=h("div");bx.style.cssText="display:flex;gap:8px;flex-wrap:wrap";bx.append(hb,btn);
+  row.append(label,bx);return row;
  }));
 }
 
@@ -2182,14 +2228,14 @@ $("adReset").onclick=async()=>{if(!confirm("Remettre le compteur « parties jou�
 function renderAdmin(D){
   if(!me||!me.owner)return;
   paintMaintenance();renderMaintenanceAdmin();
-  const GN={tk:"💥 Tanks",snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",barre:"🌀 La barre malicieuse",fruit:"🍎 Fruit Forager",sta:"STA I",amog:"🚀 Amog Us",blockdash:"🧱 Block Dash"};
+  const GN={tk:"💥 Tanks",snake:"🐍 Snake",surv:"🧟 Survie coop",br:"🪂 Battle Royale",lab:"🗝️ Évasion coop",sim:"⛏️ Mine Simulator",sumo:"🤼 Sumo Arena",barre:"🌀 La barre malicieuse",fruit:"🍎 Fruit Forager",sta:"STA I",amog:"🚀 Amog Us",blockdash:"🧱 Block Dash",fish:"🐟 Feed & Grow: Fish"};
   const lobs=Object.entries(D.lobbies||{}).filter(([,l])=>l).sort((x,y)=>(y[1].status==="playing")-(x[1].status==="playing"));
   $("adLobH").textContent=`Lobbys (${lobs.length})`;$("adAll").hidden=!lobs.length;
   $("adLob").replaceChildren(...(lobs.length?lobs.map(([c,l])=>{
     const pl=Object.entries(l.players||{}),box=h("div");box.className="adl";
     const hd=h("div");hd.className="adh";const g=h("span",GN[l.game]||l.game||"Jeu");g.className="g";
     const bd=h("span",l.status==="playing"?"En partie":"Lobby");bd.className="badge"+(l.status==="playing"?" pl2":"");
-    const sp=h("span");sp.className="sp";const open=l.status==="lobby"||["sim","fruit","sta"].includes(l.game);hd.append(g,h("code",c),bd,sp,Object.assign(h("button",open?"Rejoindre":"Observer",()=>admJoin(c)),{className:"alt mini"}),Object.assign(h("button","Fermer",()=>{if(confirm(`Fermer le lobby ${c} ?`))admClose(c)}),{className:"danger mini"}));
+    const sp=h("span");sp.className="sp";const open=l.status==="lobby"||["sim","fruit","sta","fish"].includes(l.game);hd.append(g,h("code",c),bd,sp,Object.assign(h("button",open?"Rejoindre":"Observer",()=>admJoin(c)),{className:"alt mini"}),Object.assign(h("button","Fermer",()=>{if(confirm(`Fermer le lobby ${c} ?`))admClose(c)}),{className:"danger mini"}));
     const ps=h("div");ps.className="adp";
     pl.forEach(([u,p])=>{const ch=h("span");ch.className="chip";ch.append((p.name||"?")+(u===l.host?" 👑":""));
       if(u!==l.host){const k=h("button","✕",()=>admKick(c,u,p.name||"ce joueur"));k.setAttribute("aria-label","Retirer "+(p.name||"ce joueur"));ch.append(k)}ps.append(ch)});

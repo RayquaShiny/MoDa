@@ -5,7 +5,7 @@
 <meta name="theme-color" content="var(--bg)">
 <!-- ⚠️ À CONSERVER À CHAQUE MISE À JOUR : à chaque nouvelle version (chaque modification), la version affichée doit faire +1.
      Changer le numéro aux 3 endroits, toujours identique : ce <meta name="moda-v">, `const VER` dans app.js, et `VERSION` dans sw.js. Si la mise à jour touche STA I (n'importe laquelle), ajouter aussi une entrée « Quoi de neuf » en haut de `NEWS` dans sta.js. -->
-<meta name="moda-v" content="138"/>
+<meta name="moda-v" content="141"/>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -96,6 +96,7 @@ input.err{border-color:#ff4d6d}
 .tile.barre{background:linear-gradient(135deg,#7b2ff7,#ff3b5c);color:#fff;cursor:pointer}
 .tile.sumo{background:linear-gradient(135deg,#e8318a,#ffb199);color:#2b0016;cursor:pointer}
 .tile.blockdash{background:linear-gradient(135deg,#172c59,#48a9d6);color:#fff;cursor:pointer}
+.tile.fish{background:linear-gradient(135deg,#0a3d6b,#2ec4b6);color:#fff;cursor:pointer}
 /* STA I — ambiance néon tropicale inspirée de l'illustration fournie */
 .tile.sta{background:linear-gradient(180deg,#17152f 0%,#30234c 24%,#75416f 53%,#d66c83 76%,#f39a7e 100%);color:#fff;cursor:pointer;position:relative;isolation:isolate;overflow:hidden;border:0;box-shadow:inset 0 0 0 2px #17152f,0 8px 24px #21152f66}
 .tile.sta::before{content:"";position:absolute;inset:0;z-index:-1;opacity:.9;background:
@@ -184,7 +185,7 @@ body[data-g=sim] #pad,body[data-g=sim] #gctl{display:none!important}
 .scard{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--s1);border-radius:12px;padding:10px 12px;font-size:14px}
 .scard button{white-space:nowrap}.shatch{background:#3ee6c422;border:1px solid #3ee6c466;color:var(--b);border-radius:10px;padding:8px 10px;font-weight:600}
 /* ===== Sumo Arena ===== */
-body[data-g=amog] #pad,body[data-g=amog] #gctl,body[data-g=amog] #score,body[data-g=sumo] #pad,body[data-g=sumo] #gctl,body[data-g=sumo] #score,body[data-g=barre] #pad,body[data-g=barre] #gctl,body[data-g=barre] #score,body[data-g=blockdash] #pad,body[data-g=blockdash] #gctl{display:none!important}
+body[data-g=amog] #pad,body[data-g=amog] #gctl,body[data-g=amog] #score,body[data-g=sumo] #pad,body[data-g=sumo] #gctl,body[data-g=sumo] #score,body[data-g=barre] #pad,body[data-g=barre] #gctl,body[data-g=barre] #score,body[data-g=blockdash] #pad,body[data-g=blockdash] #gctl,body[data-g=fish] #pad,body[data-g=fish] #gctl{display:none!important}
 #sdash{display:none;position:absolute;right:10px;bottom:10px;width:78px;height:78px;padding:0;border-radius:50%;font-size:34px;z-index:6;align-items:center;justify-content:center;background:#ff4d6dd0;color:#fff;touch-action:none;-webkit-user-select:none;user-select:none;opacity:.45}
 body[data-g=sumo] #sdash,body[data-g=barre] #sdash{display:flex}
 #semo{position:absolute;right:8px;bottom:60px;display:flex;gap:6px;background:#14102bec;border-radius:12px;padding:6px;z-index:6}
@@ -508,7 +509,7 @@ html.neon .adl{border-top-color:#ff1f4b33}
   <h3 class="gh">🧍 Jouable en solo <small>dès 1 joueur, tu peux lancer seul</small></h3>
   <div class="grid"><div class="tile snake" id="tsnake">Snake<small>1 à 8 joueurs</small></div><div class="tile surv" id="tsurv">Survie coop<small>1 à 8 joueurs</small></div><div class="tile lab" id="tlab">Évasion coop<small>1 à 8 joueurs · labyrinthe</small></div><div class="tile sim" id="tsim">Mine Simulator<small>1 à 8 joueurs · farme, améliore, renais</small></div><div class="tile fruit" id="tfruit">Fruit Forager<small>1 à 5 joueurs · cueille, vends, progresse</small></div></div>
   <h3 class="gh">⚔️ Multijoueur <small>il faut être au moins 2</small></h3>
-  <div class="grid"><div class="tile br" id="tbr">Battle Royale<small>2 à 8 joueurs · dernier en vie</small></div><div class="tile tk" id="ttk">Tanks<small>2 à 8 joueurs · obus qui rebondissent</small></div><div class="tile sumo" id="tsumo">Sumo Arena<small>2 à 8 joueurs · pousse-les hors de l'arène</small></div><div class="tile barre" id="tbarre">La barre malicieuse<small>2 à 8 joueurs · esquive, saute, survis 5 s</small></div><div class="tile blockdash" id="tblockdash">🧱 Block Dash<small>2 à 8 joueurs · évite les murs</small></div></div>
+  <div class="grid"><div class="tile br" id="tbr">Battle Royale<small>2 à 8 joueurs · dernier en vie</small></div><div class="tile tk" id="ttk">Tanks<small>2 à 8 joueurs · obus qui rebondissent</small></div><div class="tile sumo" id="tsumo">Sumo Arena<small>2 à 8 joueurs · pousse-les hors de l'arène</small></div><div class="tile barre" id="tbarre">La barre malicieuse<small>2 à 8 joueurs · esquive, saute, survis 5 s</small></div><div class="tile blockdash" id="tblockdash">🧱 Block Dash<small>2 à 8 joueurs · évite les murs</small></div><div class="tile fish" id="tfish">🐟 Feed &amp; Grow: Fish<small>serveur ouvert · mange, grandis, deviens un requin</small></div></div>
   <h3 class="gh">👥 Grand groupe <small>il faut au moins 4 joueurs</small></h3>
   <div class="grid"><div class="tile amog" id="tamog">Amog Us<small>4 à 10 joueurs · trouve les imposteurs</small></div></div>
   <h3 class="gh">🌍 Serveur ouvert <small>pas de lobby : tu arrives direct, comme un jeu en ligne</small></h3>

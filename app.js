@@ -14,7 +14,7 @@ import {createVoice} from "./voice.js";
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="165";
+const VER="167";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -30,7 +30,7 @@ let adm=false,unStats=[];try{adm=localStorage.getItem("moda.stats")==="1"}catch{
 let voice=null,vst={on:false,mic:false,has:false,n:0},me=null,cur="auth",code=null,lobby=null,pending=null,unLobby=null,unState=null,presUn=[],lastDir=null;
 const show=v=>{cur=v;VIEWS.forEach(x=>$(x).hidden=x!==v);$("side").hidden=v==="auth";
   document.body.classList.toggle("gm",v==="game");document.body.classList.toggle("pc",!TOUCH); // plein écran de jeu (téléphone ET PC) ; « pc » : réglages propres au clavier / souris
-  if(v!=="game"){resetTouch();unwake()}vsync()};
+  if(v!=="game"){resetTouch();unwake();$("ghmenu").hidden=true}vsync()};
 let tt;const toast=m=>{$("toast").textContent=m;clearTimeout(tt);tt=setTimeout(()=>$("toast").textContent="",3500)};
 const clean=s=>(s||"joueur").replace(/[^A-Za-z0-9_]/g,"").slice(0,16).padEnd(3,"x");
 
@@ -856,6 +856,19 @@ const touchy=e=>TOUCH&&e.pointerType!=="mouse";
 function ctlUI(){document.body.classList.toggle("padon",ctlMode==="pad");const b=$("gctl");b.textContent=ctlMode==="pad"?"✚":"🕹️";
   b.setAttribute("aria-label",ctlMode==="pad"?"Commandes : croix. Toucher pour passer au joystick":"Commandes : joystick. Toucher pour passer à la croix")}
 $("gctl").onclick=()=>{resetTouch();ctlMode=ctlMode==="pad"?"stick":"pad";try{localStorage.setItem("moda.ctl",ctlMode)}catch{}ctlUI()};
+// ---------- Bouton « ? » (en haut à droite de chaque jeu) : ouvre l'aide du jeu en cours ----------
+// Le texte vient de #ghelp, que chaque jeu remplit déjà au démarrage : il est découpé en lignes aux « · ».
+{const hq=$("ghq"),hm=$("ghmenu"),closeH=()=>{hm.hidden=true};
+  ["pointerdown","pointerup","touchstart","touchend","mousedown"].forEach(t=>{hq.addEventListener(t,e=>e.stopPropagation());hm.addEventListener(t,e=>e.stopPropagation())});
+  hq.onclick=e=>{e.stopPropagation();hq.blur();if(cur!=="game")return;if(!hm.hidden){closeH();return}
+    try{resetTouch()}catch{}
+    const g=document.body.dataset.g||"",txt=($("ghelp").textContent||"").trim(),ul=$("ghlist");
+    $("ghtitle").textContent="Aide · "+((typeof GAME_NAMES!=="undefined"&&GAME_NAMES[g])||"Jeu");
+    ul.textContent="";(txt?txt.split(" · "):["Pas d'aide pour ce jeu."]).forEach(t=>{t=t.trim();if(t)ul.appendChild(h("li",t))});
+    hm.hidden=false};
+  $("ghclose").onclick=e=>{e.stopPropagation();closeH()};
+  hm.addEventListener("click",e=>{e.stopPropagation();if(e.target===hm)closeH()});
+  addEventListener("keydown",e=>{if(e.key==="Escape"&&!hm.hidden){e.preventDefault();closeH()}},true)}
 $("gexit").onclick=()=>{if(cur!=="game")return;
   if(confirm(lobby&&lobby.host===me.uid?"Tu es l'hôte : la partie s'arrêtera pour tout le monde. Quitter ?":"Quitter la partie ?"))leaveLobby()};
 const setHeld=(U,D,L,R)=>{const w={U,D,L,R};let ch=0;for(const k in w){const on=!!w[k];if(on!==held.has(k)){on?held.add(k):held.delete(k);ch=1}}if(ch)mv()};

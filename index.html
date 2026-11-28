@@ -5,7 +5,7 @@
 <meta name="theme-color" content="var(--bg)">
 <!-- ⚠️ À CONSERVER À CHAQUE MISE À JOUR : à chaque nouvelle version (chaque modification), la version affichée doit faire +1.
      Changer le numéro aux 3 endroits, toujours identique : ce <meta name="moda-v">, `const VER` dans app.js, et `VERSION` dans sw.js. Si la mise à jour touche STA I (n'importe laquelle), ajouter aussi une entrée « Quoi de neuf » en haut de `NEWS` dans sta.js. -->
-<meta name="moda-v" content="165"/>
+<meta name="moda-v" content="167"/>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -168,7 +168,7 @@ body.gm #gbar button{min-width:44px;opacity:.92}
 @media(orientation:landscape){
  body.gm #game{justify-content:center}
  body.gm #score{position:absolute;left:calc(8px + env(safe-area-inset-left));bottom:calc(8px + env(safe-area-inset-bottom));flex-direction:column;align-items:flex-start;margin:0;max-width:22vw;font-size:12px;background:#0007;padding:4px 8px;border-radius:8px}
- body.gm #gbar{position:absolute;top:calc(6px + env(safe-area-inset-top));right:calc(8px + env(safe-area-inset-right));margin:0}
+ body.gm #gbar{position:absolute;top:calc(6px + env(safe-area-inset-top));right:calc(52px + env(safe-area-inset-right));margin:0}
 }
 /* croix directionnelle (option) : en bas à gauche, par-dessus le jeu */
 body.gm.padon #pad{display:grid;position:fixed;left:calc(14px + env(safe-area-inset-left));bottom:calc(14px + env(safe-area-inset-bottom));grid-template-columns:repeat(3,62px);grid-template-rows:repeat(2,62px);margin:0;z-index:16;opacity:.9}
@@ -179,6 +179,14 @@ body.gm #tip:empty{display:none}
 body.gm.pc:not([data-g=fish]) #ghelp{display:block!important;position:fixed;left:50%;bottom:6px;transform:translateX(-50%);max-width:min(900px,92vw);margin:0;padding:5px 12px;border-radius:10px;background:#000b;color:#fff;font-size:12px;text-align:center;pointer-events:none;z-index:14;animation:hlpf .6s 12s forwards}
 @keyframes hlpf{to{opacity:0;visibility:hidden}}
 
+/* ===== Bouton « ? » : aide du jeu en cours (en haut à droite) ===== */
+#ghq,#ghmenu{display:none}
+body.gm #ghq{display:flex;position:fixed;top:calc(8px + env(safe-area-inset-top));right:calc(8px + env(safe-area-inset-right));z-index:30;width:36px;height:36px;padding:0;border-radius:50%;align-items:center;justify-content:center;font:800 19px 'Bricolage Grotesque',system-ui,sans-serif;background:#000b;color:#fff;border:2px solid #ffffff99;cursor:pointer;touch-action:manipulation;opacity:.92}
+body.gm #ghmenu:not([hidden]){display:flex;position:fixed;inset:0;z-index:40;background:#000b;align-items:center;justify-content:center;padding:calc(14px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left))}
+#ghmenu .hbox{width:min(560px,100%);max-height:100%;overflow:auto;-webkit-overflow-scrolling:touch;background:var(--card);border-radius:var(--r);padding:16px 18px;box-shadow:0 10px 40px #000a}
+#ghmenu .ht{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;font-size:18px}
+#ghmenu ul{margin:0;padding-left:20px;line-height:1.45;font-size:15px}
+#ghmenu li{margin:5px 0}
 /* ===== Mine Simulator (dans l'écran de jeu commun) ===== */
 #sbtns{display:none;position:absolute;right:8px;bottom:8px;gap:8px;z-index:6}
 body[data-g=sim] #sbtns{display:flex}
@@ -574,6 +582,8 @@ html.neon .adl{border-top-color:#ff1f4b33}
   <div id="pad"><span></span><button data-d="U" aria-label="Haut">▲</button><span></span><button data-d="L" aria-label="Gauche">◀</button><button data-d="D" aria-label="Bas">▼</button><button data-d="R" aria-label="Droite">▶</button></div>
   <div id="score" class="row"></div>
   <div class="row" id="gbar"><button class="alt mini" id="gctl" aria-label="Commandes"></button><button class="alt mini" id="mute" aria-label="Son"></button><button class="alt mini" id="vmic" aria-label="Micro" hidden></button><button class="alt mini" id="gexit" aria-label="Quitter la partie">✕</button><span id="ghelp" style="color:var(--mute)"></span></div>
+  <button id="ghq" aria-label="Aide" title="Aide">?</button>
+  <div id="ghmenu" hidden role="dialog" aria-label="Aide du jeu"><div class="hbox"><div class="ht"><b id="ghtitle">Aide</b><button class="alt mini" id="ghclose" aria-label="Fermer">✕</button></div><ul id="ghlist"></ul></div></div>
   <div id="tip" hidden></div>
   <div class="stick" id="sL"><i class="knob"></i></div><div class="stick r" id="sR"><i class="knob"></i></div>
  </section>

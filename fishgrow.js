@@ -346,7 +346,9 @@ export function createFishClient(env){
    if(want&&L.st>0&&!L.tired){L.boost=1;L.st=Math.max(0,L.st-32*dt);if(L.st<=0)L.tired=1}else{L.boost=0;L.st=Math.min(100,L.st+(want?6:24)*dt);if(L.st>25)L.tired=0}
    L.sf+=((brk?.4:1)*mg-L.sf)*(1-Math.exp(-dt*6));L.bm+=((L.boost?1.8:1)-L.bm)*(1-Math.exp(-dt*9));
    L.lun=Math.max(0,L.lun-dt);const sp=spdOf(L.m)*SPI(selIdx()).sp*L.sf*L.bm*(L.lun>0?2.5:1),cp=Math.cos(L.pitch);L.spd=sp;
-   L.x=wrp(L.x+Math.sin(L.yaw)*cp*sp*dt);L.z=wrp(L.z+Math.cos(L.yaw)*cp*sp*dt);   // sortir par un bord = réapparaître au bord opposé (carte torique)L.y=clamp(L.y+Math.sin(L.pitch)*sp*dt,gh(L.x,L.z)+Lm*.3+.3,WH-1);
+   L.x=wrp(L.x+Math.sin(L.yaw)*cp*sp*dt);L.z=wrp(L.z+Math.cos(L.yaw)*cp*sp*dt);   // sortir par un bord = réapparaître au bord opposé (carte torique)
+   {const lo=gh(L.x,L.z)+Lm*.3+.3,ny=L.y+Math.sin(L.pitch)*sp*dt;L.y=clamp(ny,lo,WH-1);
+    if((ny<lo&&L.pitch<0)||(ny>WH-1&&L.pitch>0)){L.pitch-=L.pitch*(1-Math.exp(-dt*7));L.pv*=.5}}   // collé au fond / à la surface : le nez glisse au lieu de s'enrouler à fond
    if(L.boost&&Math.random()<dt*14)burst(L.x-Math.sin(L.yaw)*Lm*.5,L.y,L.z-Math.cos(L.yaw)*Lm*.5,BUB,1,.6)}
   else if(!L.a)L.spd=0;
   if(mine[6]>prevM+.25&&prevM>0&&L.a){const Lm=len(L.m);burst(L.x+Math.sin(L.yaw)*Lm*.6,L.y,L.z+Math.cos(L.yaw)*Lm*.6,BLOOD,12,2.5);shk=Math.max(shk,.25);try{env.beep(520,.07,"sine",.05,900)}catch{}}

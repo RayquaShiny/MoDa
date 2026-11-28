@@ -59,7 +59,7 @@ const SHAPES={   // formes des espèces : P = profil du corps (nez → queue), q
  barr:{P:[.06,.20,.30,.32,.26,.12,.04],q:.65,dh:.14,tl:.85,pf:.14,er:.05},
  pira:{P:[.10,.50,.68,.60,.34,.14,.05],q:.50,dh:.26,tl:.95,pf:.18},
  moon:{P:[.14,.62,.92,.84,.44,.16,.06],q:.34,dh:.55,tl:.5,pf:.14,vh:.5},
- dare:{P:[.13,.48,.62,.52,.32,.14,.05],q:.62,dh:.08,tl:.9,pf:.2,vh:.1,er:.07,ear:1,wh:1,nose:1,pw:1}};   // la chatte : oreilles, moustaches, nez rose, pattes blanches
+ dare:{P:[.14,.5,.64,.54,.34,.15,.05],q:.64,dh:.07,tl:1.1,pf:.3,vh:.17,er:.07,ear:1,wh:1,nose:1,pw:1}};   // la chatte : oreilles, moustaches, nez rose, pattes blanches
 /* ---- Évolution des formes : chaque espèce change de modèle 3D à chaque niveau (8 formes). On donne des « images clés » [niveau, écarts] ;
         les niveaux intermédiaires sont interpolés. P = profil du corps, q = épaisseur, dh = dorsale, tl = queue, pf = pectorales, vh = ventrale,
         spk = épines, th = crocs, er = yeux, sk = 1 : corps de requin. Bibos finit en requin (Requin → Grand blanc → Mégalodon). ---- */
@@ -181,16 +181,16 @@ function fishGeom(sh,so){
  const FN=[1,0,0],r1=prof(1/6),r2=prof(1/3),r3=prof(.5),r4=prof(2/3),z1=.5-1/6,z2=.5-1/3,z4=.5-2/3,dh=so?so.dh:(sh?.36:.28),tl=so?so.tl:1,pfw=so?so.pf:(sh?.26:.2),vh=so?(so.vh||.13):.13;
  fan(mb,sh?[[0,.03,-.5],[0,.38,-.7],[0,0,-.62],[0,-.22,-.7],[0,-.03,-.5]]:[[0,.03,-.5],[0,.3*tl,-.72],[0,0,-.62],[0,-.3*tl,-.72],[0,-.03,-.5]],FN,Z);   // queue
  fan(mb,[[0,r2*.9,z2+.08],[0,r2+dh,z2-.12],[0,r4*.9,z4]],FN,Z);   // dorsale
- if(so&&so.ear)[-1,1].forEach(s=>{const zz=.3,rr=prof(.2)*.95;fan(mb,[[s*rr*q*.58,rr*.82,zz+.05],[s*rr*q*.42,rr+.15,zz-.01],[s*rr*q*.08,rr*.9,zz-.07]],FN,Z)});   // oreilles de chat
+ if(so&&so.ear)[-1,1].forEach(s=>{const zz=.3,rr=prof(.2)*.95;fan(mb,[[s*rr*q*.9,rr*.72,zz+.07],[s*rr*q*.6,rr+.26,zz-.02],[s*rr*q*.1,rr*.9,zz-.1]],FN,Z)});   // oreilles de chat
  if(so&&so.spk)for(let i=0;i<so.spk;i++){const zb=.36-i*.065,rr=prof(.5-zb)*.9;fan(mb,[[0,rr,zb+.03],[0,rr+.36-i*.025,zb-.07],[0,rr,zb-.02]],FN,Z)}   // épines (poisson-lion)
- fan(mb,[[0,-r3*.9,.5-.5],[0,-r3-vh,.5-.58],[0,-r4*.9,z4-.05]],FN,Z);   // ventrale
+ fan(mb,[[0,-r3*.9,.5-.5],[0,-r3-vh,.5-.58],[0,-r4*.9,z4-.05]],so&&so.pw?[1.2,0,0]:FN,Z);   // ventrale (blanche pour la chatte)
  if(sh)fan(mb,[[0,prof(.78)*.9,.5-.76],[0,prof(.78)+.1,.5-.82],[0,prof(.86)*.9,.5-.88]],FN,Z);
  [-1,1].forEach(s=>{fan(mb,[[s*r1*q*.9,-r1*.2,z1],[s*(r1*q+pfw),-.12,z1-.2],[s*r1*q*.9,r1*.1,z1-.12]],so&&so.pw?[1.2,0,0]:FN,Z);   // pectorales (pattes blanches pour la chatte)
   const er=so?(so.er||.06):(sh?.045:.06),ex=s*r1*q*.92,ey=r1*.3,ez=z1+.03;sph(mb,ex,ey,ez,er,er,er,6,8,[2,0,0],Z,false);sph(mb,ex+s*er*.55,ey,ez,er*.55,er*.55,er*.55,5,6,[3,0,0],Z,false)});
  sph(mb,0,-.012,.51,.04,.032,.04,5,8,[4,0,0],[0,-.012,.51],false);   // bouche (s'ouvre à la morsure)
   if(so&&so.th)for(let sd=-1;sd<=1;sd+=2)for(let i=0;i<so.th;i++){const bx=sd*(.016+i*.014),z0=.485-i*.006;fan(mb,[[bx-.007,-.034,z0],[bx+.007,-.034,z0],[bx*.9,-.058,z0+.065]],[2,0,0],Z)}   // crocs (barracuda, piranha)
  if(so&&so.wh)[-1,1].forEach(s=>[-1,0,1].forEach(k=>tube(mb,[[s*.035,-.012+k*.01,.5],[s*.19,-.01+k*.05,.43]],[.006,.003],3,[2,0,0],Z)));   // moustaches
- if(so&&so.nose)sph(mb,0,.006,.527,.018,.014,.018,4,6,[5,0,0],Z,false);   // petit nez rose
+ if(so&&so.nose)sph(mb,0,.004,.526,.024,.018,.022,5,8,[5,0,0],Z,false);   // petit nez rose
  return mb}
 function terrGeom(){const mb=MB(),N=56,S=R2/N;   // UNE tuile = exactement la carte [-R,R]² ; on la répète autour de la caméra
  for(let i=0;i<=N;i++)for(let j=0;j<=N;j++){const x0=-R+i*S,z0=-R+j*S,h=gh(x0,z0),e=.5,dx=(gh(x0+e,z0)-gh(x0-e,z0))/(2*e),dz=(gh(x0,z0+e)-gh(x0,z0-e))/(2*e),nz=hash2(i%N,j%N),lowf=clamp((3.4-h)/2.4,0,1);
@@ -271,7 +271,12 @@ void main(){float f=clamp((v_z-7.)/42.,0.,.93);
     else if(u_bands<2.5){pt=smoothstep(.2,.45,sin(v_l.z*36.));}
     else if(u_bands<3.5){pt=smoothstep(.5,.62,sin(v_l.z*46.)*sin(v_l.y*70.+v_l.x*50.));}
     else if(u_bands<4.5){float bz=min(abs(v_l.z-.3),min(abs(v_l.z-.02),abs(v_l.z+.24)));pt=1.-smoothstep(.02,.055,bz);}
-    else{pt=max(smoothstep(.3,.38,v_l.z)*(1.-smoothstep(-.03,.04,v_l.y)),(1.-smoothstep(.012,.045,abs(v_l.x)))*smoothstep(.1,.22,v_l.z)*smoothstep(-.02,.04,v_l.y));}
+    else{float bw=mix(.02,.08,smoothstep(.1,.45,v_l.z));
+     float bl=(1.-smoothstep(bw*.55,bw,abs(v_l.x)))*smoothstep(.06,.18,v_l.z)*smoothstep(-.03,.03,v_l.y);
+     float mz=smoothstep(.28,.36,v_l.z)*(1.-smoothstep(-.04,.05,v_l.y));
+     float tp=smoothstep(.42,.47,v_l.z);
+     float pa=(1.-smoothstep(.025,.06,abs(v_l.z+.03)))*smoothstep(-.01,.05,v_l.x)*smoothstep(.03,.1,v_l.y);
+     pt=max(max(bl,mz),max(tp,pa));}
     c=mix(c,u_base,pt*(u_bands>4.5?.97:.85));}
    c*=.93+.07*sin(v_l.z*85.+v_l.x*30.)*sin(v_l.z*60.-v_l.y*70.);
    spec=pow(max(dot(n,normalize(Ld+V)),0.),22.)*.22+pow(1.-max(dot(n,V),0.),3.)*.1;}

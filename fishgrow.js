@@ -361,18 +361,19 @@ export function createFishClient(env){
  let touch=!!(window.matchMedia&&matchMedia("(pointer:coarse)").matches);
  const rz=()=>{dirty=1};const selIdx=()=>Math.max(0,FISHES.findIndex(f=>f.id===selId));const keys=new Map(),btn=new Map(),rend=new Map(),parts=[],cam={x:0,y:12,z:0,yaw:0,pitch:0},wc=[10,60,100];
  const L={yv:0,pv:0,roll:0,sf:1,bm:1,aim:null,x:0,y:10,z:0,yaw:0,pitch:0,st:100,lun:0,bcd:0,bc:0,rc:-1,a:1,bt:0,boost:0,m:1.6,spd:0,tired:0,ph:0,inf:0};
- const NEAR=.35,BB={x:0,y:0,r:46},BS={x:0,y:0,r:34},BA={x:0,y:0,r:32};let W=800,H=560,FOC=520,CY=235,bW=800,bH=560,uS=1,SAf={t:0,r:0,b:0,l:0},JR=58,probe=null,G=null,glc=null,lvT=-9,lvTxt="",lastSt=-1,sty=null,dirty=1,isGm=false,ro=null,pops=[],pmh=0,phpv=100;
+ const NEAR=.35,BB={x:0,y:0,r:46},BS={x:0,y:0,r:34},BA={x:0,y:0,r:32},BU={x:0,y:0,r:26},BD={x:0,y:0,r:26};let W=800,H=560,FOC=520,CY=235,bW=800,bH=560,uS=1,SAf={t:0,r:0,b:0,l:0},JR=58,probe=null,G=null,glc=null,lvT=-9,lvTxt="",lastSt=-1,sty=null,dirty=1,isGm=false,ro=null,pops=[],pmh=0,phpv=100;
  let cf=[0,0,1],cr=[1,0,0],cu=[0,1,0];
  /* ---- entrées ---- */
  let msOn=false,ms=null,brk=false,cruise=false,abFor="";try{cruise=localStorage.getItem("moda.fishcruise")==="1"}catch{}try{msOn=localStorage.getItem("moda.fishmouse")==="1"}catch{}
  const vib=p=>{if(vibOn)try{navigator.vibrate&&navigator.vibrate(p)}catch{}};
+ const pbt=()=>{const v=[...btn.values()];return(v.includes("u")?1:0)-(v.includes("d")?1:0)};   // boutons tactiles ▲ ▼ : monter / descendre
  const vec=()=>{   // [virage -1..1, tangage -1..1, vitesse 0..1]
   const ax=(a,b)=>keys.has(a)&&keys.has(b)?(keys.get(a)>keys.get(b)?1:-1):(keys.has(a)?1:0)-(keys.has(b)?1:0);
   const kx=ax("R","L"),kz=ax("U","B");
   if(kx||kz){const l=Math.hypot(kx,kz);return[kx/l,kz/l,1]}
-  if(joy){const dx=joy.px-joy.ox,dy=joy.py-joy.oy,l=Math.hypot(dx,dy);if(l>12&&performance.now()-joy.t>90){const m=Math.min(1,l/JR),n=Math.min(1,m*1.3);return[dx/l*n,-dy/l*n,.5+.5*m]}}
+  if(joy){const dx=joy.px-joy.ox,dy=joy.py-joy.oy,l=Math.hypot(dx,dy);if(l>10&&performance.now()-joy.t>90){const fw=clamp(-dy/JR,-1,1),tn=Math.abs(dx)<JR*.12?0:clamp(dx/JR*1.3,-1,1);return[tn,pbt(),fw>.12?clamp(.35+fw*.8,0,1):fw<-.12?clamp(fw*.6,-.45,0):0]}}   // joystick : haut = avancer, bas = reculer, côtés = tourner (monter / descendre = boutons ▲ ▼)
   if(msOn&&ms){const f=v=>{const a=Math.abs(v);return a<.07?0:Math.sign(v)*Math.min(1,Math.pow(a,1.25))};return[f((ms.x-W/2)/(W*.28)),f(-(ms.y-H*.48)/(H*.3)),1]}   // pilotage à la souris : le poisson se tourne vers le curseur
-  return[0,0,cruise?1:0]};   // sans entrée : on reste sur place (sauf nage automatique, touche V)
+  return[0,pbt(),cruise?1:0]};   // sans entrée : on reste sur place (sauf nage automatique, touche V)
  const MV={ArrowUp:"U",KeyW:"U",ArrowDown:"B",KeyS:"B",ArrowLeft:"L",KeyA:"L",ArrowRight:"R",KeyD:"R"};
  const kd=e=>{if(!active)return;if(menuOn){if(e.code==="Escape"&&scr!=="main"){scr="main";render()}else if(e.code==="Enter"&&scr==="main"&&!(document.activeElement&&document.activeElement.closest&&document.activeElement.closest(".fm button")))act("play");return}
   if(talkOn){if(e.code==="Escape")closeTalk();return}
@@ -398,7 +399,7 @@ export function createFishClient(env){
   if(talkBtn&&p[0]>=talkBtn.x-8&&p[0]<=talkBtn.x+talkBtn.w+8&&p[1]>=talkBtn.y-8&&p[1]<=talkBtn.y+talkBtn.h+8){openTalk();return}   // bouton « Parler »
   if(e.pointerType==="mouse"){bite();return}
   if(AB[selId]&&hit(p,BA)){zap();btn.set(e.pointerId,"z");return}   // bouton éclair, au-dessus de mordre
-  if(hit(p,BS))btn.set(e.pointerId,"s");
+  if(hit(p,BU)){btn.set(e.pointerId,"u");return}if(hit(p,BD)){btn.set(e.pointerId,"d");return}if(hit(p,BS))btn.set(e.pointerId,"s");
   else if(hit(p,BB)||p[0]>=W*.5){btn.set(e.pointerId,"b");bite()}   // toute la moitié droite = MORDRE (maintenir = mordre en boucle)
   else if(!joy&&p[1]>H*.2)joy={id:e.pointerId,ox:p[0],oy:p[1],px:p[0],py:p[1],t:performance.now()}};
  const pm=e=>{if(e.pointerType==="mouse"){const p=toC(e);ms={x:p[0],y:p[1]}}if(joy&&joy.id===e.pointerId){const p=toC(e);joy.px=p[0];joy.py=p[1];const dx=p[0]-joy.ox,dy=p[1]-joy.oy,l=Math.hypot(dx,dy),lim=JR*1.05;if(l>lim){joy.ox+=dx/l*(l-lim);joy.oy+=dy/l*(l-lim)}}};   // le joystick suit le doigt s'il dépasse
@@ -458,13 +459,13 @@ export function createFishClient(env){
     const dx=dwr(L.aim.x-L.x),dy=L.aim.y-L.y,dz=dwr(L.aim.z-L.z),hd=Math.hypot(dx,dz);
     L.yaw+=clamp(angd(Math.atan2(dx,dz)-L.yaw),-10*dt,10*dt);L.pitch=clamp(L.pitch+clamp(Math.atan2(dy,Math.max(.01,hd))-L.pitch,-8*dt,8*dt),-1.35,1.35)}
    L.yv+=(tn*3.4/k-L.yv)*sm;L.pv+=(pt*2.4/k-L.pv)*sm;   // vitesse de rotation lissée : réactif mais fluide
-   L.yaw+=L.yv*dt;L.pitch=clamp(L.pitch+L.pv*dt,-1.35,1.35);
+   L.yaw+=L.yv*dt;L.pitch=clamp(L.pitch+L.pv*dt,-1.35,1.35);if(touch&&!pt&&!(L.lun>0))L.pitch*=Math.exp(-dt*.9);   // tactile : le nez se redresse doucement quand on lâche ▲ ▼
    L.roll+=(clamp(-L.yv*.22,-.6,.6)-L.roll)*(1-Math.exp(-dt*8));   // le poisson s'incline dans les virages
    const want=boostKey||[...btn.values()].includes("s");
    if(want&&L.st>0&&!L.tired){L.boost=1;L.st=Math.max(0,L.st-32*dt);if(L.st<=0)L.tired=1}else{L.boost=0;L.st=Math.min(100,L.st+(want?6:24)*dt);if(L.st>25)L.tired=0}
    const mg=(menuOn||talkOn)?0:((want&&!brk)||(L.zap>0&&(AB[selId]||{}).dash&&!brk))?1:mg0,tsf=(brk?0:1)*mg;L.sf+=(tsf-L.sf)*(1-Math.exp(-dt*(tsf>L.sf?6:2.5)));   // Maj (sprint) ou capacité de ruée = tout droit ; sinon arrêt si aucune entrée
    L.bm+=((L.zap>0?(AB[selId]||{sp:1}).sp:L.boost?1.8:1)-L.bm)*(1-Math.exp(-dt*9));
-   L.lun=Math.max(0,L.lun-dt);const sp=spdOf(L.m)*SPI(selIdx()).sp*(L.lun>0?Math.max(L.sf,.6):L.sf)*L.bm*(L.lun>0?2.5:1),cp=Math.cos(L.pitch);L.spd=sp;
+   L.lun=Math.max(0,L.lun-dt);const sp=spdOf(L.m)*SPI(selIdx()).sp*(L.lun>0?Math.max(L.sf,.6):L.sf)*L.bm*(L.lun>0?2.5:1),cp=Math.cos(L.pitch);L.spd=Math.abs(sp);
    L.x=wrp(L.x+Math.sin(L.yaw)*cp*sp*dt);L.z=wrp(L.z+Math.cos(L.yaw)*cp*sp*dt);   // sortir par un bord = réapparaître au bord opposé (carte torique)
    {const lo=gh(L.x,L.z)+Lm*.3+.3,ny=L.y+Math.sin(L.pitch)*sp*dt;L.y=clamp(ny,lo,WH-1);
     if((ny<lo&&L.pitch<0)||(ny>WH-1&&L.pitch>0)){L.pitch-=L.pitch*(1-Math.exp(-dt*7));L.pv*=.5}}   // collé au fond / à la surface : le nez glisse au lieu de s'enrouler à fond
@@ -490,7 +491,7 @@ export function createFishClient(env){
   const q=Math.min(devicePixelRatio||1,2)*(lowq?.72:1),nw=Math.round(cw*q),nh=Math.round(ch*q);
   W=cw;H=ch;if(nw!==cv.width||nh!==cv.height){cv.width=nw;cv.height=nh}if(glc&&(glc.width!==nw||glc.height!==nh)){glc.width=nw;glc.height=nh}bW=nw;bH=nh;
   FOC=Math.min(.93*H,.8*W);CY=H*.42;uS=clamp(Math.min(W/700,H/430),.85,1.15);insets();
-  BB.r=Math.round(46*uS);BB.x=W-SAf.r-BB.r-22;BB.y=H-SAf.b-78*uS-BB.r;BS.r=Math.round(34*uS);BS.x=BB.x-BB.r-BS.r-18;BS.y=BB.y+BB.r-BS.r;BA.r=Math.round(32*uS);BA.x=BB.x;BA.y=BB.y-BB.r-BA.r-14;JR=Math.round(58*uS);dirty=0}
+  BB.r=Math.round(46*uS);BB.x=W-SAf.r-BB.r-22;BB.y=H-SAf.b-78*uS-BB.r;BS.r=Math.round(34*uS);BS.x=BB.x-BB.r-BS.r-18;BS.y=BB.y+BB.r-BS.r;BA.r=Math.round(32*uS);BA.x=BB.x;BA.y=BB.y-BB.r-BA.r-14;BU.r=BD.r=Math.round(26*uS);BU.x=BS.x;BU.y=BS.y-BS.r-BU.r-12*uS;BD.x=BS.x-BS.r-BD.r-12*uS;BD.y=BS.y;JR=Math.round(58*uS);dirty=0}
  /* ---- scène 3D ---- */
  const SPR=new Float32Array(8*1600);let nspr=0;
  const spr=(px,py,pz,col,a,sz)=>{if(nspr>=1600)return;const o=nspr++*8;SPR[o]=px;SPR[o+1]=py;SPR[o+2]=pz;SPR[o+3]=col[0];SPR[o+4]=col[1];SPR[o+5]=col[2];SPR[o+6]=a;SPR[o+7]=sz};
@@ -611,7 +612,7 @@ export function createFishClient(env){
     x.globalAlpha=1-a*a;x.save();x.translate(sx,sy);x.scale(sc,sc);ot(String(p.v),0,0,F(900,26),"#ffdd2e","center",6*u);x.restore();x.globalAlpha=1;continue}
    x.globalAlpha=1-a*a;x.save();x.translate(W/2+p.dx*u,H*.52-a*70*u);const sc=1+Math.max(0,.4-a*3);x.scale(sc,sc);ot(String(p.v),0,0,F(900,22),p.cl||"#fff","center",6*u);x.restore();x.globalAlpha=1}
   if(S&&now-enterT<10000){x.globalAlpha=clamp((10000-(now-enterT))/1500,0,1);const hw=Math.min(W-20,Math.round(520*u));card(W/2-hw/2,H*.42,hw,touch?44*u:52*u,12*u,"#0b2416e0","#8fd47a55");
-   if(touch)T("{joy} Joystick = nager (lâché : tu t'arrêtes) · droite = MORDRE · {bolt} sprint",W/2,H*.42+26*u,F(700,12.5),"#eaf8ff","center");
+   if(touch)(T("Joystick : ↑ avancer · ↓ reculer · ←→ tourner · ▲▼ monter / descendre",W/2,H*.42+18*u,F(700,12),"#eaf8ff","center"),T("{bolt} sprint · touche à droite = MORDRE (lâche le joystick pour t'arrêter)",W/2,H*.42+36*u,F(700,12),"#eaf8ff","center"));
    else{T("Mange le plancton {spark} et les plus petits · les gros te blessent (barre rouge)",W/2,H*.42+22*u,F(600,13),"#eaf8ff","center");T("Espace/clic : mords · Maj : sprint · C : stop · V : nage auto · F : capacité",W/2,H*.42+42*u,F(600,12),"#eaf8ff","center")}x.globalAlpha=1}
   /* bas : barres + jauge en demi-cercle */
   const Rd=Math.round((cp?46:60)*u),cx=W/2,by=H-sa.b-8*u,cy0=by-2*u,sq=Math.round(11*u),gp=Math.round(3*u),barY=by-18*u,xr=W-sa.r-12;
@@ -634,7 +635,7 @@ export function createFishClient(env){
   /* commandes tactiles */
   if(touch){const pb=[...btn.values()].includes("b"),ps=[...btn.values()].includes("s");
    if(!joy){const gx=sa.l+JR+26,gy=H-sa.b-78*u-JR-8*u;x.beginPath();x.arc(gx,gy,JR,0,7);x.strokeStyle="#ffffff40";x.lineWidth=3;x.stroke();x.beginPath();x.arc(gx,gy,JR*.38,0,7);x.fillStyle="#ffffff26";x.fill()}
-   [[BB,"MORDS","{tooth}",pb],[BS,"SPRINT","{bolt}",ps],...(AB[selId]?[[BA,AB[selId].n,"{bolt}",L.zap>0]]:[])].forEach(([b,l,ic,on])=>{x.beginPath();x.arc(b.x,b.y,b.r,0,7);x.fillStyle=on?"#ffffff55":"#0b2416b0";x.fill();x.strokeStyle=on?"#fff":"#8fd47aaa";x.lineWidth=3;x.stroke();T(ic,b.x,b.y+2*u,F(700,b===BB?24:18),"#fff","center");T(l,b.x,b.y+b.r*.62,F(800,b===BB?11:9.5),"#fff","center")});
+   [[BB,"MORDS","{tooth}",pb],[BS,"SPRINT","{bolt}",ps],[BU,"HAUT","▲",[...btn.values()].includes("u")],[BD,"BAS","▼",[...btn.values()].includes("d")],...(AB[selId]?[[BA,AB[selId].n,"{bolt}",L.zap>0]]:[])].forEach(([b,l,ic,on])=>{x.beginPath();x.arc(b.x,b.y,b.r,0,7);x.fillStyle=on?"#ffffff55":"#0b2416b0";x.fill();x.strokeStyle=on?"#fff":"#8fd47aaa";x.lineWidth=3;x.stroke();T(ic,b.x,b.y+2*u,F(700,b===BB?24:18),"#fff","center");T(l,b.x,b.y+b.r*.62,F(800,b===BB?11:9.5),"#fff","center")});
    if(L.bcd>0)arc(BB.x,BB.y,BB.r+5,L.bcd/(L.bmx||BITE_CD),"#f4b52a",4);arc(BS.x,BS.y,BS.r+5,L.st/100,L.tired?"#ff8a5c":"#7ccf1b",4);if(AB[selId])arc(BA.x,BA.y,BA.r+5,zfill(),L.zap>0?"#ffffff":L.zcd>0?"#8a8f94":AB[selId].col,4);
    if(joy){x.beginPath();x.arc(joy.ox,joy.oy,JR,0,7);x.strokeStyle="#ffffff66";x.lineWidth=3;x.stroke();const dx=joy.px-joy.ox,dy=joy.py-joy.oy,l=Math.hypot(dx,dy),mm=l>JR?JR/l:1;x.beginPath();x.arc(joy.ox+dx*mm,joy.oy+dy*mm,JR*.42,0,7);x.fillStyle="#ffffffb0";x.fill()}}}
 
@@ -795,7 +796,7 @@ function render(){if(!menuEl)return;const keepY=lastScr===scr?menuEl.scrollTop:0
  return {enter(c){
   active=true;code=c;me=getMe().uid;S=null;last="";lastSend=0;joy=null;parts.length=0;rend.clear();mrend.clear();keys.clear();btn.clear();boostKey=false;brk=false;sdSeen=MAP_SEED;PK=plankton(MAP_SEED);deco=mkDeco(MAP_SEED);pkSet=new Set();prevM=0;shk=0;enterT=performance.now();hostOn=false;E=[];byId=new Map();hLast=new Map();
   Object.assign(L,{hurt:0,yv:0,pv:0,roll:0,sf:1,bm:1,aim:null,rc:-1,a:1,bc:0,bcd:0,bt:0,lun:0,st:100,boost:0,tired:0,m:1.6,spd:0,zap:0,zcd:0});talkOn=false;talkBtn=null;
-  help.textContent="La carte boucle : sors par un bord, tu réapparais de l'autre côté. ← → tourner · ↑ ↓ monter/descendre (ou ZQSD) · Espace / clic : mordre n'importe quel poisson (chiffre jaune = dégâts) · Maj : sprint · C : arrêt net · si tu lâches les touches, tu t'arrêtes (V : nage automatique) · M : piloter à la souris · les poissons tués éclatent en bouts de viande : mange-les vite ! Fuis les plus gros ! F : capacité de ton poisson (jauge jaune) · T : parler.";
+  help.textContent="La carte boucle : sors par un bord, tu réapparais de l'autre côté. ← → tourner · ↑ ↓ monter/descendre (ou ZQSD) · Espace / clic : mordre n'importe quel poisson (chiffre jaune = dégâts) · Maj : sprint · C : arrêt net · si tu lâches les touches, tu t'arrêtes (V : nage automatique) · M : piloter à la souris · les poissons tués éclatent en bouts de viande : mange-les vite ! Fuis les plus gros ! F : capacité de ton poisson (jauge jaune) · T : parler. Sur mobile : joystick (haut = avancer, bas = reculer, côtés = tourner) · boutons ▲ ▼ = monter / descendre · capacité = bouton rond au-dessus de MORDS.";
   un=onValue(ref(`games/${c}/state`),s=>{const v=s.val();if(!v)return;try{const q=JSON.parse(v);if(q.k!=="fish")return;
    if(S){const ids=new Set([...q.p.filter(t=>t[7]).map(t=>t[0]),...q.f.map(t=>t[0]),"me"]);rend.forEach((r,id)=>{if(!ids.has(id)){if(Math.hypot(r.x-cam.x,r.z-cam.z)<50)burst(r.x,r.y,r.z,BLOOD,10,2.2);rend.delete(id)}})}
    pkSet=new Set(q.pk);S=q;snapT=performance.now()}catch{}});

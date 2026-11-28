@@ -104,6 +104,10 @@ const parseP = s => { const a = String(s).split(","); return { x: +a[0] || 0, y:
 // ajoute une entrée EN HAUT de la liste, avec un numéro « v » plus grand que le précédent, la date du jour et les nouveautés en clair.
 // Les joueurs qui n'ont pas vu cette version voient la fenêtre à l'entrée dans le jeu.
 const NEWS = [
+  { v: 9, d: "28 nov. 2026", t: [
+    "Si ton compte se connecte sur un autre appareil, l'ancienne session se ferme toute seule : fini les bugs de serveur quand deux PC jouent avec le même compte",
+    "Sur PC aussi, le jeu passe maintenant en plein écran"
+  ] },
   { v: 8, d: "22 nov. 2026", t: [
     "L'intro revient une dernière fois pour tout le monde, avec sa nouvelle musique",
     "Le bouton 🎬 pour revoir l'intro a été retiré"

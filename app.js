@@ -14,7 +14,7 @@ import {createVoice} from "./voice.js";
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="164";
+const VER="165";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -29,7 +29,7 @@ const ownerOf=u=>OW.find(n=>u.email===ownerMail(n));
 let adm=false,unStats=[];try{adm=localStorage.getItem("moda.stats")==="1"}catch{}
 let voice=null,vst={on:false,mic:false,has:false,n:0},me=null,cur="auth",code=null,lobby=null,pending=null,unLobby=null,unState=null,presUn=[],lastDir=null;
 const show=v=>{cur=v;VIEWS.forEach(x=>$(x).hidden=x!==v);$("side").hidden=v==="auth";
-  document.body.classList.toggle("gm",TOUCH&&v==="game"); // plein écran de jeu sur téléphone
+  document.body.classList.toggle("gm",v==="game");document.body.classList.toggle("pc",!TOUCH); // plein écran de jeu (téléphone ET PC) ; « pc » : réglages propres au clavier / souris
   if(v!=="game"){resetTouch();unwake()}vsync()};
 let tt;const toast=m=>{$("toast").textContent=m;clearTimeout(tt);tt=setTimeout(()=>$("toast").textContent="",3500)};
 const clean=s=>(s||"joueur").replace(/[^A-Za-z0-9_]/g,"").slice(0,16).padEnd(3,"x");
@@ -573,7 +573,7 @@ function enterGame(c){
   if(lobby&&lobby.game==="sta"){show("game");st=pv=null;gk="sta";held.clear();lastMv="";scoreKey="";document.body.dataset.g="sta";wake();orientHint();unState=enterStaGame(c);return}
   if(lobby&&lobby.game==="barre"){show("game");st=pv=null;gk="barre";held.clear();lastMv="";scoreKey="";document.body.dataset.g="barre";wake();orientHint();unState=enterBarreGame(c);return}
   if(lobby&&lobby.game==="amog"){show("game");st=pv=null;gk="amog";held.clear();lastMv="";scoreKey="";document.body.dataset.g="amog";wake();orientHint();unState=enterAmogGame(c);return}
-  if(lobby&&lobby.game==="fish"){show("game");st=pv=null;gk="fish";held.clear();lastMv="";scoreKey="";document.body.dataset.g="fish";document.body.classList.add("gm");wake();orientHint();unState=enterFishGame(c);return}
+  if(lobby&&lobby.game==="fish"){show("game");st=pv=null;gk="fish";held.clear();lastMv="";scoreKey="";document.body.dataset.g="fish";wake();orientHint();unState=enterFishGame(c);return}
   if(lobby&&lobby.game==="blockdash"){show("game");st=pv=null;gk="blockdash";held.clear();lastMv="";scoreKey="";document.body.dataset.g="blockdash";wake();orientHint();unState=enterBlockDashGame(c);return}
   if(lobby&&lobby.game==="sumo"){show("game");st=pv=null;gk="sumo";held.clear();lastMv="";scoreKey="";document.body.dataset.g="sumo";wake();orientHint();unState=enterSumoGame(c);return}
   if(lobby&&lobby.game==="fruit"){show("game");st=pv=null;gk="fruit";held.clear();lastMv="";scoreKey="";document.body.dataset.g="fruit";wake();orientHint();unState=enterFruitGame(c);return}

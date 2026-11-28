@@ -5,7 +5,7 @@
 <meta name="theme-color" content="var(--bg)">
 <!-- ⚠️ À CONSERVER À CHAQUE MISE À JOUR : à chaque nouvelle version (chaque modification), la version affichée doit faire +1.
      Changer le numéro aux 3 endroits, toujours identique : ce <meta name="moda-v">, `const VER` dans app.js, et `VERSION` dans sw.js. Si la mise à jour touche STA I (n'importe laquelle), ajouter aussi une entrée « Quoi de neuf » en haut de `NEWS` dans sta.js. -->
-<meta name="moda-v" content="164"/>
+<meta name="moda-v" content="165"/>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -173,6 +173,11 @@ body.gm #gbar button{min-width:44px;opacity:.92}
 /* croix directionnelle (option) : en bas à gauche, par-dessus le jeu */
 body.gm.padon #pad{display:grid;position:fixed;left:calc(14px + env(safe-area-inset-left));bottom:calc(14px + env(safe-area-inset-bottom));grid-template-columns:repeat(3,62px);grid-template-rows:repeat(2,62px);margin:0;z-index:16;opacity:.9}
 body.gm.padon #pad button{background:var(--s2)cc;border-radius:14px}
+/* plein écran sur PC : pas de bouton manette ni de croix tactile, pas de bulle vide ; l'aide des commandes s'affiche en bas puis s'efface */
+body.gm.pc #gctl,body.gm.pc #pad{display:none!important}
+body.gm #tip:empty{display:none}
+body.gm.pc:not([data-g=fish]) #ghelp{display:block!important;position:fixed;left:50%;bottom:6px;transform:translateX(-50%);max-width:min(900px,92vw);margin:0;padding:5px 12px;border-radius:10px;background:#000b;color:#fff;font-size:12px;text-align:center;pointer-events:none;z-index:14;animation:hlpf .6s 12s forwards}
+@keyframes hlpf{to{opacity:0;visibility:hidden}}
 
 /* ===== Mine Simulator (dans l'écran de jeu commun) ===== */
 #sbtns{display:none;position:absolute;right:8px;bottom:8px;gap:8px;z-index:6}

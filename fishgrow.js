@@ -399,9 +399,11 @@ export function createFishClient(env){
   if(S&&S.dg)for(const d of S.dg){if(seenDg.has(d[0]))continue;seenDg.add(d[0]);if(d[1]!==me)continue;const tr=rend.get(d[2]);
    pops.push({t:now,v:d[3],dmg:1,wx:tr?tr.x:L.x,wy:tr?tr.y+len(tr.m)*.4+.3:L.y,wz:tr?tr.z:L.z,dx:(Math.random()-.5)*30})}
   if(seenDg.size>300)seenDg.clear();
-  /* arc de dents (morsure) : brille quand une proie est à portée, se recharge après chaque morsure */
-  if(L.a){const aw=Math.min(W*.42,300*u),ay=Math.max(H*.16,top+(cp?96:70)*u),rd=clamp(1-L.bcd/BITE_CD,0,1),sz=[13,8,6.5,5.5,5,5.5,6.5,8,13];
-   for(let i=0;i<9;i++){const t=i/8,px=W/2+(t-.5)*aw,py=ay+Math.pow(Math.abs(2*t-1),2)*28*u,s=sz[i]*u;x.globalAlpha=i<rd*9?(rng?1:.6):.18;x.fillStyle="#d8d43c";x.beginPath();x.ellipse(px,py,s*.78,s*1.15,(t-.5)*1.3,0,7);x.fill()}x.globalAlpha=1}
+  /* mâchoires jaunes : n'apparaissent que pendant une morsure, s'ouvrent vite puis se referment d'un coup et disparaissent */
+  if(L.a&&L.bcd>0){const aw=Math.min(W*.42,300*u),ay=Math.max(H*.16,top+(cp?96:70)*u),pb=clamp(1-L.bcd/BITE_CD,0,1),op=pb<.15?pb/.15:Math.max(0,1-(pb-.15)/.35),al=pb<.55?1:Math.max(0,1-(pb-.55)/.15),gap=op*24*u+2*u,sz=[13,8,6.5,5.5,5,5.5,6.5,8,13];
+   if(al>0){x.globalAlpha=al;x.fillStyle="#d8d43c";x.strokeStyle="#6b6a12";x.lineWidth=1.5*u;
+    for(let k=0;k<2;k++){const sg=k?1:-1;for(let i=0;i<9;i++){const t=i/8,px=W/2+(t-.5)*aw,py=ay+sg*gap+Math.pow(Math.abs(2*t-1),2)*28*u,s=sz[i]*u;x.beginPath();x.moveTo(px-s*.7,py);x.lineTo(px+s*.7,py);x.lineTo(px,py-sg*s*1.8);x.closePath();x.fill();x.stroke()}}
+    x.globalAlpha=1}}
   /* haut : espèce, niveau, compteur de croissance, serveur */
   ot(STG[si][1].toUpperCase(),lft,top+18*u,F(900,18),"#fff");
   if(cp){ot("NIV "+(si+1)+" · "+fmtm(m)+"/"+(nx?nx[0]:"MAX"),lft,top+36*u,F(900,12),"#7dffa1");

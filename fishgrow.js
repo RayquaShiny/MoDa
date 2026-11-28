@@ -303,7 +303,7 @@ export function createFishClient(env){
   const ax=(a,b)=>keys.has(a)&&keys.has(b)?(keys.get(a)>keys.get(b)?1:-1):(keys.has(a)?1:0)-(keys.has(b)?1:0);
   const kx=ax("R","L"),kz=ax("U","B");
   if(kx||kz){const l=Math.hypot(kx,kz);return[kx/l,kz/l,1]}
-  if(joy){const dx=joy.px-joy.ox,dy=joy.py-joy.oy,l=Math.hypot(dx,dy);if(l>7){const m=Math.min(1,l/JR),n=Math.min(1,m*1.3);return[dx/l*n,-dy/l*n,.5+.5*m]}}
+  if(joy){const dx=joy.px-joy.ox,dy=joy.py-joy.oy,l=Math.hypot(dx,dy);if(l>12&&performance.now()-joy.t>90){const m=Math.min(1,l/JR),n=Math.min(1,m*1.3);return[dx/l*n,-dy/l*n,.5+.5*m]}}
   if(msOn&&ms){const f=v=>{const a=Math.abs(v);return a<.07?0:Math.sign(v)*Math.min(1,Math.pow(a,1.25))};return[f((ms.x-W/2)/(W*.28)),f(-(ms.y-H*.48)/(H*.3)),1]}   // pilotage à la souris : le poisson se tourne vers le curseur
   return[0,0,1]};
  const MV={ArrowUp:"U",KeyW:"U",ArrowDown:"B",KeyS:"B",ArrowLeft:"L",KeyA:"L",ArrowRight:"R",KeyD:"R"};
@@ -314,13 +314,19 @@ export function createFishClient(env){
   else if(e.code==="KeyM"&&!e.repeat){msOn=!msOn;try{localStorage.setItem("moda.fishmouse",msOn?"1":"0")}catch{}try{env.toast(msOn?"Pilotage à la souris : le poisson suit ton curseur (M pour arrêter)":"Pilotage à la souris désactivé")}catch{}}};
  const ku=e=>{const m=MV[e.code];if(m)keys.delete(m);if(e.code==="ShiftLeft"||e.code==="ShiftRight"||e.code==="KeyX")boostKey=false;if(e.code==="KeyC"||e.code==="ControlLeft")brk=false};
  const blur=()=>{keys.clear();joy=null;btn.clear();boostKey=false;brk=false};
+ // pendant la partie : ni zoom au double-tap, ni défilement/rebond de la page (iOS ignore user-scalable=no)
+ let lte=0;const inMenu=e=>e.target&&e.target.closest&&e.target.closest(".fm");
+ const noMove=e=>{if(active&&!inMenu(e))e.preventDefault()};
+ const noDbl=e=>{if(!active||inMenu(e))return;const n=Date.now();if(n-lte<400)e.preventDefault();lte=n};
+ const noGest=e=>{if(active)e.preventDefault()};
+ const noScroll=()=>{if(active&&(window.scrollX||window.scrollY))window.scrollTo(0,0)};
  const toC=e=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left)*W/r.width,(e.clientY-r.top)*H/r.height]};
  const hit=(p,b)=>Math.hypot(p[0]-b.x,p[1]-b.y)<=b.r+14;
  const pd=e=>{if(!active||e.target.closest("button"))return;e.preventDefault();if(e.pointerType!=="mouse")touch=true;const p=toC(e);try{cv.setPointerCapture(e.pointerId)}catch{}
   if(e.pointerType==="mouse"){bite();return}
   if(hit(p,BS))btn.set(e.pointerId,"s");
   else if(hit(p,BB)||p[0]>=W*.5){btn.set(e.pointerId,"b");bite()}   // toute la moitié droite = MORDRE (maintenir = mordre en boucle)
-  else if(!joy&&p[1]>H*.2)joy={id:e.pointerId,ox:p[0],oy:p[1],px:p[0],py:p[1]}};
+  else if(!joy&&p[1]>H*.2)joy={id:e.pointerId,ox:p[0],oy:p[1],px:p[0],py:p[1],t:performance.now()}};
  const pm=e=>{if(e.pointerType==="mouse"){const p=toC(e);ms={x:p[0],y:p[1]}}if(joy&&joy.id===e.pointerId){const p=toC(e);joy.px=p[0];joy.py=p[1];const dx=p[0]-joy.ox,dy=p[1]-joy.oy,l=Math.hypot(dx,dy),lim=JR*1.05;if(l>lim){joy.ox+=dx/l*(l-lim);joy.oy+=dy/l*(l-lim)}}};   // le joystick suit le doigt s'il dépasse
  const pl=()=>{ms=null};
  const pu=e=>{btn.delete(e.pointerId);if(joy&&joy.id===e.pointerId)joy=null};
@@ -626,6 +632,7 @@ export function createFishClient(env){
    if(v){coins=Math.max(0,+v.c||0)+pend;const o=Array.isArray(v.o)?v.o.filter(id=>FISHES.some(f=>f.id===id)):[];owned=o.includes("bibos")?o:["bibos",...o];selId=owned.includes(v.s)?v.s:"bibos"}   // le compte fait foi ; sinon on envoie la copie locale (première fois)
    pend=0;fbOk=true;fbBad=false;sv("moda.fish.coins",coins);sv("moda.fish.owned",owned);sv("moda.fish.sel",selId);saveFish(1);render()}).catch(()=>{fbBad=true;render()})}
  const MCSS="body.gm[data-g=fish] .fm{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:12px;padding:calc(max(10px,env(safe-area-inset-top)) + 34px) 16px max(10px,env(safe-area-inset-bottom));box-sizing:border-box;overflow:auto;text-align:center;color:#fff;font-family:system-ui,sans-serif;border-radius:inherit;background:radial-gradient(ellipse at 50% 40%,rgba(6,40,70,.3),rgba(2,12,26,.8))}"+
+"body.gm[data-g=fish] .fm,body.gm[data-g=fish] .fm *{touch-action:pan-y;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}body.gm[data-g=fish] .fm{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}"+
  ".fm::before,.fm::after{content:'';flex:1 0 0;min-height:0}.fm h1{margin:0;font-size:clamp(26px,7vw,52px);font-weight:900;letter-spacing:.04em;line-height:1;text-shadow:0 3px 0 #06324f,0 0 24px #3fa0ee88}.fm h1 small{display:block;font-size:.34em;letter-spacing:.3em;color:#9be37a;margin-bottom:6px}"+
  ".fm button{font:inherit;cursor:pointer;border:0;color:#fff;font-weight:900}.fm button[disabled]{cursor:default}"+
  ".fm .b{width:min(300px,78vw);padding:clamp(10px,2.4vh,16px) 18px;border-radius:14px;font-size:clamp(16px,4.4vw,22px);letter-spacing:.06em;background:linear-gradient(#2f86c6,#1c5f94);box-shadow:0 4px 0 #0d3a5e,0 8px 18px #0006}.fm .b:active{transform:translateY(3px);box-shadow:0 1px 0 #0d3a5e}"+
@@ -642,13 +649,14 @@ export function createFishClient(env){
  ".fm .tip{max-width:min(420px,90vw);font-size:12px;font-weight:600;color:#cfe9f5;line-height:1.5}"+
  ".fm .st{width:100%;display:flex;flex-direction:column;gap:3px;margin:2px 0 4px}.fm .st div{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:800;color:#9be37a}.fm .st span{width:48px;text-align:left}.fm .st i{flex:1;height:5px;border-radius:3px;background:#ffffff22;overflow:hidden}.fm .st i b{display:block;height:100%;background:#7ccf1b;font-size:0}"+
  "@media (max-height:420px){.fm{gap:7px}.fm h1{font-size:26px}.fm .card p{display:none}}";
- function render(){if(!menuEl)return;const cur=FISHES.find(f=>f.id===selId)||FISHES[0],cn=`<div class="cn"><i></i>${coins}</div>`;let h=cn;
+ let lastScr="";
+function render(){if(!menuEl)return;const keepY=lastScr===scr?menuEl.scrollTop:0;const cur=FISHES.find(f=>f.id===selId)||FISHES[0],cn=`<div class="cn"><i></i>${coins}</div>`;let h=cn;
   if(scr==="main")h+=`<h1><small>MODA</small>FEED &amp; GROW<br>FISH</h1><button class="b p" data-a="play">${ico("play")} JOUER</button><button class="b" data-a="fish">${ico("fish")} POISSONS</button><button class="b" data-a="set">${ico("gear")} PARAMÈTRES</button><div class="tip">Poisson choisi : ${fishSvg(cur).replace('width="86" height="54"','width="34" height="21"')} ${cur.name}</div>${fbBad?`<div class="tip">${ico("warn")} Pièces non enregistrées sur ton compte (hors ligne ?)</div>`:""}`;
   else if(scr==="fish"){h+=`<h1 style="font-size:clamp(22px,5vw,34px)">POISSONS</h1><div class="grid">`+FISHES.map(f=>{const own=owned.includes(f.id),sel=f.id===selId,can=own||(f.price!=null&&coins>=f.price);
     const lab=f.soon?"Bientôt":sel?ico("check")+" Sélectionné":own?"Choisir":f.price==null?"Bientôt":"Acheter · "+f.price+" "+ico("coin"),dis=f.soon||sel||(!own&&!can);
     return `<div class="card${sel?" sel":""}${f.soon?" lock":""}"><div class="ic">${fishSvg(f)}</div><b>${f.name}</b><p>${f.desc}</p>${statsH(f)}<button class="a" data-a="${own?"pick":"buy"}" data-id="${f.id}"${dis?" disabled":""}>${lab}</button></div>`}).join("")+`</div><div class="tip">Gagne des pièces ${ico("coin")} en tuant des poissons (plus ton niveau est haut, plus ça rapporte) et en montant de niveau.</div><button class="back" data-a="main">← Retour</button>`}
   else h+=`<h1 style="font-size:clamp(22px,5vw,34px)">PARAMÈTRES</h1><div class="row">${ico("mouse","1.3em")} Pilotage à la souris<button class="tg${msOn?" on":""}" data-a="tgm">${msOn?"OUI":"NON"}</button></div><div class="row">${ico("vib","1.3em")} Vibrations<button class="tg${vibOn?" on":""}" data-a="tgv">${vibOn?"OUI":"NON"}</button></div><div class="tip">Le son se coupe avec le bouton ${ico("snd")} en haut à droite.<br>← → tourner · ↑ ↓ monter/descendre · Espace : mordre · Maj : sprint · C : freiner · M : souris</div><button class="back" data-a="main">← Retour</button>`;
-  menuEl.innerHTML=h}
+  menuEl.innerHTML=h;lastScr=scr;menuEl.scrollTop=keepY}
  function act(a,id){if(!menuOn)return;
   if(a==="play"){menuOn=false;L.yaw=cam.yaw;L.pitch=0;enterT=performance.now();if(menuEl)menuEl.style.display="none";send(true);return}
   if(a==="fish"||a==="set"||a==="main")scr=a;
@@ -659,7 +667,7 @@ export function createFishClient(env){
   render()}
  function openMenu(){coins=Math.max(0,+ld("moda.fish.coins",0)||0);owned=ld("moda.fish.owned",["bibos"]);if(!Array.isArray(owned)||!owned.includes("bibos"))owned=["bibos"];
   selId=ld("moda.fish.sel","bibos");if(!owned.includes(selId))selId="bibos";vibOn=ld("moda.fish.vib",true)!==false;pkl=-1;cT=-9;fbOk=false;fbBad=false;pend=0;dirtyFb=false;
-  menuOn=true;scr="main";menuEl=document.createElement("div");menuEl.className="fm";menuEl.addEventListener("click",e=>{const b=e.target.closest("[data-a]");if(b&&!b.disabled)act(b.dataset.a,b.dataset.id)});cv.parentElement.appendChild(menuEl);render();loadFish()}
+  menuOn=true;scr="main";menuEl=document.createElement("div");menuEl.className="fm";lastScr="";menuEl.addEventListener("dblclick",e=>e.preventDefault());menuEl.addEventListener("click",e=>{const b=e.target.closest("[data-a]");if(b&&!b.disabled)act(b.dataset.a,b.dataset.id)});cv.parentElement.appendChild(menuEl);render();loadFish()}
 
  return {enter(c){
   active=true;code=c;me=getMe().uid;S=null;last="";lastSend=0;joy=null;parts.length=0;rend.clear();mrend.clear();keys.clear();btn.clear();boostKey=false;brk=false;sdSeen=MAP_SEED;PK=plankton(MAP_SEED);deco=mkDeco(MAP_SEED);pkSet=new Set();prevM=0;shk=0;enterT=performance.now();hostOn=false;E=[];byId=new Map();hLast=new Map();
@@ -668,15 +676,15 @@ export function createFishClient(env){
   un=onValue(ref(`games/${c}/state`),s=>{const v=s.val();if(!v)return;try{const q=JSON.parse(v);if(q.k!=="fish")return;
    if(S){const ids=new Set([...q.p.filter(t=>t[7]).map(t=>t[0]),...q.f.map(t=>t[0]),"me"]);rend.forEach((r,id)=>{if(!ids.has(id)){if(Math.hypot(r.x-cam.x,r.z-cam.z)<50)burst(r.x,r.y,r.z,BLOOD,10,2.2);rend.delete(id)}})}
    pkSet=new Set(q.pk);S=q;snapT=performance.now()}catch{}});
-  addEventListener("keydown",kd);addEventListener("keyup",ku);addEventListener("blur",blur);addEventListener("pagehide",flushFish);
+  addEventListener("keydown",kd);addEventListener("keyup",ku);addEventListener("blur",blur);addEventListener("pagehide",flushFish);document.addEventListener("touchmove",noMove,{passive:false});document.addEventListener("touchend",noDbl,{passive:false});document.addEventListener("dblclick",noGest,{passive:false});document.addEventListener("gesturestart",noGest,{passive:false});addEventListener("scroll",noScroll,{passive:true});
   cv.style.touchAction="none";cv.addEventListener("pointerdown",pd);cv.addEventListener("pointermove",pm);cv.addEventListener("pointerleave",pl);cv.addEventListener("pointerup",pu);cv.addEventListener("pointercancel",pu);cv.addEventListener("lostpointercapture",pu);
-  sty=document.createElement("style");sty.textContent="body.gm[data-g=fish] #game{padding:0}body.gm[data-g=fish] #gw{width:100vw!important;height:100vh;height:100dvh}body.gm[data-g=fish] #cv{width:100%;height:100%}body.gm[data-g=fish] #gbar{position:absolute;top:calc(6px + env(safe-area-inset-top));right:calc(8px + env(safe-area-inset-right));margin:0;z-index:20}body[data-g=fish] #score{display:none!important}"+MCSS;document.head.appendChild(sty);
+  sty=document.createElement("style");sty.textContent="html:has(body.gm[data-g=fish]){overscroll-behavior:none;overflow:hidden;height:100%}body.gm[data-g=fish],body.gm[data-g=fish] #game,body.gm[data-g=fish] #gw,body.gm[data-g=fish] #gbar{touch-action:none}body.gm[data-g=fish] #game{padding:0}body.gm[data-g=fish] #gw{width:100vw!important;height:100vh;height:100dvh}body.gm[data-g=fish] #cv{width:100%;height:100%}body.gm[data-g=fish] #gbar{position:absolute;top:calc(6px + env(safe-area-inset-top));right:calc(8px + env(safe-area-inset-right));margin:0;z-index:20}body[data-g=fish] #score{display:none!important}"+MCSS;document.head.appendChild(sty);
   glc=document.createElement("canvas");glc.setAttribute("aria-hidden","true");glc.style.cssText="position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:0;border-radius:"+getComputedStyle(cv).borderRadius;cv.parentElement.insertBefore(glc,cv);cv.style.position="relative";cv.style.zIndex="1";cv.style.background="transparent";
   G=createGL(glc);if(G){glc.addEventListener("webglcontextlost",ev=>{ev.preventDefault();G.lost=true});glc.addEventListener("webglcontextrestored",()=>{try{G.init();G.lost=false}catch{G=null}})}
   dirty=1;lastSt=-1;lvT=-9;pops.length=0;seenDg.clear();pmh=0;phpv=100;addEventListener("resize",rz);addEventListener("orientationchange",rz);cv.addEventListener("contextmenu",noCtx);if(window.ResizeObserver){ro=new ResizeObserver(rz);ro.observe(cv)}layout();openMenu();
   lastT=performance.now();raf=requestAnimationFrame(frame);timer=setInterval(simLoop,50);
   env.played&&env.played("fish",true);
-  return()=>{flushFish();clearTimeout(svT);removeEventListener("pagehide",flushFish);active=false;clearInterval(timer);if(poseUn){poseUn();poseUn=null}hostOn=false;un();cancelAnimationFrame(raf);remove(ref(`games/${c}/p/${me}`)).catch(()=>{});removeEventListener("keydown",kd);removeEventListener("keyup",ku);removeEventListener("blur",blur);
+  return()=>{flushFish();clearTimeout(svT);removeEventListener("pagehide",flushFish);active=false;clearInterval(timer);if(poseUn){poseUn();poseUn=null}hostOn=false;un();cancelAnimationFrame(raf);remove(ref(`games/${c}/p/${me}`)).catch(()=>{});removeEventListener("keydown",kd);removeEventListener("keyup",ku);removeEventListener("blur",blur);document.removeEventListener("touchmove",noMove);document.removeEventListener("touchend",noDbl);document.removeEventListener("dblclick",noGest);document.removeEventListener("gesturestart",noGest);removeEventListener("scroll",noScroll);
    cv.removeEventListener("pointerdown",pd);cv.removeEventListener("pointermove",pm);cv.removeEventListener("pointerleave",pl);cv.removeEventListener("pointerup",pu);cv.removeEventListener("pointercancel",pu);cv.removeEventListener("lostpointercapture",pu);cv.style.touchAction="";removeEventListener("resize",rz);removeEventListener("orientationchange",rz);cv.removeEventListener("contextmenu",noCtx);if(ro){ro.disconnect();ro=null}if(G){G.dispose();G=null}if(glc){glc.remove();glc=null}if(sty){sty.remove();sty=null}if(menuEl){menuEl.remove();menuEl=null}menuOn=false;if(probe){probe.remove();probe=null}cv.style.position="";cv.style.zIndex="";cv.style.background="";cv.width=800;cv.height=560;
    joy=null;btn.clear();keys.clear();ov._h="";ov.textContent="";ov.style.fontSize="56px";help.textContent=""}
  }};

@@ -5,7 +5,7 @@
 <meta name="theme-color" content="var(--bg)">
 <!-- ⚠️ À CONSERVER À CHAQUE MISE À JOUR : à chaque nouvelle version (chaque modification), la version affichée doit faire +1.
      Changer le numéro aux 3 endroits, toujours identique : ce <meta name="moda-v">, `const VER` dans app.js, et `VERSION` dans sw.js. Si la mise à jour touche STA I (n'importe laquelle), ajouter aussi une entrée « Quoi de neuf » en haut de `NEWS` dans sta.js. -->
-<meta name="moda-v" content="154"/>
+<meta name="moda-v" content="157"/>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -149,7 +149,8 @@ header,main{padding-left:max(var(--px,24px),env(safe-area-inset-left));padding-r
 #tip{position:absolute;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);width:max-content;max-width:86vw;text-align:center;background:#000a;color:#fff;padding:8px 14px;border-radius:12px;font-size:14px;pointer-events:none;z-index:14}
 
 /* Plein écran de jeu sur téléphone / tablette : plus d'en-tête, pas de défilement, le jeu occupe tout l'écran */
-body.gm{position:fixed;inset:0;width:100%;overflow:hidden;background:var(--bg);-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+html:has(body.gm){overflow:hidden;overscroll-behavior:none;height:100%}
+  body.gm{position:fixed;inset:0;width:100%;overflow:hidden;background:var(--bg);-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 body.gm header,body.gm aside,body.gm #ver,body.gm #ghelp{display:none!important}
 body.gm main{display:block;padding:0;max-width:none;margin:0}
 body.gm #game{position:fixed;inset:0;z-index:10;background:var(--bg);touch-action:none;display:flex;flex-direction:column;align-items:center;padding-top:env(safe-area-inset-top)}

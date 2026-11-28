@@ -14,7 +14,7 @@ import {createVoice} from "./voice.js";
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="154";
+const VER="157";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -886,6 +886,14 @@ gameEl.addEventListener("pointermove",e=>{
 const relPtr=e=>{if(tp.mv&&tp.mv.id===e.pointerId)endStick("mv");else if(tp.aim&&tp.aim.id===e.pointerId)endStick("aim");else if(tp.sw&&tp.sw.id===e.pointerId)tp.sw=null};
 ["pointerup","pointercancel"].forEach(t=>gameEl.addEventListener(t,relPtr));
 document.addEventListener("gesturestart",e=>e.preventDefault()); document.addEventListener("gesturechange",e=>e.preventDefault()); // zoom à deux doigts impossible partout (iOS ignore user-scalable)
+// Plein écran de jeu sur téléphone (tous les jeux) : pas de zoom au double-tap, pas de défilement ni de rebond de la page, pas de décalage vers le bas
+{const inGm=()=>document.body.classList.contains("gm");let lte=0;
+ const canScroll=el=>{for(;el&&el!==document.body&&el.nodeType===1;el=el.parentElement){const o=getComputedStyle(el).overflowY;if((o==="auto"||o==="scroll")&&el.scrollHeight>el.clientHeight+1)return true}return false};
+ document.addEventListener("touchend",e=>{if(!inGm())return;const n=Date.now();if(n-lte<350&&!(e.target.closest&&e.target.closest("input,textarea,select")))e.preventDefault();lte=n},{passive:false});
+ document.addEventListener("touchmove",e=>{if(inGm()&&!canScroll(e.target))e.preventDefault()},{passive:false});
+ document.addEventListener("dblclick",e=>{if(inGm())e.preventDefault()},{passive:false});
+ const top=()=>{if(inGm()&&(window.scrollX||window.scrollY))window.scrollTo(0,0)};
+ addEventListener("scroll",top,{passive:true});if(window.visualViewport){visualViewport.addEventListener("scroll",top);visualViewport.addEventListener("resize",top)}addEventListener("orientationchange",()=>setTimeout(top,350))}
 document.addEventListener("wheel",e=>{if(e.ctrlKey)e.preventDefault()},{passive:false}); // pas de zoom par pincement au pavé tactile / Ctrl+molette
 document.addEventListener("visibilitychange",()=>{if(document.hidden)resetTouch();else if(cur==="game")wake()});
 addEventListener("blur",resetTouch);

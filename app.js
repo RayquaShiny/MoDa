@@ -14,7 +14,7 @@ import {createVoice} from "./voice.js";
 // 1) Colle ici la config de ton projet Firebase (Paramètres du projet > Tes applications > Web)
 const cfg={apiKey:"AIzaSyCU2qkeRozdFeIybYQQjy9PssnqxBbYdIo",authDomain:"moda-ac6b2.firebaseapp.com",databaseURL:"https://moda-ac6b2-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moda-ac6b2",storageBucket:"moda-ac6b2.firebasestorage.app",messagingSenderId:"79010938897",appId:"1:79010938897:web:4cf8ffe4ca61e04ada31b0"};
 const app=initializeApp(cfg),auth=getAuth(app),db=getDatabase(app);
-const VER="162";
+const VER="163";
 const $=i=>document.getElementById(i)||document.createElement("div");
 {const m=document.querySelector('meta[name="moda-v"]');$("ver").textContent=m&&m.content===VER?"MoDa v"+VER:"";
  if(!m||m.content!==VER)setTimeout(()=>toast("⚠️ index.html et app.js ne sont pas de la même version : renvoie les DEUX fichiers sur GitHub, puis recharge"),900)}
@@ -271,6 +271,7 @@ function withBots(l){ // joueurs réels + bots (ids « bot_1 », « bot_2 »…,
 let spec=false; // admin qui regarde une partie sans y jouer (pas dans la liste des joueurs)
 const specTag=document.createElement("div");specTag.style.cssText="position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:60;padding:4px 12px;border-radius:999px;background:#000a;color:#fff;font:700 13px sans-serif;pointer-events:none";specTag.textContent="👁️ Observateur";specTag.hidden=true;document.body.append(specTag);
 const ownTag=()=>me&&me.owner?{ow:1}:{}; // badge 🛡️ affiché en lobby (purement visuel)
+const SID=Math.random().toString(36).slice(2,10)+Date.now().toString(36); // identifiant de CET onglet/appareil : si le même compte se connecte ailleurs sur STA / Fish, la session la plus ancienne se ferme (sinon deux appareils écrivent le même joueur et font bugger le serveur)
 let gStart=Date.now();
 // Compte une partie terminée : total, par jeu (nombre + secondes) et par heure UTC (open=true : partie sans fin, durée ignorée)
 const played=(g,open)=>{const sec=open?0:Math.max(1,Math.round((Date.now()-gStart)/1000)),hr=new Date().getUTCHours();
@@ -304,11 +305,13 @@ function enter(c){
   unLobby=onValue(R(`lobbies/${c}`),s=>{
     const l=s.val();if(!l){if(code){local();toast("Le lobby a été fermé")}return}
     if(l.kick&&l.kick[me.uid]){if(code){local();toast("Un admin t'a retiré du lobby")}return}
+    {const mp=l.players&&l.players[me.uid];   // même compte connecté sur un AUTRE appareil : la session la plus récente garde la place, celle-ci se ferme sans toucher à l'entrée du joueur
+     if(SRV(l.game)&&mp&&mp.sid&&mp.sid!==SID){const c0=code;if(c0){onDisconnect(R(`lobbies/${c0}/players/${me.uid}`)).cancel().catch(()=>{});local();toast("Ton compte s'est connecté sur un autre appareil : cette session a été fermée")}return}}
     lobby=l;
     if(spec&&l.status==="lobby")spec=false;   // la partie est finie / pas lancée : l'admin redevient un joueur du lobby
     if(isMaintained(l.game)){toast(maintMsg(l.game));leaveLobby();return}
     if(((l.status==="lobby"||l.game==="sim"||l.game==="fruit")&&l.host!==me.uid||SRV(l.game))&&!(l.players&&l.players[me.uid])&&!spec){ // coupure puis retour : on se réinscrit
-      set(R(`lobbies/${c}/players/${me.uid}`),{name:me.name,color:firstColor(l.players),ready:false,...(SRV(l.game)?{j:Date.now()}:{}),...ownTag()});onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();return}
+      set(R(`lobbies/${c}/players/${me.uid}`),{name:me.name,color:firstColor(l.players),ready:false,...(SRV(l.game)?{j:Date.now(),sid:SID}:{}),...ownTag()});onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();return}
     renderLobby();
     if(l.status==="playing"&&cur!=="game")enterGame(c);
     if(l.status==="lobby"&&cur==="game"){unState&&unState();unState=null;show("lobby")}
@@ -358,7 +361,7 @@ async function joinSta(pref){   // pref : serveur à essayer en premier (reprise
       if(l&&l.game!=="sta")continue;
       if(l&&n>=STA_MAX&&!pl[me.uid])continue;
       if(l&&l.kick&&l.kick[me.uid])continue;   // retiré par un admin de CE serveur : on passe au suivant
-      const mine={name:me.name,color:firstColor(pl),ready:true,j:Date.now(),...ownTag()};
+      const mine={name:me.name,color:firstColor(pl),ready:true,j:Date.now(),sid:SID,...ownTag()};
       if(l&&n)await set(R(`lobbies/${k}/players/${me.uid}`),mine);   // serveur déjà occupé : on s'ajoute SEULEMENT dans players/<uid> (on ne réécrit pas l'en-tête du lobby)
       else{                                                          // serveur inexistant ou vide : on le (re)crée avec un monde neuf
         if(l)await remove(R(`games/${k}`)).catch(()=>{});
@@ -386,7 +389,7 @@ async function joinFish(pref){
       if(l&&l.game!=="fish")continue;
       if(l&&n>=FISH_MAX&&!pl[me.uid])continue;
       if(l&&l.kick&&l.kick[me.uid])continue;
-      const mine={name:me.name,color:firstColor(pl),ready:true,j:Date.now(),...ownTag()};
+      const mine={name:me.name,color:firstColor(pl),ready:true,j:Date.now(),sid:SID,...ownTag()};
       if(l&&n)await set(R(`lobbies/${k}/players/${me.uid}`),mine);   // serveur déjà occupé : on s'ajoute seulement dans players/<uid>
       else{                                                          // serveur inexistant ou vide : on le (re)crée avec un récif neuf
         if(l)await remove(R(`games/${k}`)).catch(()=>{});
@@ -408,7 +411,7 @@ async function admJoin(c){
   try{if(l.kick&&l.kick[me.uid])await remove(R(`lobbies/${c}/kick/${me.uid}`))}catch{}   // un owner n'est jamais bloqué
   if(SRV(l.game)){
     const pl=l.players||{};if(Object.keys(pl).length>=(l.game==="fish"?FISH_MAX:STA_MAX)&&!pl[me.uid])return toast("Serveur plein");
-    try{await update(R(`lobbies/${c}`),{[`players/${me.uid}`]:{name:me.name,color:firstColor(pl),ready:true,j:Date.now(),...ownTag()}})}catch{return admErr()}
+    try{await update(R(`lobbies/${c}`),{[`players/${me.uid}`]:{name:me.name,color:firstColor(pl),ready:true,j:Date.now(),sid:SID,...ownTag()}})}catch{return admErr()}
     onDisconnect(R(`lobbies/${c}/players/${me.uid}`)).remove();return enter(c);
   }
   if(l.status==="lobby"||l.game==="sim"||l.game==="fruit")return joinLobby(c);   // lobby non lancé (ou monde ouvert) : on rejoint normalement

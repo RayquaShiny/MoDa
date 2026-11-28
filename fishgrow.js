@@ -59,7 +59,7 @@ const SHAPES={   // formes des espèces : P = profil du corps (nez → queue), q
  barr:{P:[.06,.20,.30,.32,.26,.12,.04],q:.65,dh:.14,tl:.85,pf:.14,er:.05},
  pira:{P:[.10,.50,.68,.60,.34,.14,.05],q:.50,dh:.26,tl:.95,pf:.18},
  moon:{P:[.14,.62,.92,.84,.44,.16,.06],q:.34,dh:.55,tl:.5,pf:.14,vh:.5},
- dare:{P:[.14,.5,.64,.54,.34,.15,.05],q:.64,dh:.07,tl:1.1,pf:.3,vh:.17,er:.07,ear:1,wh:1,nose:1,pw:1}};   // la chatte : oreilles, moustaches, nez rose, pattes blanches
+ dare:{P:[.19,.60,.68,.50,.36,.17,.05],q:.86,dh:.05,tl:.95,pf:.26,vh:.17,er:.075,ear:1,wh:1,nose:1,pw:1,cat:1}};   // la chatte (smoking noir et blanc) : grosse tête ronde, oreilles dressées, liseré blanc, museau blanc, nez rose, pattes blanches
 /* ---- Évolution des formes : chaque espèce change de modèle 3D à chaque niveau (8 formes). On donne des « images clés » [niveau, écarts] ;
         les niveaux intermédiaires sont interpolés. P = profil du corps, q = épaisseur, dh = dorsale, tl = queue, pf = pectorales, vh = ventrale,
         spk = épines, th = crocs, er = yeux, sk = 1 : corps de requin. Bibos finit en requin (Requin → Grand blanc → Mégalodon). ---- */
@@ -138,7 +138,7 @@ const fishSvg=f=>{const b=f.c||[255,140,40],bl=f.bl||mixc(b,[255,255,255],.6),fn
   `<ellipse cx="44" cy="25" rx="26" ry="${iy}" fill="${rgbs(b)}"/><g clip-path="url(#${id})"><rect x="14" y="25" width="62" height="30" fill="${rgbs(bl)}" opacity=".7"/>`+
   bars.map(a=>`<rect x="${a[0]}" y="0" width="${a[1]}" height="50" fill="${rgbs(bd)}" opacity=".9"/>`).join("")+dots.map(a=>`<circle cx="${a[0]}" cy="${a[1]}" r="3" fill="${rgbs(bd)}" opacity=".85"/>`).join("")+
   (pt===5?`<rect x="61" y="27" width="16" height="14" fill="#fff"/><rect x="64.5" y="10" width="3" height="18" fill="#fff"/>`:"")+
-  `</g><circle cx="62" cy="22" r="3.4" fill="#fff"/><circle cx="63" cy="22" r="1.7" fill="#0a1226"/>`+
+  `</g>`+(pt===5?`<ellipse cx="62" cy="22" rx="3.3" ry="3.6" fill="#bcd234"/><ellipse cx="63.2" cy="22" rx=".9" ry="3" fill="#0a1226"/>`:`<circle cx="62" cy="22" r="3.4" fill="#fff"/><circle cx="63" cy="22" r="1.7" fill="#0a1226"/>`)+
   (pt===5?`<path d="M51 13L54 3L59 14Z M60 15L65 7L68 19Z" fill="${rgbs(fn)}"/><circle cx="69.5" cy="26.5" r="1.7" fill="#f6a6b8"/>`:"")+`</svg>`};
 const statsH=f=>{const b=(l,v)=>`<div><span>${l}</span><i><b style="width:${Math.round(clamp(v/1.8,0,1)*100)}%"></b></i></div>`;return `<div class="st">${b("Vitesse",f.sp)}${b("Morsure",f.bi)}${b("Vie",f.hp)}</div>`};
 const fmtm=m=>m<10?m.toFixed(1):String(Math.round(m));
@@ -181,16 +181,21 @@ function fishGeom(sh,so){
  const FN=[1,0,0],r1=prof(1/6),r2=prof(1/3),r3=prof(.5),r4=prof(2/3),z1=.5-1/6,z2=.5-1/3,z4=.5-2/3,dh=so?so.dh:(sh?.36:.28),tl=so?so.tl:1,pfw=so?so.pf:(sh?.26:.2),vh=so?(so.vh||.13):.13;
  fan(mb,sh?[[0,.03,-.5],[0,.38,-.7],[0,0,-.62],[0,-.22,-.7],[0,-.03,-.5]]:[[0,.03,-.5],[0,.3*tl,-.72],[0,0,-.62],[0,-.3*tl,-.72],[0,-.03,-.5]],FN,Z);   // queue
  fan(mb,[[0,r2*.9,z2+.08],[0,r2+dh,z2-.12],[0,r4*.9,z4]],FN,Z);   // dorsale
- if(so&&so.ear)[-1,1].forEach(s=>{const zz=.3,rr=prof(.2)*.95;fan(mb,[[s*rr*q*.9,rr*.72,zz+.07],[s*rr*q*.6,rr+.26,zz-.02],[s*rr*q*.1,rr*.9,zz-.1]],FN,Z)});   // oreilles de chat
+ if(so&&so.ear&&so.cat)[-1,1].forEach(s=>{const ty=prof(.27),tx=ty*q,zc=.5-.27,A=[s*tx*.98,ty*.62,zc+.075],B=[s*tx*.2,ty*.9,zc+.07],C=[s*tx*.78,ty*.78,zc-.085],T=[s*tx*.8,ty+.2,zc-.005];   // oreilles de chat : pyramides noires dressées
+  fan(mb,[A,B,T],Z,Z);fan(mb,[B,C,T],Z,Z);fan(mb,[C,A,T],Z,Z);
+  const m=(P,Q,t)=>[P[0]+(Q[0]-P[0])*t,P[1]+(Q[1]-P[1])*t,P[2]+(Q[2]-P[2])*t+.004];fan(mb,[m(A,T,.2),m(B,T,.2),m(T,A,.35)],[5,0,0],Z)});   // intérieur rose
+ else if(so&&so.ear)[-1,1].forEach(s=>{const zz=.3,rr=prof(.2)*.95;fan(mb,[[s*rr*q*.9,rr*.72,zz+.07],[s*rr*q*.6,rr+.26,zz-.02],[s*rr*q*.1,rr*.9,zz-.1]],FN,Z)});   // oreilles (anciennes)
  if(so&&so.spk)for(let i=0;i<so.spk;i++){const zb=.36-i*.065,rr=prof(.5-zb)*.9;fan(mb,[[0,rr,zb+.03],[0,rr+.36-i*.025,zb-.07],[0,rr,zb-.02]],FN,Z)}   // épines (poisson-lion)
  fan(mb,[[0,-r3*.9,.5-.5],[0,-r3-vh,.5-.58],[0,-r4*.9,z4-.05]],so&&so.pw?[1.2,0,0]:FN,Z);   // ventrale (blanche pour la chatte)
  if(sh)fan(mb,[[0,prof(.78)*.9,.5-.76],[0,prof(.78)+.1,.5-.82],[0,prof(.86)*.9,.5-.88]],FN,Z);
  [-1,1].forEach(s=>{fan(mb,[[s*r1*q*.9,-r1*.2,z1],[s*(r1*q+pfw),-.12,z1-.2],[s*r1*q*.9,r1*.1,z1-.12]],so&&so.pw?[1.2,0,0]:FN,Z);   // pectorales (pattes blanches pour la chatte)
-  const er=so?(so.er||.06):(sh?.045:.06),ex=s*r1*q*.92,ey=r1*.3,ez=z1+.03;sph(mb,ex,ey,ez,er,er,er,6,8,[2,0,0],Z,false);sph(mb,ex+s*er*.55,ey,ez,er*.55,er*.55,er*.55,5,6,[3,0,0],Z,false)});
+  const er=so?(so.er||.06):(sh?.045:.06);
+  if(so&&so.cat){const te=.15,rx=prof(te)*q,ry=prof(te),an=.3,ex=s*rx*Math.cos(an),ey=ry*Math.sin(an),ez=.5-te;sph(mb,ex,ey,ez,er*.8,er*1.05,er,7,10,[6,0,0],Z,false);sph(mb,ex+s*er*.62,ey,ez+er*.12,er*.2,er*.92,er*.55,5,8,[3,0,0],Z,false);return}   // œil de chat : iris + pupille fendue
+  const ex=s*r1*q*.92,ey=r1*.3,ez=z1+.03;sph(mb,ex,ey,ez,er,er,er,6,8,[2,0,0],Z,false);sph(mb,ex+s*er*.55,ey,ez,er*.55,er*.55,er*.55,5,6,[3,0,0],Z,false)});
  sph(mb,0,-.012,.51,.04,.032,.04,5,8,[4,0,0],[0,-.012,.51],false);   // bouche (s'ouvre à la morsure)
   if(so&&so.th)for(let sd=-1;sd<=1;sd+=2)for(let i=0;i<so.th;i++){const bx=sd*(.016+i*.014),z0=.485-i*.006;fan(mb,[[bx-.007,-.034,z0],[bx+.007,-.034,z0],[bx*.9,-.058,z0+.065]],[2,0,0],Z)}   // crocs (barracuda, piranha)
- if(so&&so.wh)[-1,1].forEach(s=>[-1,0,1].forEach(k=>tube(mb,[[s*.035,-.012+k*.01,.5],[s*.19,-.01+k*.05,.43]],[.006,.003],3,[2,0,0],Z)));   // moustaches
- if(so&&so.nose)sph(mb,0,.004,.526,.024,.018,.022,5,8,[5,0,0],Z,false);   // petit nez rose
+ if(so&&so.wh)[-1,1].forEach(s=>[-1,0,1].forEach(k=>tube(mb,so.cat?[[s*.05,-.02+k*.012,.5],[s*.17,-.015+k*.035,.47],[s*.3,-.045+k*.07,.4]]:[[s*.035,-.012+k*.01,.5],[s*.19,-.01+k*.05,.43]],so.cat?[.005,.004,.0015]:[.006,.003],3,[2,0,0],Z)));   // moustaches
+ if(so&&so.nose)sph(mb,0,so.cat?.012:.004,so.cat?.534:.526,so.cat?.032:.024,so.cat?.022:.018,.024,5,8,[5,0,0],Z,false);   // petit nez rose
  return mb}
 function terrGeom(){const mb=MB(),N=56,S=R2/N;   // UNE tuile = exactement la carte [-R,R]² ; on la répète autour de la caméra
  for(let i=0;i<=N;i++)for(let j=0;j<=N;j++){const x0=-R+i*S,z0=-R+j*S,h=gh(x0,z0),e=.5,dx=(gh(x0+e,z0)-gh(x0-e,z0))/(2*e),dz=(gh(x0,z0+e)-gh(x0,z0-e))/(2*e),nz=hash2(i%N,j%N),lowf=clamp((3.4-h)/2.4,0,1);
@@ -271,12 +276,14 @@ void main(){float f=clamp((v_z-7.)/42.,0.,.93);
     else if(u_bands<2.5){pt=smoothstep(.2,.45,sin(v_l.z*36.));}
     else if(u_bands<3.5){pt=smoothstep(.5,.62,sin(v_l.z*46.)*sin(v_l.y*70.+v_l.x*50.));}
     else if(u_bands<4.5){float bz=min(abs(v_l.z-.3),min(abs(v_l.z-.02),abs(v_l.z+.24)));pt=1.-smoothstep(.02,.055,bz);}
-    else{float bw=mix(.02,.08,smoothstep(.1,.45,v_l.z));
-     float bl=(1.-smoothstep(bw*.55,bw,abs(v_l.x)))*smoothstep(.06,.18,v_l.z)*smoothstep(-.03,.03,v_l.y);
-     float mz=smoothstep(.28,.36,v_l.z)*(1.-smoothstep(-.04,.05,v_l.y));
-     float tp=smoothstep(.42,.47,v_l.z);
+    else{float bw=mix(.022,.1,smoothstep(.1,.46,v_l.z));
+     float bl=(1.-smoothstep(bw*.55,bw,abs(v_l.x)))*smoothstep(.08,.16,v_l.z)*smoothstep(-.03,.03,v_l.y);
+     float mz=smoothstep(.3,.38,v_l.z)*(1.-smoothstep(-.03,.03,v_l.y));
+     float tp=smoothstep(.46,.5,v_l.z);
+     float bib=(1.-smoothstep(.06,.12,abs(v_l.x)))*(1.-smoothstep(-.06,0.,v_l.y))*smoothstep(0.,.1,v_l.z)*(1.-smoothstep(.34,.4,v_l.z));
      float pa=(1.-smoothstep(.025,.06,abs(v_l.z+.03)))*smoothstep(-.01,.05,v_l.x)*smoothstep(.03,.1,v_l.y);
-     pt=max(max(bl,mz),max(tp,pa));}
+     pt=max(bib,0.);
+     pt=max(pt,max(max(bl,mz),max(tp,pa)));}
     c=mix(c,u_base,pt*(u_bands>4.5?.97:.85));}
    c*=.93+.07*sin(v_l.z*85.+v_l.x*30.)*sin(v_l.z*60.-v_l.y*70.);
    spec=pow(max(dot(n,normalize(Ld+V)),0.),22.)*.22+pow(1.-max(dot(n,V),0.),3.)*.1;}
@@ -284,7 +291,8 @@ void main(){float f=clamp((v_z-7.)/42.,0.,.93);
   else if(z<2.5){c=vec3(1.);lit=.95;spec=.3;}
   else if(z<3.5){c=vec3(.04,.07,.15);lit=1.;spec=pow(max(dot(n,normalize(Ld+V)),0.),30.)*.8;}
   else if(z<4.5){c=vec3(.54,.06,.15);lit=.9;}
-  else{c=vec3(.96,.64,.7);lit=.95;spec=.15;}}
+  else if(z<5.5){c=vec3(.96,.64,.7);lit=.95;spec=.15;}
+  else{c=vec3(.74,.82,.2);lit=1.;spec=pow(max(dot(n,normalize(Ld+V)),0.),30.)*.6;}}
  if(u_caus>0.&&u_mode<1.5){float c1=sin(wl.x*.8976+u_t*1.3)*sin(wl.z*.8078-u_t*1.1),c2=sin(wl.x*1.7054-u_t*.9+wl.z*.4937)*sin(wl.z*1.481+u_t*1.2),ca=pow(clamp((c1+c2)*.5+.5,0.,1.),2.5)*2.;lit*=1.+u_caus*.5*ca*max(n.y,0.)*(1.-f);}
  vec3 col=c*lit+vec3(spec);col*=mix(vec3(1.),vec3(.62,.86,1.04),clamp(1.-v_w.y/36.,0.,1.)*.8);   // l'eau absorbe le rouge en profondeur
  float lum=dot(col,vec3(.3,.59,.11));col=mix(vec3(lum),col,1.18);
@@ -359,7 +367,7 @@ export function createFishClient(env){
   if(msOn&&ms){const f=v=>{const a=Math.abs(v);return a<.07?0:Math.sign(v)*Math.min(1,Math.pow(a,1.25))};return[f((ms.x-W/2)/(W*.28)),f(-(ms.y-H*.48)/(H*.3)),1]}   // pilotage à la souris : le poisson se tourne vers le curseur
   return[0,0,1]};
  const MV={ArrowUp:"U",KeyW:"U",ArrowDown:"B",KeyS:"B",ArrowLeft:"L",KeyA:"L",ArrowRight:"R",KeyD:"R"};
- const kd=e=>{if(!active)return;if(menuOn){if(e.code==="Escape"&&scr!=="main"){scr="main";render()}else if(e.code==="Enter"&&scr==="main")act("play");return}
+ const kd=e=>{if(!active)return;if(menuOn){if(e.code==="Escape"&&scr!=="main"){scr="main";render()}else if(e.code==="Enter"&&scr==="main"&&!(document.activeElement&&document.activeElement.closest&&document.activeElement.closest(".fm button")))act("play");return}
   if(talkOn){if(e.code==="Escape")closeTalk();return}
   const m=MV[e.code];if(m){if(!keys.has(m))keys.set(m,++kc);e.preventDefault();return}
   if(e.code==="Space"||e.code==="KeyE"){e.preventDefault();if(!e.repeat)bite()}
@@ -394,6 +402,7 @@ export function createFishClient(env){
   L.aim=null;let bd=64;   // aide à la visée : pendant la ruée, on se tourne vers la proie comestible la plus proche devant soi
   for(const [id,r] of rend){if(id==="me")continue;const dx=dwr(r.x-L.x),dy=r.y-L.y,dz=dwr(r.z-L.z),d2=dx*dx+dy*dy+dz*dz;if(d2>=bd)continue;if(Math.abs(angd(Math.atan2(dx,dz)-L.yaw))>1)continue;bd=d2;L.aim=r}
   L.bc++;L.bcd=BITE_CD;L.lun=.3;L.bt=.35;send(true);if(touch)vib(12)}
+ const zfill=()=>selId==="dare"?(L.zap>0?clamp(L.zap/ZAP,0,1):L.zcd>0?clamp(1-L.zcd/(ZCD-ZAP),0,1):1):1;   // jauge jaune : pleine (autres poissons) ; Dare-dare : se vide pendant l'éclair puis se recharge jusqu'au max
  function zap(){   // ÉCLAIR de Dare-dare : 5 s de vitesse folle, puis recharge
   if(!active||menuOn||talkOn||!L.a||selId!=="dare"||L.zap>0||L.zcd>0)return;
   L.zap=ZAP;L.zcd=ZCD;burst(L.x,L.y,L.z,ZAPC,28,3.4);shk=Math.max(shk,.3);try{env.beep(880,.18,"square",.05,1500)}catch{}vib([15,30,15]);send(true)}
@@ -597,7 +606,7 @@ export function createFishClient(env){
   const hpv=mine&&mine[16]!=null?mine[16]:100,hpf=clamp(hpv/100,0,1),low=hpf<.3&&L.a&&Math.floor(now/180)%2===0;segs(lft,cx-Rd*1.14-4*u,hpf,low?"#ff6a6a":"#e01818","#3a0c0c");segs(cx+Rd*1.14+4*u,xr,L.st/100,L.tired?"#ff8a2a":"#7ccf1b","#1b3510");
   ot(String(Math.round(hpv)),cx-Rd*1.14-4*u-2*u,barY-4*u,F(900,10),"#ff3b3b","right",3*u);
   x.fillStyle="#0b1c2e";x.beginPath();x.roundRect(lft,by-4*u,xr-lft,3.5*u,2*u);x.fill();x.fillStyle="#3fa0ee";x.beginPath();x.roundRect(lft,by-4*u,Math.max(3.5*u,(xr-lft)*prog),3.5*u,2*u);x.fill();   // expérience : progression vers le stade suivant
-  const r1=Rd*.8,r2=Rd*1.08,rd=clamp(1-L.bcd/BITE_CD,0,1);
+  const r1=Rd*.8,r2=Rd*1.08,rd=zfill();
   x.beginPath();x.arc(cx,cy0,r2+3*u,Math.PI,0);x.closePath();x.fillStyle="#0a1a0cdd";x.fill();
   for(let k=0;k<7;k++){const a0=Math.PI+k*Math.PI/7+.03,a1=Math.PI+(k+1)*Math.PI/7-.03;x.beginPath();x.arc(cx,cy0,r2,a0,a1);x.arc(cx,cy0,r1,a1,a0,true);x.closePath();x.fillStyle=k<Math.ceil(rd*7-.001)?"#f4b52a":"#4b4a20";x.fill();x.strokeStyle="#17120a";x.lineWidth=2*u;x.stroke()}
   x.beginPath();x.arc(cx,cy0,r1,Math.PI,0);x.closePath();x.fillStyle="#17301c";x.fill();x.strokeStyle="#5d9c55";x.lineWidth=3*u;x.stroke();
@@ -608,12 +617,12 @@ export function createFishClient(env){
   const ox=cx+Rd*1.28,oy=cy0-Rd*.78,os=Rd*.5;sl(ox,oy,os,"#2f86c6");   // morsure
   x.fillStyle=L.bcd>0?"#8a8f94":"#fff";x.beginPath();x.moveTo(ox-os*.22,oy-os*.2);x.lineTo(ox+os*.22,oy-os*.2);x.lineTo(ox,oy+os*.26);x.closePath();x.fill();
   if(!touch)T("ESP",ox-os/2+2*u,oy-os/2-3*u,F(800,9),"#fff");
-  if(selId==="dare"&&!touch){const zy=oy-os-9*u,zz=L.zap>0;sl(ox,zy,os,zz?"#ffd23f":"#7a6a1a");bolt(ox,zy,os*.34,zz?"#fff6a8":L.zcd>0?"#8a8f94":"#ffd23f");arc(ox,zy,os*.68,zz?L.zap/ZAP:L.zcd>0?1-L.zcd/ZCD:1,zz?"#fff06a":L.zcd>0?"#8a8f94":"#ffd23f",3*u);T("F",ox-os/2+2*u,zy-os/2-3*u,F(800,9),"#fff")}   // éclair : au-dessus de la morsure
+  if(selId==="dare"&&!touch){const zy=oy-os-9*u,zz=L.zap>0;sl(ox,zy,os,zz?"#ffd23f":"#7a6a1a");bolt(ox,zy,os*.34,zz?"#fff6a8":L.zcd>0?"#8a8f94":"#ffd23f");arc(ox,zy,os*.68,zfill(),zz?"#fff06a":L.zcd>0?"#8a8f94":"#ffd23f",3*u);T("F",ox-os/2+2*u,zy-os/2-3*u,F(800,9),"#fff")}   // éclair : au-dessus de la morsure
   /* commandes tactiles */
   if(touch){const pb=[...btn.values()].includes("b"),ps=[...btn.values()].includes("s");
    if(!joy){const gx=sa.l+JR+26,gy=H-sa.b-78*u-JR-8*u;x.beginPath();x.arc(gx,gy,JR,0,7);x.strokeStyle="#ffffff40";x.lineWidth=3;x.stroke();x.beginPath();x.arc(gx,gy,JR*.38,0,7);x.fillStyle="#ffffff26";x.fill()}
    [[BB,"MORDS","{tooth}",pb],[BS,"SPRINT","{bolt}",ps],...(selId==="dare"?[[BA,"ÉCLAIR","{bolt}",L.zap>0]]:[])].forEach(([b,l,ic,on])=>{x.beginPath();x.arc(b.x,b.y,b.r,0,7);x.fillStyle=on?"#ffffff55":"#0b2416b0";x.fill();x.strokeStyle=on?"#fff":"#8fd47aaa";x.lineWidth=3;x.stroke();T(ic,b.x,b.y+2*u,F(700,b===BB?24:18),"#fff","center");T(l,b.x,b.y+b.r*.62,F(800,b===BB?11:9.5),"#fff","center")});
-   if(L.bcd>0)arc(BB.x,BB.y,BB.r+5,L.bcd/BITE_CD,"#f4b52a",4);arc(BS.x,BS.y,BS.r+5,L.st/100,L.tired?"#ff8a5c":"#7ccf1b",4);if(selId==="dare")arc(BA.x,BA.y,BA.r+5,L.zap>0?L.zap/ZAP:L.zcd>0?1-L.zcd/ZCD:1,L.zap>0?"#fff06a":L.zcd>0?"#8a8f94":"#ffd23f",4);
+   if(L.bcd>0)arc(BB.x,BB.y,BB.r+5,L.bcd/BITE_CD,"#f4b52a",4);arc(BS.x,BS.y,BS.r+5,L.st/100,L.tired?"#ff8a5c":"#7ccf1b",4);if(selId==="dare")arc(BA.x,BA.y,BA.r+5,zfill(),L.zap>0?"#fff06a":L.zcd>0?"#8a8f94":"#ffd23f",4);
    if(joy){x.beginPath();x.arc(joy.ox,joy.oy,JR,0,7);x.strokeStyle="#ffffff66";x.lineWidth=3;x.stroke();const dx=joy.px-joy.ox,dy=joy.py-joy.oy,l=Math.hypot(dx,dy),mm=l>JR?JR/l:1;x.beginPath();x.arc(joy.ox+dx*mm,joy.oy+dy*mm,JR*.42,0,7);x.fillStyle="#ffffffb0";x.fill()}}}
 
  /* ================= HÔTE : le plus ancien joueur du serveur simule le monde ================= */
@@ -729,10 +738,10 @@ export function createFishClient(env){
  const MCSS="body.gm[data-g=fish] .fm{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:12px;padding:calc(max(10px,env(safe-area-inset-top)) + 34px) 16px max(10px,env(safe-area-inset-bottom));box-sizing:border-box;overflow:auto;text-align:center;color:#fff;font-family:system-ui,sans-serif;border-radius:inherit;background:radial-gradient(ellipse at 50% 40%,rgba(6,40,70,.3),rgba(2,12,26,.8))}"+
 "body.gm[data-g=fish] .fm,body.gm[data-g=fish] .fm *{touch-action:pan-y;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}body.gm[data-g=fish] .fm{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}"+
  ".fm::before,.fm::after{content:'';flex:1 0 0;min-height:0}.fm h1{margin:0;font-size:clamp(26px,7vw,52px);font-weight:900;letter-spacing:.04em;line-height:1;text-shadow:0 3px 0 #06324f,0 0 24px #3fa0ee88}.fm h1 small{display:block;font-size:.34em;letter-spacing:.3em;color:#9be37a;margin-bottom:6px}"+
- ".fm button{font:inherit;cursor:pointer;border:0;color:#fff;font-weight:900}.fm button[disabled]{cursor:default}"+
+ ".fm button{font:inherit;cursor:pointer;border:0;color:#fff;font-weight:900}.fm button[disabled]{cursor:default}.fm button:focus-visible{outline:3px solid #ffd23f;outline-offset:2px}.fm .b:not([disabled]):hover,.fm .back:hover,.fm .tg:hover{filter:brightness(1.12)}.fm .card .a:not([disabled]):hover{filter:brightness(1.12)}"+
  ".fm .b{width:min(300px,78vw);padding:clamp(10px,2.4vh,16px) 18px;border-radius:14px;font-size:clamp(16px,4.4vw,22px);letter-spacing:.06em;background:linear-gradient(#2f86c6,#1c5f94);box-shadow:0 4px 0 #0d3a5e,0 8px 18px #0006}.fm .b:active{transform:translateY(3px);box-shadow:0 1px 0 #0d3a5e}"+
  ".fm .b.p{background:linear-gradient(#8bdc2a,#4f9e12);box-shadow:0 4px 0 #2f6a0a,0 8px 18px #0006;font-size:clamp(20px,5.4vw,30px)}"+
- ".fm .cn{position:absolute;top:calc(8px + env(safe-area-inset-top));left:calc(10px + env(safe-area-inset-left));display:flex;align-items:center;gap:7px;padding:5px 14px 5px 6px;border-radius:99px;background:#0b2416cc;border:1.5px solid #ffd23f88;font-weight:900;color:#ffe28a}"+
+ ".fm .cn{position:fixed;z-index:12;top:calc(8px + env(safe-area-inset-top));left:calc(10px + env(safe-area-inset-left));display:flex;align-items:center;gap:7px;padding:5px 14px 5px 6px;border-radius:99px;background:#0b2416cc;border:1.5px solid #ffd23f88;font-weight:900;color:#ffe28a}"+
  ".fm .cn i{width:20px;height:20px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff3a0,#ffd23f 55%,#b58a12);border:1.5px solid #8a6508}"+
  ".fm .grid{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;max-width:min(780px,96vw)}"+
  ".fm .card{width:min(172px,44vw);padding:12px;border-radius:16px;background:#0b2436dd;border:2px solid #ffffff30;display:flex;flex-direction:column;gap:6px;align-items:center}.fm .card.sel{border-color:#7ccf1b;box-shadow:0 0 18px #7ccf1b66}.fm .card.lock{opacity:.6}"+
@@ -753,7 +762,7 @@ function render(){if(!menuEl)return;const keepY=lastScr===scr?menuEl.scrollTop:0
   else h+=`<h1 style="font-size:clamp(22px,5vw,34px)">PARAMÈTRES</h1><div class="row">${ico("mouse","1.3em")} Pilotage à la souris<button class="tg${msOn?" on":""}" data-a="tgm">${msOn?"OUI":"NON"}</button></div><div class="row">${ico("vib","1.3em")} Vibrations<button class="tg${vibOn?" on":""}" data-a="tgv">${vibOn?"OUI":"NON"}</button></div><div class="tip">Le son se coupe avec le bouton ${ico("snd")} en haut à droite.<br>← → tourner · ↑ ↓ monter/descendre · Espace : mordre · Maj : sprint · C : freiner · M : souris</div><button class="back" data-a="main">← Retour</button>`;
   menuEl.innerHTML=h;lastScr=scr;menuEl.scrollTop=keepY}
  function act(a,id){if(!menuOn)return;
-  if(a==="play"){menuOn=false;L.yaw=cam.yaw;L.pitch=0;enterT=performance.now();if(menuEl)menuEl.style.display="none";send(true);return}
+  if(a==="play"){menuOn=false;L.yaw=cam.yaw;L.pitch=0;enterT=performance.now();try{document.activeElement&&document.activeElement.blur&&document.activeElement.blur()}catch{}if(menuEl)menuEl.style.display="none";send(true);return}
   if(a==="fish"||a==="set"||a==="main")scr=a;
   else if(a==="pick"&&owned.includes(id)){selId=id;sv("moda.fish.sel",id);saveFish(1)}
   else if(a==="buy"){const f=FISHES.find(q=>q.id===id);if(f&&f.price!=null&&!owned.includes(id)&&coins>=f.price){coins-=f.price;owned.push(id);selId=id;sv("moda.fish.coins",coins);sv("moda.fish.owned",owned);sv("moda.fish.sel",id);saveFish(1)}}

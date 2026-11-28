@@ -4,7 +4,7 @@
    et barre de croissance, endurance, classement, boutons ronds sur mobile.
    ════════════════════════════════════════════════════════════════════════════════════════ */
 export const BASED_ON="Feed and Grow: Fish";
-/* MoDa — Feed & Grow: Fish 🐟 (3D WebGL) : SERVEUR OUVERT, comme Sta I
+/* MoDa — Feed & Grow: Fish (3D WebGL) : SERVEUR OUVERT, comme Sta I
    Inspiré de Feed and Grow: Fish : tu es un tout petit poisson dans un récif. Mange du plancton et plus petit que toi pour grandir,
    fuis les plus gros, deviens un requin puis un Mégalodon.
    - Serveurs persistants FISH1, FISH2… (24 joueurs max chacun) : on clique sur la tuile et on arrive directement dedans (pas de lobby, pas de manche).
@@ -16,7 +16,7 @@ export const BASED_ON="Feed and Grow: Fish";
      le déplacement de SON poisson (fluide) et l'écrit dans games/<code>/p/<uid> : « x,y,z,cap,tangage,boost,morsures,respawn ». Chemins Firebase : games/, lobbies/ et users/<uid>/fish (pièces + poissons du joueur).
    - Rendu : moteur 3D en perspective sur le canvas 2D existant (poissons maillés, tri en profondeur, brouillard sous-marin, fond marin, coraux, algues).
    Rendu : WebGL (vrais maillages 3D éclairés, brouillard, caustiques, algues/coraux animés). Mobile : joystick flottant à gauche, moitié droite = mordre, bouton sprint.
-   MENU au démarrage : Jouer / Poissons (8 espèces à acheter avec les pièces : vitesse, morsure et vie différentes) / Paramètres ; pièces 🪙 gagnées en tuant et en montant de niveau, sauvegardées sur ton compte Firebase (users/<uid>/fish : c = pièces, o = poissons possédés, s = poisson choisi) pour acheter d'autres poissons plus tard.
+   MENU au démarrage : Jouer / Poissons (8 espèces à acheter avec les pièces : vitesse, morsure et vie différentes) / Paramètres ; pièces gagnées en tuant et en montant de niveau, sauvegardées sur ton compte Firebase (users/<uid>/fish : c = pièces, o = poissons possédés, s = poisson choisi) pour acheter d'autres poissons plus tard.
    Commandes : ←/→ (Q/D) tourner · ↑/↓ (Z/S) monter / descendre · Espace ou clic : MORDRE · Maj : sprint. Tactile : joystick + boutons. */
 const DT=1/30,R=70,WH=36,NPK=170;
 const R2=2*R,KP=6.283185307/R2,MAP_SEED=20261128;   // la carte est FIXE (même récif sur tous les serveurs) et BOUCLE : le monde est un tore de 140 × 140
@@ -24,14 +24,14 @@ const wrp=v=>v-R2*Math.floor((v+R)/R2);   // ramène une coordonnée dans [-R, R
 const dwr=d=>d-R2*Math.round(d/R2);   // plus court écart signé entre deux coordonnées (à travers le bord si c'est plus près)
 const STG=[[0,"Alevin"],[3,"Sardine"],[8,"Maquereau"],[20,"Barracuda"],[50,"Thon géant"],[120,"Requin"],[300,"Grand blanc"],[700,"Mégalodon"]];
 const FISHES=[   // sp = vitesse, bi = force de morsure, hp = vie (× le poisson de départ) ; sh = forme 3D ; pat = motif (1 deux bandes, 2 rayures, 3 taches, 4 trois bandes) ; Bibos garde la couleur de ton compte
- {id:"bibos",name:"Bibos",icon:"🐟",price:0,sp:1,bi:1,hp:1,sh:"f0",desc:"Le poisson de départ. Équilibré : mange du plancton et plus petit que toi, grandis jusqu'au Mégalodon."},
- {id:"clown",name:"Poisson-clown",icon:"🐠",price:40,sp:1.05,bi:.95,hp:1,sh:"sclown",pat:4,iy:13,c:[255,112,28],bl:[255,176,96],fn:[255,142,52],bd:[255,255,255],desc:"Petit et vif, rayé de blanc. Le plus agile des débutants."},
- {id:"puff",name:"Poisson-ballon",icon:"🐡",price:90,sp:.88,bi:.9,hp:1.5,sh:"spuff",pat:3,iy:17,c:[236,206,96],bl:[255,246,214],fn:[214,172,70],bd:[120,92,40],desc:"Rond, lent mais très costaud : il encaisse les morsures."},
- {id:"surg",name:"Chirurgien bleu",icon:"💙",price:160,sp:1.14,bi:.9,hp:.95,sh:"ssurg",pat:0,iy:17,c:[34,98,236],bl:[120,180,255],fn:[255,214,40],bd:[255,255,255],desc:"Nageur rapide au corps bleu roi et à la queue jaune."},
- {id:"lion",name:"Poisson-lion",icon:"🦁",price:260,sp:.96,bi:1.25,hp:1.1,sh:"slion",pat:2,iy:13,c:[178,40,34],bl:[246,214,196],fn:[226,110,84],bd:[255,246,240],desc:"Rayures rouges et épines : sa morsure fait très mal."},
- {id:"barr",name:"Barracuda",icon:"🗡️",price:400,sp:1.22,bi:1.15,hp:.95,sh:"sbarr",pat:0,iy:8,c:[140,158,176],bl:[236,242,248],fn:[96,110,128],bd:[255,255,255],desc:"Long, argenté et ultra rapide : le chasseur parfait."},
- {id:"pira",name:"Piranha",icon:"🦷",price:600,sp:1.08,bi:1.55,hp:.85,sh:"spira",pat:3,iy:15,c:[112,132,142],bl:[232,72,58],fn:[210,70,56],bd:[220,230,236],desc:"Fragile mais redoutable : les plus gros dégâts du récif."},
- {id:"moon",name:"Poisson-lune",icon:"🌕",price:850,sp:.84,bi:.85,hp:1.9,sh:"smoon",pat:0,iy:20,c:[138,156,172],bl:[226,234,242],fn:[110,128,148],bd:[255,255,255],desc:"Un géant tranquille : énorme réserve de vie, mais lent."}];
+ {id:"bibos",name:"Bibos",price:0,sp:1,bi:1,hp:1,sh:"f0",desc:"Le poisson de départ. Équilibré : mange du plancton et plus petit que toi, grandis jusqu'au Mégalodon."},
+ {id:"clown",name:"Poisson-clown",price:40,sp:1.05,bi:.95,hp:1,sh:"sclown",pat:4,iy:13,c:[255,112,28],bl:[255,176,96],fn:[255,142,52],bd:[255,255,255],desc:"Petit et vif, rayé de blanc. Le plus agile des débutants."},
+ {id:"puff",name:"Poisson-ballon",price:90,sp:.88,bi:.9,hp:1.5,sh:"spuff",pat:3,iy:17,c:[236,206,96],bl:[255,246,214],fn:[214,172,70],bd:[120,92,40],desc:"Rond, lent mais très costaud : il encaisse les morsures."},
+ {id:"surg",name:"Chirurgien bleu",price:160,sp:1.14,bi:.9,hp:.95,sh:"ssurg",pat:0,iy:17,c:[34,98,236],bl:[120,180,255],fn:[255,214,40],bd:[255,255,255],desc:"Nageur rapide au corps bleu roi et à la queue jaune."},
+ {id:"lion",name:"Poisson-lion",price:260,sp:.96,bi:1.25,hp:1.1,sh:"slion",pat:2,iy:13,c:[178,40,34],bl:[246,214,196],fn:[226,110,84],bd:[255,246,240],desc:"Rayures rouges et épines : sa morsure fait très mal."},
+ {id:"barr",name:"Barracuda",price:400,sp:1.22,bi:1.15,hp:.95,sh:"sbarr",pat:0,iy:8,c:[140,158,176],bl:[236,242,248],fn:[96,110,128],bd:[255,255,255],desc:"Long, argenté et ultra rapide : le chasseur parfait."},
+ {id:"pira",name:"Piranha",price:600,sp:1.08,bi:1.55,hp:.85,sh:"spira",pat:3,iy:15,c:[112,132,142],bl:[232,72,58],fn:[210,70,56],bd:[220,230,236],desc:"Fragile mais redoutable : les plus gros dégâts du récif."},
+ {id:"moon",name:"Poisson-lune",price:850,sp:.84,bi:.85,hp:1.9,sh:"smoon",pat:0,iy:20,c:[138,156,172],bl:[226,234,242],fn:[110,128,148],bd:[255,255,255],desc:"Un géant tranquille : énorme réserve de vie, mais lent."}];
 const SPI=i=>FISHES[i>=0&&i<FISHES.length?i:0];
 const stg=m=>{let i=0;while(i+1<STG.length&&m>=STG[i+1][0])i++;return i};
 const len=m=>.8*Math.cbrt(m)+.4,spdOf=m=>7*Math.pow(len(m),.15);
@@ -64,6 +64,39 @@ const spC=new Map();
 const specOf=(key,rgb,shark)=>{let s=spC.get(key);if(!s){s={b:rgb,bl:mixc(rgb,[255,255,255],shark?.85:.6),fn:mixc(rgb,[255,255,255],.2),bd:mixc(rgb,[255,255,255],.85),bands:(!shark&&(String(key).length%3===0||key==="n0"||key==="n6"))?1:0};spC.set(key,s)}return s};
 const spF=(fi,col)=>{const f=SPI(fi);if(!f.c)return specOf(col,hexrgb(col),0);   // Bibos : couleur du joueur ; les autres espèces ont leur palette
  const k="f"+fi;let s=spC.get(k);if(!s){s={b:f.c,bl:f.bl,fn:f.fn,bd:f.bd,bands:f.pat|0};spC.set(k,s)}return s};
+/* ---- Icônes dessinées (remplacent les emojis) : tracés 24×24 utilisés en SVG (menus) et en Path2D (canvas) ---- */
+const cirP=(cx,cy,r)=>`M${cx-r} ${cy}a${r} ${r} 0 1 0 ${2*r} 0a${r} ${r} 0 1 0 ${-2*r} 0z`;
+const gearP=(()=>{let d=cirP(12,12,6.6);for(let k=0;k<8;k++){const a=k*Math.PI/4,c=Math.cos(a),s=Math.sin(a),P=(r,w)=>(12+c*r-s*w).toFixed(2)+" "+(12+s*r+c*w).toFixed(2);d+="M"+P(5.5,-1.8)+"L"+P(10,-1.8)+"L"+P(10,1.8)+"L"+P(5.5,1.8)+"z"}return d})();
+const ICO={   // [tracé, remplissage, contour, épaisseur]
+ coin:[[cirP(12,12,10),"#f6bd1f","#9a5f06",1.6],[cirP(12,12,6.4),"#ffd95a","#c78a0f",1.2],["M12 8.2v7.6","none","#a86a08",2]],
+ fish:[["M17.5 12L22.5 7v10z","#2f86c6","#1a5a9a",1.3],["M3 12c3-5.5 9-6.5 13-2.5 1.4 1.4 2.4 2.5 2.4 2.5s-1 1.1-2.4 2.5C12 18.5 6 17.5 3 12z","#4aa8ff","#1a5a9a",1.4],[cirP(7.6,11,1.3),"#fff","#1a5a9a",.6],[cirP(7.8,11,.55),"#111"]],
+ tooth:[["M6 3c2-1 4 .5 6 .5s4-1.5 6-.5c2 1 2.5 4 1.5 7-.8 2.4-1 4.5-1.6 7.6-.4 2.2-2.2 2.2-2.7 0-.4-2-.8-4-2.2-4s-1.8 2-2.2 4c-.5 2.2-2.3 2.2-2.7 0C6.5 14.5 6.3 12.4 5.5 10 4.5 7 4 4 6 3z","#ffffff","#7d8a96",1.4]],
+ bolt:[["M13.5 2L5 13.5h6L9.5 22 19 9.8h-6.2z","#ffd21f","#b8860b",1.4]],
+ skull:[["M12 2.5C7 2.5 4 6 4 10.2c0 2.8 1.3 4.5 3 5.6V19.5h10V15.8c1.7-1.1 3-2.8 3-5.6C20 6 17 2.5 12 2.5z","#f1f1ea","#555",1.4],[cirP(8.8,10.5,2.2),"#222"],[cirP(15.2,10.5,2.2),"#222"],["M12 13l-1 2h2z","#222"],["M10 19.5v-2.5M12 19.5v-2.5M14 19.5v-2.5","none","#555",1.2]],
+ spark:[["M12 2c.8 5.2 2.8 7.2 8 8-5.2.8-7.2 2.8-8 8-.8-5.2-2.8-7.2-8-8 5.2-.8 7.2-2.8 8-8z","#ffe98a","#d9a400",1.2],["M19 16.5c.3 2 1 2.7 3 3-2 .3-2.7 1-3 3-.3-2-1-2.7-3-3 2-.3 2.7-1 3-3z","#fff3b0","#d9a400",.8]],
+ fork:[["M4.5 2v6.5c0 1.5 1 2.5 2.5 2.5s2.5-1 2.5-2.5V2M7 2v20","none","#e8eef2",1.8],["M17 22V2c-2.5 2-3.5 5-3.5 8.5 0 1.5 1 2.5 3.5 2.5","#e8eef2","#e8eef2",1.4]],
+ plate:[[cirP(12,12,10),"#eef3f6","#7d8c97",1.6],[cirP(12,12,6),"none","#b8c4cc",1.4]],
+ wave:[["M2 9c2.5-3 4.5-3 7 0s4.5 3 7 0 4-3 6-1.5M2 15c2.5-3 4.5-3 7 0s4.5 3 7 0 4-3 6-1.5","none","#4db8ff",2.2]],
+ warn:[["M12 2.5L22.5 20.5H1.5z","#ffcc1f","#8a5a00",1.6],["M12 9v5.5","none","#3a2500",2.2],[cirP(12,17.5,1.3),"#3a2500"]],
+ joy:[["M4 21h16v-3.5c0-1-.8-1.8-1.8-1.8H5.8C4.8 15.7 4 16.5 4 17.5z","#555","#111",1.3],["M12 15.7V8","none","#aaa",2.2],[cirP(12,6.5,3.8),"#e23b3b","#7a1010",1.3]],
+ mouse:[["M12 2.5c-4 0-6.5 2.8-6.5 6.8v5.4c0 4 2.5 6.8 6.5 6.8s6.5-2.8 6.5-6.8V9.3c0-4-2.5-6.8-6.5-6.8z","#e9eef2","#56626c",1.5],["M12 2.5v8M5.5 10.5h13","none","#56626c",1.4]],
+ key:[["M2 6h20v12H2z","#cfd8de","#56626c",1.5],["M5 9h2M9 9h2M13 9h2M17 9h2M5 12h2M9 12h2M13 12h2M17 12h2M7 15h10","none","#56626c",1.5]],
+ vib:[["M8 3h8a1 1 0 011 1v16a1 1 0 01-1 1H8a1 1 0 01-1-1V4a1 1 0 011-1z","#dfe6eb","#56626c",1.4],["M3.5 8.5v7M1.5 10.5v3M20.5 8.5v7M22.5 10.5v3","none","#4db8ff",1.6]],
+ snd:[["M3 9.5h4l5-4.5v14l-5-4.5H3z","#dfe6eb","#56626c",1.4],["M15.5 8.5c1.8 2 1.8 5 0 7M18.5 6c3 3.5 3 8.5 0 12","none","#4db8ff",1.6]],
+ gear:[[gearP,"#aeb9c2","#6c7a85",1.2],[cirP(12,12,2.8),"#26343f"]],
+ play:[["M7 4.5L20 12 7 19.5z","#ffffff","#ffffff",1]],
+ check:[["M4 12.5l5 5L20 6.5","none","#7dffa1",3]]
+};
+const ico=(n,sz)=>{const a=ICO[n];if(!a)return"";return`<svg viewBox="0 0 24 24" width="${sz||"1.1em"}" height="${sz||"1.1em"}" style="vertical-align:-.2em;display:inline-block" aria-hidden="true">`+a.map(([d,f,k,w])=>`<path d="${d}" fill="${f||"none"}"${k?` stroke="${k}" stroke-width="${w||1.4}" stroke-linejoin="round" stroke-linecap="round"`:""}/>`).join("")+"</svg>"};
+const ICP={};
+function drawIco(c,n,px,py,sz){const a=ICO[n];if(!a)return;c.save();c.translate(px,py);c.scale(sz/24,sz/24);c.lineJoin="round";c.lineCap="round";for(const [d,f,k,w] of a){const q=ICP[d]||(ICP[d]=new Path2D(d));if(f&&f!=="none"){c.fillStyle=f;c.fill(q)}if(k){c.strokeStyle=k;c.lineWidth=w||1.4;c.stroke(q)}}c.restore()}
+// texte canvas avec icônes inline : « {coin} » est remplacé par le dessin correspondant
+function richT(c,t,px,py,font,fill,al,lw){const fs=parseFloat(/([\d.]+)px/.exec(font)[1])||12,sz=fs*1.15;let pr=t.split(/\{(\w+)\}/);c.font=font;c.textAlign="left";
+ pr=pr.map((q,i)=>i%2&&!ICO[q]?"{"+q+"}":q);   // icône inconnue : texte tel quel
+ let w=0;pr.forEach((q,i)=>{w+=i%2?sz+fs*.1:c.measureText(q).width});
+ let cx=al==="center"?px-w/2:al==="right"?px-w:px;
+ pr.forEach((q,i)=>{if(i%2){drawIco(c,q,cx,py-sz*.86,sz);cx+=sz+fs*.1}else if(q){if(lw){c.lineJoin="round";c.lineWidth=lw;c.strokeStyle="#000d";c.strokeText(q,cx,py)}c.fillStyle=fill;c.fillText(q,cx,py);cx+=c.measureText(q).width}});c.textAlign="left"}
+const escH=t=>String(t).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
 const fishSvg=f=>{const b=f.c||[255,140,40],bl=f.bl||mixc(b,[255,255,255],.6),fn=f.fn||mixc(b,[255,255,255],.2),bd=f.bd||mixc(b,[255,255,255],.85),iy=f.iy||12,pt=f.c?(f.pat|0):1,id="fc"+f.id,
  bars=pt===1?[[38,4],[52,4]]:pt===2?[[30,3],[37,3],[44,3],[51,3],[58,3]]:pt===4?[[32,5],[45,5],[57,4]]:[],dots=pt===3?[[36,21],[46,30],[53,19],[60,28],[42,24]]:[];
  return `<svg viewBox="0 0 80 50" width="86" height="54" aria-hidden="true"><defs><clipPath id="${id}"><ellipse cx="44" cy="25" rx="26" ry="${iy}"/></clipPath></defs>`+
@@ -278,7 +311,7 @@ export function createFishClient(env){
   if(e.code==="Space"||e.code==="KeyE"){e.preventDefault();if(!e.repeat)bite()}
   else if(e.code==="ShiftLeft"||e.code==="ShiftRight"||e.code==="KeyX"){e.preventDefault();boostKey=true}
   else if(e.code==="KeyC"||e.code==="ControlLeft"){e.preventDefault();brk=true}
-  else if(e.code==="KeyM"&&!e.repeat){msOn=!msOn;try{localStorage.setItem("moda.fishmouse",msOn?"1":"0")}catch{}try{env.toast(msOn?"🖱️ Pilotage à la souris : le poisson suit ton curseur (M pour arrêter)":"⌨️ Pilotage à la souris désactivé")}catch{}}};
+  else if(e.code==="KeyM"&&!e.repeat){msOn=!msOn;try{localStorage.setItem("moda.fishmouse",msOn?"1":"0")}catch{}try{env.toast(msOn?"Pilotage à la souris : le poisson suit ton curseur (M pour arrêter)":"Pilotage à la souris désactivé")}catch{}}};
  const ku=e=>{const m=MV[e.code];if(m)keys.delete(m);if(e.code==="ShiftLeft"||e.code==="ShiftRight"||e.code==="KeyX")boostKey=false;if(e.code==="KeyC"||e.code==="ControlLeft")brk=false};
  const blur=()=>{keys.clear();joy=null;btn.clear();boostKey=false;brk=false};
  const toC=e=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left)*W/r.width,(e.clientY-r.top)*H/r.height]};
@@ -327,7 +360,7 @@ export function createFishClient(env){
    const ddx=dwr(tx-r.x),ddz=dwr(tz-r.z);if(Math.abs(ddx)>6||Math.abs(ddz)>6){r.x=wrp(tx);r.y=ty;r.z=wrp(tz)}else{r.x=wrp(r.x+ddx*kk);r.y+=(ty-r.y)*kk;r.z=wrp(r.z+ddz*kk)}   // lissage qui traverse le bord sans traîner à travers la carte
    const oy_=r.yaw;r.yaw+=angd(yaw-r.yaw)*Math.min(1,dt*12);r.roll=(r.roll||0)+(clamp(-angd(r.yaw-oy_)/dt*.22,-.6,.6)-(r.roll||0))*Math.min(1,dt*8);r.pitch+=(pit-r.pitch)*Math.min(1,dt*12);r.m=m;r.k=k;r.spd=spd;r.bt=bt;r.ph+=dt*(3+spd*1.1);r.sp=sp;return r};
   S.p.forEach(t=>{if(t[0]===me||!t[7])return;const r=upd(t[0],0,t[1],t[2],t[3],t[4],t[5],t[6],0,t[11],t[14],spF(t[17]|0,t[10]));r.shp=SPI(t[17]|0).sh;r.n=t[9];r.pl=1;vis.push(r)});
-  S.f.forEach(t=>{const id=t[0],n=parseInt(id.slice(1))||0,sh=t[7]===1,r=upd(id,0,t[1],t[2],t[3],t[4],t[5],t[6],t[7],t[8],t[9],sh?specOf("s",[110,128,148],1):specOf("n"+(n%PAL.length),PAL[n%PAL.length],0));r.pl=0;r.n=sh?"🦈":"";vis.push(r)});
+  S.f.forEach(t=>{const id=t[0],n=parseInt(id.slice(1))||0,sh=t[7]===1,r=upd(id,0,t[1],t[2],t[3],t[4],t[5],t[6],t[7],t[8],t[9],sh?specOf("s",[110,128,148],1):specOf("n"+(n%PAL.length),PAL[n%PAL.length],0));r.pl=0;r.n="";vis.push(r)});
   const mine=S.p.find(t=>t[0]===me);
   if(mine&&L.a){const r=rend.get("me")||{ph:0};r.x=L.x;r.y=L.y;r.z=L.z;r.yaw=L.yaw;r.pitch=L.pitch;r.roll=L.roll;r.m=L.m;r.k=0;r.spd=L.spd;r.boost=L.boost;r.bt=L.bt>0?1:0;r.ph+=dt*(3+L.spd*1.1);r.sp=spF(selIdx(),mine[10]);r.shp=SPI(selIdx()).sh;r.n=mine[9];r.pl=1;r.me=1;rend.set("me",r);vis.push(r)}}
  function stepLocal(dt){
@@ -414,9 +447,9 @@ export function createFishClient(env){
   if(G&&!G.lost)draw3D(now,dt,vis);else{x.fillStyle=rgbs(wc);x.fillRect(0,0,W,H)}
   vignette();if(!menuOn){tags(vis);hud(now,vis)}
   const mine=S&&S.p.find(q=>q[0]===me),dead=S&&mine&&!mine[7];
-  ov.textContent=S?(dead?"💀 Mangé par "+(mine[15]||"un poisson"):""):(G?"Connexion au serveur…":"⚠️ WebGL indisponible sur cet appareil");
+  const ovh=S?(dead?ico("skull")+" Mangé par "+escH(mine[15]||"un poisson"):""):(G?"Connexion au serveur…":ico("warn")+" WebGL indisponible sur cet appareil");if(ov._h!==ovh){ov._h=ovh;ov.innerHTML=ovh}
   const fs=Math.round((dead?30:44)*uS)+"px";if(ov.style.fontSize!==fs)ov.style.fontSize=fs}
- const T=(t,px,py,font,c,al)=>{x.font=font;x.fillStyle=c;x.textAlign=al||"left";x.fillText(t,px,py);x.textAlign="left"};
+ const T=(t,px,py,font,c,al)=>{if(t.indexOf("{")>=0)return richT(x,t,px,py,font,c,al,0);x.font=font;x.fillStyle=c;x.textAlign=al||"left";x.fillText(t,px,py);x.textAlign="left"};
  const fit=(t,mw,font)=>{x.font=font;t=String(t);if(x.measureText(t).width<=mw)return t;while(t.length>1&&x.measureText(t+"…").width>mw)t=t.slice(0,-1);return t+"…"};
  const card=(px,py,w,h,r,bg,bd)=>{x.beginPath();x.roundRect(px,py,w,h,r);x.fillStyle=bg||"#06192ee6";x.fill();x.strokeStyle=bd||"#ffffff30";x.lineWidth=1.5;x.stroke()};
  const bar=(px,py,w,h,p,col)=>{x.fillStyle="#ffffff22";x.beginPath();x.roundRect(px,py,w,h,h/2);x.fill();if(p>0){x.fillStyle=col;x.beginPath();x.roundRect(px,py,Math.max(h,w*clamp(p,0,1)),h,h/2);x.fill()}};
@@ -433,7 +466,7 @@ export function createFishClient(env){
  const bolt=(cx,cy,s,col)=>{x.beginPath();[[.25,-1],[-.55,.1],[-.05,.1],[-.3,1],[.6,-.2],[.05,-.2]].forEach((p,i)=>x[i?"lineTo":"moveTo"](cx+p[0]*s,cy+p[1]*s));x.closePath();x.fillStyle=col;x.fill()};
  function hud(now,vis){
   const mine=S&&S.p.find(q=>q[0]===me),u=uS,sa=SAf,cp=W<560,top=sa.t+8,lft=sa.l+12,F=(w,s)=>w+" "+Math.round(s*u)+"px system-ui";
-  const ot=(t,px,py,font,fill,al,lw)=>{x.font=font;x.textAlign=al||"left";x.lineJoin="round";x.lineWidth=lw||4*u;x.strokeStyle="#000d";x.strokeText(t,px,py);x.fillStyle=fill;x.fillText(t,px,py);x.textAlign="left"};
+  const ot=(t,px,py,font,fill,al,lw)=>{if(t.indexOf("{")>=0)return richT(x,t,px,py,font,fill,al,lw||4*u);x.font=font;x.textAlign=al||"left";x.lineJoin="round";x.lineWidth=lw||4*u;x.strokeStyle="#000d";x.strokeText(t,px,py);x.fillStyle=fill;x.fillText(t,px,py);x.textAlign="left"};
   let dg=null,rng=false;
   if(L.a)for(const r of vis){if(r.me)continue;const d=Math.hypot(dwr(r.x-L.x),r.y-L.y,dwr(r.z-L.z));
    if(edible(r.m,L.m)&&d<16+len(r.m)&&(!dg||d<dg))dg=d;
@@ -455,18 +488,18 @@ export function createFishClient(env){
   /* haut : espèce, niveau, compteur de croissance, serveur */
   ot(STG[si][1].toUpperCase(),lft,top+18*u,F(900,18),"#fff");
   if(cp){ot("NIV "+(si+1)+" · "+fmtm(m)+"/"+(nx?nx[0]:"MAX"),lft,top+36*u,F(900,12),"#7dffa1");
-   if(S){const rank=S.p.slice().sort((a,b)=>b[6]-a[6]).findIndex(q=>q[0]===me)+1;ot(getCode()+" · "+S.p.length+" 🐟"+(rank?" · #"+rank:""),lft,top+53*u,F(800,11),"#cfe9f5",0,3*u)}}
+   if(S){const rank=S.p.slice().sort((a,b)=>b[6]-a[6]).findIndex(q=>q[0]===me)+1;ot(getCode()+" · "+S.p.length+" {fish}"+(rank?" · #"+rank:""),lft,top+53*u,F(800,11),"#cfe9f5",0,3*u)}}
   else{ot("NIVEAU "+(si+1),lft,top+36*u,F(800,12),"#9be37a");ot("CROISSANCE "+fmtm(m)+"/"+(nx?nx[0]:"MAX"),W/2,top+16*u,F(900,15),"#7dffa1","center");
-   if(S)ot("🌊 "+getCode()+" · "+S.p.length+" 🐟 · 🍽 "+(mine?mine[12]:0),W/2,top+36*u,F(800,12),"#e8f6ff","center",3*u)}
+   if(S)ot("{wave} "+getCode()+" · "+S.p.length+" {fish} · {plate} "+(mine?mine[12]:0),W/2,top+36*u,F(800,12),"#e8f6ff","center",3*u)}
   /* pièces (comme dans le jeu : pastille dorée) */
   {const cy2=top+(cp?72:54)*u,txt=String(coins),fl=clamp(1-(now-cT)/600,0,1);x.font=F(900,14);const tw=x.measureText(txt).width;card(lft,cy2-11*u,tw+38*u,22*u,11*u,"#0b2416cc",fl>0?"#ffd23f":"#ffd23f66");
    x.beginPath();x.arc(lft+12*u,cy2,7*u,0,7);x.fillStyle="#ffd23f";x.fill();x.strokeStyle="#b58a12";x.lineWidth=1.5*u;x.stroke();T(txt,lft+25*u,cy2+5*u,F(900,14),fl>0?"#fff":"#ffe28a")}
   /* classement + journal des morsures */
   if(S&&!cp){const rows=H<420?3:5,lb=S.p.slice().sort((a,b)=>b[6]-a[6]).slice(0,rows),lw=Math.round(186*u),bx=W-sa.r-10-lw,by0=isGm?sa.t+58:top,rh=Math.round(20*u);card(bx,by0,lw,30*u+lb.length*rh,13*u,"#0b2416cc","#8fd47a44");T("CLASSEMENT",bx+14*u,by0+19*u,F(700,11),"#9be37a");
    lb.forEach((q,i)=>{const yb=by0+39*u+i*rh,mm=q[0]===me;T((i+1)+". "+fit(q[9],lw-80*u,F(700,12)),bx+14*u,yb,F(mm?800:600,12),mm?"#7dffa1":q[7]?"#fff":"#ffffff77");T(fmtm(q[6]),bx+lw-14*u,yb,F(700,12),"#ffd23f","right")});
-   let ly=by0+30*u+lb.length*rh+8*u;(S.ev||[]).slice(-3).forEach(e=>{if(e[2]>5)return;x.globalAlpha=clamp((5-e[2])*1.5,0,1);card(bx,ly,lw,22*u,8*u,"#2a0c1ddd","#ff6b6b55");T("🍴 "+fit(e[0]+" › "+e[1],lw-20*u,F(600,11)),bx+10*u,ly+15*u,F(600,11),"#ffd1d9");x.globalAlpha=1;ly+=26*u})}
+   let ly=by0+30*u+lb.length*rh+8*u;(S.ev||[]).slice(-3).forEach(e=>{if(e[2]>5)return;x.globalAlpha=clamp((5-e[2])*1.5,0,1);card(bx,ly,lw,22*u,8*u,"#2a0c1ddd","#ff6b6b55");T("{fork} "+fit(e[0]+" › "+e[1],lw-20*u,F(600,11)),bx+10*u,ly+15*u,F(600,11),"#ffd1d9");x.globalAlpha=1;ly+=26*u})}
   const mid=cp?top+86*u:top+50*u;
-  if(dg!==null)ot("⚠️ DANGER : plus gros que toi !",W/2,mid+(cp?60*u:0),F(900,15),"#ffb3bd","center");
+  if(dg!==null)ot("{warn} DANGER : plus gros que toi !",W/2,mid+(cp?60*u:0),F(900,15),"#ffb3bd","center");
   if(now-lvT<2800){const a=clamp((2800-(now-lvT))/700,0,1),sc=1+Math.max(0,.3-(now-lvT)/600);x.globalAlpha=a;x.save();x.translate(W/2,H*.34);x.scale(sc,sc);ot(lvTxt,0,0,F(900,28),"#ffd23f","center",6*u);ot("Tu as grandi !",0,26*u,F(800,14),"#fff","center");x.restore();x.globalAlpha=1}
   /* chiffres qui s'envolent quand on mange (comme le « 27 » orange du jeu) */
   for(let i=pops.length-1;i>=0;i--){const p=pops[i],a=(now-p.t)/1100;if(a>=1){pops.splice(i,1);continue}
@@ -474,8 +507,8 @@ export function createFishClient(env){
     x.globalAlpha=1-a*a;x.save();x.translate(sx,sy);x.scale(sc,sc);ot(String(p.v),0,0,F(900,26),"#ffdd2e","center",6*u);x.restore();x.globalAlpha=1;continue}
    x.globalAlpha=1-a*a;x.save();x.translate(W/2+p.dx*u,H*.52-a*70*u);const sc=1+Math.max(0,.4-a*3);x.scale(sc,sc);ot(String(p.v),0,0,F(900,22),p.cl||"#fff","center",6*u);x.restore();x.globalAlpha=1}
   if(S&&now-enterT<10000){x.globalAlpha=clamp((10000-(now-enterT))/1500,0,1);const hw=Math.min(W-20,Math.round(520*u));card(W/2-hw/2,H*.42,hw,touch?44*u:52*u,12*u,"#0b2416e0","#8fd47a55");
-   if(touch)T("🕹 Joystick à gauche = nager · touche à droite = MORDRE · ⚡ = sprint",W/2,H*.42+26*u,F(700,12.5),"#eaf8ff","center");
-   else{T("Mange le plancton ✨ et les plus petits · les gros te blessent (barre rouge)",W/2,H*.42+22*u,F(600,13),"#eaf8ff","center");T("Mords : Espace / clic · Sprint : Maj · Frein : C · Souris : M · ←→ ↑↓",W/2,H*.42+42*u,F(600,12),"#eaf8ff","center")}x.globalAlpha=1}
+   if(touch)T("{joy} Joystick à gauche = nager · touche à droite = MORDRE · {bolt} = sprint",W/2,H*.42+26*u,F(700,12.5),"#eaf8ff","center");
+   else{T("Mange le plancton {spark} et les plus petits · les gros te blessent (barre rouge)",W/2,H*.42+22*u,F(600,13),"#eaf8ff","center");T("Mords : Espace / clic · Sprint : Maj · Frein : C · Souris : M · ←→ ↑↓",W/2,H*.42+42*u,F(600,12),"#eaf8ff","center")}x.globalAlpha=1}
   /* bas : barres + jauge en demi-cercle */
   const Rd=Math.round((cp?46:60)*u),cx=W/2,by=H-sa.b-8*u,cy0=by-2*u,sq=Math.round(11*u),gp=Math.round(3*u),barY=by-18*u,xr=W-sa.r-12;
   const segs=(xa,xb,p,on,off)=>{const n=clamp(Math.floor((xb-xa)/(sq+gp)),3,24);for(let i=0;i<n;i++){const lit=i<Math.round(p*n)||(p>0&&i===0);x.fillStyle="#120606";x.beginPath();x.roundRect(xa+i*(sq+gp)-1,barY-1,sq+2,sq+2,3*u);x.fill();x.fillStyle=lit?on:off;x.beginPath();x.roundRect(xa+i*(sq+gp),barY,sq,sq,2.5*u);x.fill();if(lit){x.fillStyle="#ffffff40";x.fillRect(xa+i*(sq+gp)+1,barY+1,sq-2,3*u)}}};
@@ -496,7 +529,7 @@ export function createFishClient(env){
   /* commandes tactiles */
   if(touch){const pb=[...btn.values()].includes("b"),ps=[...btn.values()].includes("s");
    if(!joy){const gx=sa.l+JR+26,gy=H-sa.b-78*u-JR-8*u;x.beginPath();x.arc(gx,gy,JR,0,7);x.strokeStyle="#ffffff40";x.lineWidth=3;x.stroke();x.beginPath();x.arc(gx,gy,JR*.38,0,7);x.fillStyle="#ffffff26";x.fill()}
-   [[BB,"MORDS","🦷",pb],[BS,"SPRINT","⚡",ps]].forEach(([b,l,ic,on])=>{x.beginPath();x.arc(b.x,b.y,b.r,0,7);x.fillStyle=on?"#ffffff55":"#0b2416b0";x.fill();x.strokeStyle=on?"#fff":"#8fd47aaa";x.lineWidth=3;x.stroke();T(ic,b.x,b.y+2*u,F(700,b===BB?24:18),"#fff","center");T(l,b.x,b.y+b.r*.62,F(800,b===BB?11:9.5),"#fff","center")});
+   [[BB,"MORDS","{tooth}",pb],[BS,"SPRINT","{bolt}",ps]].forEach(([b,l,ic,on])=>{x.beginPath();x.arc(b.x,b.y,b.r,0,7);x.fillStyle=on?"#ffffff55":"#0b2416b0";x.fill();x.strokeStyle=on?"#fff":"#8fd47aaa";x.lineWidth=3;x.stroke();T(ic,b.x,b.y+2*u,F(700,b===BB?24:18),"#fff","center");T(l,b.x,b.y+b.r*.62,F(800,b===BB?11:9.5),"#fff","center")});
    if(L.bcd>0)arc(BB.x,BB.y,BB.r+5,L.bcd/BITE_CD,"#f4b52a",4);arc(BS.x,BS.y,BS.r+5,L.st/100,L.tired?"#ff8a5c":"#7ccf1b",4);
    if(joy){x.beginPath();x.arc(joy.ox,joy.oy,JR,0,7);x.strokeStyle="#ffffff66";x.lineWidth=3;x.stroke();const dx=joy.px-joy.ox,dy=joy.py-joy.oy,l=Math.hypot(dx,dy),mm=l>JR?JR/l:1;x.beginPath();x.arc(joy.ox+dx*mm,joy.oy+dy*mm,JR*.42,0,7);x.fillStyle="#ffffffb0";x.fill()}}}
 
@@ -516,10 +549,10 @@ export function createFishClient(env){
   if(sdSeen!==MAP_SEED){sdSeen=MAP_SEED;PK=plankton(sdSeen);deco=mkDeco(sdSeen)}
   hLast=new Map(ls?ls.p.map(a=>[a[0],a]):[]);
   const cnt=new Array(TIER.length).fill(0);let sh=0;
-  if(ls){ls.f.forEach(a=>{const k=a[7]|0,tr=a[10]|0;mkE({id:a[0],k,tier:tr,name:k?"🦈 Requin":"",x:a[1],y:a[2],z:a[3],yaw:a[4],pitch:a[5],m:a[6]});if(k)sh++;else cnt[tr]++;nid=Math.max(nid,parseInt(a[0].slice(1))||0)});
+  if(ls){ls.f.forEach(a=>{const k=a[7]|0,tr=a[10]|0;mkE({id:a[0],k,tier:tr,name:k?"Requin":"",x:a[1],y:a[2],z:a[3],yaw:a[4],pitch:a[5],m:a[6]});if(k)sh++;else cnt[tr]++;nid=Math.max(nid,parseInt(a[0].slice(1))||0)});
    (ls.pk||[]).forEach(i=>{pkAt[i]=t+8});(ls.ml||[]).forEach(a=>{ML.push({id:a[0],x:a[1],y:a[2],z:a[3],m:a[4],ttl:a[5],vx:0,vy:0,vz:0});cid=Math.max(cid,parseInt(a[0].slice(1))||0)})}
   TIER.forEach((m,i)=>{for(let n=cnt[i];n<TCNT[i];n++)mkE({id:"n"+(++nid),k:0,tier:i,m:m*rf(.9,1.15)})});
-  for(let i=sh;i<NSH;i++)mkE({id:"n"+(++nid),k:1,name:"🦈 Requin",m:rf(140,210)});
+  for(let i=sh;i<NSH;i++)mkE({id:"n"+(++nid),k:1,name:"Requin",m:rf(140,210)});
   poseUn=onValue(ref(`games/${code}/p`),onPose)}
  function loseHost(){hostOn=false;ML=[];if(poseUn){poseUn();poseUn=null}E=[];byId=new Map()}
  const near=(e,f,mx)=>{let b=null,bd=mx*mx;for(const o of E){if(o===e||!o.a||!f(o))continue;const d=dwr(o.x-e.x)**2+(o.y-e.y)**2+dwr(o.z-e.z)**2;if(d<bd){bd=d;b=o}}return b?[b,Math.sqrt(bd)]:null};
@@ -585,7 +618,7 @@ export function createFishClient(env){
   else if(hostOn)loseHost()}
  /* ───────── MENU : Jouer · Poissons · Paramètres (par-dessus la scène 3D) ───────── */
  const ld=(k,d)=>{try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch{return d}},sv=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}};
- const addCoins=(n,now)=>{if(n<=0)return;coins+=n;if(!fbOk)pend+=n;sv("moda.fish.coins",coins);saveFish();cT=now||performance.now();pops.push({t:cT,v:"+"+n+" 🪙",dx:60+Math.random()*40,xp:1,cl:"#ffd23f"})};
+ const addCoins=(n,now)=>{if(n<=0)return;coins+=n;if(!fbOk)pend+=n;sv("moda.fish.coins",coins);saveFish();cT=now||performance.now();pops.push({t:cT,v:"+"+n+" {coin}",dx:60+Math.random()*40,xp:1,cl:"#ffd23f"})};
 /* pièces, poissons possédés et poisson choisi : sauvegardés sur ton compte dans users/<uid>/fish (copie locale en secours) */
  function flushFish(){clearTimeout(svT);if(!fbOk||!dirtyFb||!me)return;dirtyFb=false;Promise.resolve(set(ref(`users/${me}/fish`),{c:coins,o:owned.slice(0,40),s:selId})).catch(()=>{dirtyFb=true})}
  function saveFish(now){dirtyFb=true;clearTimeout(svT);if(now)flushFish();else svT=setTimeout(flushFish,1500)}   // les gains de pièces sont regroupés (1,5 s) ; achat / choix : tout de suite
@@ -610,11 +643,11 @@ export function createFishClient(env){
  ".fm .st{width:100%;display:flex;flex-direction:column;gap:3px;margin:2px 0 4px}.fm .st div{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:800;color:#9be37a}.fm .st span{width:48px;text-align:left}.fm .st i{flex:1;height:5px;border-radius:3px;background:#ffffff22;overflow:hidden}.fm .st i b{display:block;height:100%;background:#7ccf1b;font-size:0}"+
  "@media (max-height:420px){.fm{gap:7px}.fm h1{font-size:26px}.fm .card p{display:none}}";
  function render(){if(!menuEl)return;const cur=FISHES.find(f=>f.id===selId)||FISHES[0],cn=`<div class="cn"><i></i>${coins}</div>`;let h=cn;
-  if(scr==="main")h+=`<h1><small>MODA</small>FEED &amp; GROW<br>FISH</h1><button class="b p" data-a="play">▶ JOUER</button><button class="b" data-a="fish">🐟 POISSONS</button><button class="b" data-a="set">⚙️ PARAMÈTRES</button><div class="tip">Poisson choisi : ${cur.icon} ${cur.name}</div>${fbBad?`<div class="tip">⚠️ Pièces non enregistrées sur ton compte (hors ligne ?)</div>`:""}`;
+  if(scr==="main")h+=`<h1><small>MODA</small>FEED &amp; GROW<br>FISH</h1><button class="b p" data-a="play">${ico("play")} JOUER</button><button class="b" data-a="fish">${ico("fish")} POISSONS</button><button class="b" data-a="set">${ico("gear")} PARAMÈTRES</button><div class="tip">Poisson choisi : ${fishSvg(cur).replace('width="86" height="54"','width="34" height="21"')} ${cur.name}</div>${fbBad?`<div class="tip">${ico("warn")} Pièces non enregistrées sur ton compte (hors ligne ?)</div>`:""}`;
   else if(scr==="fish"){h+=`<h1 style="font-size:clamp(22px,5vw,34px)">POISSONS</h1><div class="grid">`+FISHES.map(f=>{const own=owned.includes(f.id),sel=f.id===selId,can=own||(f.price!=null&&coins>=f.price);
-    const lab=f.soon?"Bientôt":sel?"✔ Sélectionné":own?"Choisir":f.price==null?"Bientôt":"Acheter · "+f.price+" 🪙",dis=f.soon||sel||(!own&&!can);
-    return `<div class="card${sel?" sel":""}${f.soon?" lock":""}"><div class="ic">${fishSvg(f)}</div><b>${f.name}</b><p>${f.desc}</p>${statsH(f)}<button class="a" data-a="${own?"pick":"buy"}" data-id="${f.id}"${dis?" disabled":""}>${lab}</button></div>`}).join("")+`</div><div class="tip">Gagne des pièces 🪙 en tuant des poissons (plus ton niveau est haut, plus ça rapporte) et en montant de niveau.</div><button class="back" data-a="main">← Retour</button>`}
-  else h+=`<h1 style="font-size:clamp(22px,5vw,34px)">PARAMÈTRES</h1><div class="row">🖱️ Pilotage à la souris<button class="tg${msOn?" on":""}" data-a="tgm">${msOn?"OUI":"NON"}</button></div><div class="row">📳 Vibrations<button class="tg${vibOn?" on":""}" data-a="tgv">${vibOn?"OUI":"NON"}</button></div><div class="tip">Le son se coupe avec le bouton 🔊 en haut à droite.<br>← → tourner · ↑ ↓ monter/descendre · Espace : mordre · Maj : sprint · C : freiner · M : souris</div><button class="back" data-a="main">← Retour</button>`;
+    const lab=f.soon?"Bientôt":sel?ico("check")+" Sélectionné":own?"Choisir":f.price==null?"Bientôt":"Acheter · "+f.price+" "+ico("coin"),dis=f.soon||sel||(!own&&!can);
+    return `<div class="card${sel?" sel":""}${f.soon?" lock":""}"><div class="ic">${fishSvg(f)}</div><b>${f.name}</b><p>${f.desc}</p>${statsH(f)}<button class="a" data-a="${own?"pick":"buy"}" data-id="${f.id}"${dis?" disabled":""}>${lab}</button></div>`}).join("")+`</div><div class="tip">Gagne des pièces ${ico("coin")} en tuant des poissons (plus ton niveau est haut, plus ça rapporte) et en montant de niveau.</div><button class="back" data-a="main">← Retour</button>`}
+  else h+=`<h1 style="font-size:clamp(22px,5vw,34px)">PARAMÈTRES</h1><div class="row">${ico("mouse","1.3em")} Pilotage à la souris<button class="tg${msOn?" on":""}" data-a="tgm">${msOn?"OUI":"NON"}</button></div><div class="row">${ico("vib","1.3em")} Vibrations<button class="tg${vibOn?" on":""}" data-a="tgv">${vibOn?"OUI":"NON"}</button></div><div class="tip">Le son se coupe avec le bouton ${ico("snd")} en haut à droite.<br>← → tourner · ↑ ↓ monter/descendre · Espace : mordre · Maj : sprint · C : freiner · M : souris</div><button class="back" data-a="main">← Retour</button>`;
   menuEl.innerHTML=h}
  function act(a,id){if(!menuOn)return;
   if(a==="play"){menuOn=false;L.yaw=cam.yaw;L.pitch=0;enterT=performance.now();if(menuEl)menuEl.style.display="none";send(true);return}
@@ -645,6 +678,6 @@ export function createFishClient(env){
   env.played&&env.played("fish",true);
   return()=>{flushFish();clearTimeout(svT);removeEventListener("pagehide",flushFish);active=false;clearInterval(timer);if(poseUn){poseUn();poseUn=null}hostOn=false;un();cancelAnimationFrame(raf);remove(ref(`games/${c}/p/${me}`)).catch(()=>{});removeEventListener("keydown",kd);removeEventListener("keyup",ku);removeEventListener("blur",blur);
    cv.removeEventListener("pointerdown",pd);cv.removeEventListener("pointermove",pm);cv.removeEventListener("pointerleave",pl);cv.removeEventListener("pointerup",pu);cv.removeEventListener("pointercancel",pu);cv.removeEventListener("lostpointercapture",pu);cv.style.touchAction="";removeEventListener("resize",rz);removeEventListener("orientationchange",rz);cv.removeEventListener("contextmenu",noCtx);if(ro){ro.disconnect();ro=null}if(G){G.dispose();G=null}if(glc){glc.remove();glc=null}if(sty){sty.remove();sty=null}if(menuEl){menuEl.remove();menuEl=null}menuOn=false;if(probe){probe.remove();probe=null}cv.style.position="";cv.style.zIndex="";cv.style.background="";cv.width=800;cv.height=560;
-   joy=null;btn.clear();keys.clear();ov.textContent="";ov.style.fontSize="56px";help.textContent=""}
+   joy=null;btn.clear();keys.clear();ov._h="";ov.textContent="";ov.style.fontSize="56px";help.textContent=""}
  }};
 }

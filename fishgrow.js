@@ -24,15 +24,16 @@ const wrp=v=>v-R2*Math.floor((v+R)/R2);   // ramène une coordonnée dans [-R, R
 const dwr=d=>d-R2*Math.round(d/R2);   // plus court écart signé entre deux coordonnées (à travers le bord si c'est plus près)
 const STG=[[0,"Alevin"],[3,"Sardine"],[8,"Maquereau"],[20,"Barracuda"],[50,"Thon géant"],[120,"Requin"],[300,"Grand blanc"],[700,"Mégalodon"]];
 const FISHES=[   // sp = vitesse, bi = force de morsure, hp = vie (× le poisson de départ) ; sh = forme 3D ; pat = motif (1 deux bandes, 2 rayures, 3 taches, 4 trois bandes) ; Bibos garde la couleur de ton compte
- {id:"bibos",name:"Bibos",price:0,sp:1,bi:1,hp:1,sh:"f0",desc:"Le poisson de départ. Équilibré : mange du plancton et plus petit que toi, grandis jusqu'au Mégalodon."},
- {id:"clown",name:"Poisson-clown",price:40,sp:1.05,bi:.95,hp:1,sh:"sclown",pat:4,iy:13,c:[255,112,28],bl:[255,176,96],fn:[255,142,52],bd:[255,255,255],desc:"Petit et vif, rayé de blanc. Le plus agile des débutants."},
- {id:"puff",name:"Poisson-ballon",price:90,sp:.88,bi:.9,hp:1.5,sh:"spuff",pat:3,iy:17,c:[236,206,96],bl:[255,246,214],fn:[214,172,70],bd:[120,92,40],desc:"Rond, lent mais très costaud : il encaisse les morsures."},
- {id:"surg",name:"Chirurgien bleu",price:160,sp:1.14,bi:.9,hp:.95,sh:"ssurg",pat:0,iy:17,c:[34,98,236],bl:[120,180,255],fn:[255,214,40],bd:[255,255,255],desc:"Nageur rapide au corps bleu roi et à la queue jaune."},
- {id:"lion",name:"Poisson-lion",price:260,sp:.96,bi:1.25,hp:1.1,sh:"slion",pat:2,iy:13,c:[178,40,34],bl:[246,214,196],fn:[226,110,84],bd:[255,246,240],desc:"Rayures rouges et épines : sa morsure fait très mal."},
- {id:"barr",name:"Barracuda",price:400,sp:1.22,bi:1.15,hp:.95,sh:"sbarr",pat:0,iy:8,c:[140,158,176],bl:[236,242,248],fn:[96,110,128],bd:[255,255,255],desc:"Long, argenté et ultra rapide : le chasseur parfait."},
- {id:"pira",name:"Piranha",price:600,sp:1.08,bi:1.55,hp:.85,sh:"spira",pat:3,iy:15,c:[112,132,142],bl:[232,72,58],fn:[210,70,56],bd:[220,230,236],desc:"Fragile mais redoutable : les plus gros dégâts du récif."},
- {id:"moon",name:"Poisson-lune",price:850,sp:.84,bi:.85,hp:1.9,sh:"smoon",pat:0,iy:20,c:[138,156,172],bl:[226,234,242],fn:[110,128,148],bd:[255,255,255],desc:"Un géant tranquille : énorme réserve de vie, mais lent."}];
+ {id:"bibos",st:["Alevin", "Sardine", "Maquereau", "Barracuda", "Thon géant", "Requin", "Grand blanc", "Mégalodon"],name:"Bibos",price:0,sp:1,bi:1,hp:1,sh:"f0",desc:"Le poisson de départ. Équilibré : mange du plancton et plus petit que toi, grandis jusqu'au Mégalodon."},
+ {id:"clown",st:["Larve", "Clownillon", "Petit clown", "Clown rayé", "Clown des anémones", "Grand clown", "Clown royal", "Roi du récif"],name:"Poisson-clown",price:40,sp:1.05,bi:.95,hp:1,sh:"sclown",pat:4,iy:13,c:[255,112,28],bl:[255,176,96],fn:[255,142,52],bd:[255,255,255],desc:"Petit et vif, rayé de blanc. Le plus agile des débutants."},
+ {id:"puff",st:["Boulette", "Petit ballon", "Ballon rond", "Ballon piquant", "Ballon géant", "Mine des mers", "Ballon colossal", "Dirigeable des mers"],name:"Poisson-ballon",price:90,sp:.88,bi:.9,hp:1.5,sh:"spuff",pat:3,iy:17,c:[236,206,96],bl:[255,246,214],fn:[214,172,70],bd:[120,92,40],desc:"Rond, lent mais très costaud : il encaisse les morsures."},
+ {id:"surg",st:["Alevin bleu", "Petit chirurgien", "Chirurgien", "Chirurgien agile", "Chirurgien royal", "Lame bleue", "Grand chirurgien", "Seigneur du lagon"],name:"Chirurgien bleu",price:160,sp:1.14,bi:.9,hp:.95,sh:"ssurg",pat:0,iy:17,c:[34,98,236],bl:[120,180,255],fn:[255,214,40],bd:[255,255,255],desc:"Nageur rapide au corps bleu roi et à la queue jaune."},
+ {id:"lion",st:["Alevin rayé", "Petit lion", "Poisson-lion", "Lion épineux", "Lion des récifs", "Lion rouge", "Grand lion", "Lion-empereur"],name:"Poisson-lion",price:260,sp:.96,bi:1.25,hp:1.1,sh:"slion",pat:2,iy:13,c:[178,40,34],bl:[246,214,196],fn:[226,110,84],bd:[255,246,240],desc:"Rayures rouges et épines : sa morsure fait très mal."},
+ {id:"barr",st:["Alevin argenté", "Petite flèche", "Jeune barracuda", "Barracuda", "Barracuda rapide", "Grand barracuda", "Faucheur des mers", "Barracuda géant"],name:"Barracuda",price:400,sp:1.22,bi:1.15,hp:.95,sh:"sbarr",pat:0,iy:8,c:[140,158,176],bl:[236,242,248],fn:[96,110,128],bd:[255,255,255],desc:"Long, argenté et ultra rapide : le chasseur parfait."},
+ {id:"pira",st:["Alevin dentu", "Petit piranha", "Piranha", "Piranha affamé", "Piranha rouge", "Grand piranha", "Piranha cannibale", "Roi des dents"],name:"Piranha",price:600,sp:1.08,bi:1.55,hp:.85,sh:"spira",pat:3,iy:15,c:[112,132,142],bl:[232,72,58],fn:[210,70,56],bd:[220,230,236],desc:"Fragile mais redoutable : les plus gros dégâts du récif."},
+ {id:"moon",st:["Alevin lunaire", "Petite lune", "Poisson-lune", "Lune d'argent", "Grande lune", "Lune géante", "Lune colossale", "Titan lunaire"],name:"Poisson-lune",price:850,sp:.84,bi:.85,hp:1.9,sh:"smoon",pat:0,iy:20,c:[138,156,172],bl:[226,234,242],fn:[110,128,148],bd:[255,255,255],desc:"Un géant tranquille : énorme réserve de vie, mais lent."}];
 const SPI=i=>FISHES[i>=0&&i<FISHES.length?i:0];
+const stN=(fi,i)=>{const f=SPI(fi);return(f.st&&f.st[i])||STG[i][1]};   // chaque espèce a ses propres noms d'étapes (mêmes seuils de masse pour tous)
 const stg=m=>{let i=0;while(i+1<STG.length&&m>=STG[i+1][0])i++;return i};
 const len=m=>.8*Math.cbrt(m)+.4,spdOf=m=>7*Math.pow(len(m),.15);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),rf=(a,b)=>a+Math.random()*(b-a);
@@ -55,6 +56,35 @@ const SHAPES={   // formes des espèces : P = profil du corps (nez → queue), q
  barr:{P:[.06,.20,.30,.32,.26,.12,.04],q:.65,dh:.14,tl:.85,pf:.14,er:.05},
  pira:{P:[.10,.50,.68,.60,.34,.14,.05],q:.50,dh:.26,tl:.95,pf:.18},
  moon:{P:[.14,.62,.92,.84,.44,.16,.06],q:.34,dh:.55,tl:.5,pf:.14,vh:.5}};
+/* ---- Évolution des formes : chaque espèce change de modèle 3D à chaque niveau (8 formes). On donne des « images clés » [niveau, écarts] ;
+        les niveaux intermédiaires sont interpolés. P = profil du corps, q = épaisseur, dh = dorsale, tl = queue, pf = pectorales, vh = ventrale,
+        spk = épines, th = crocs, er = yeux, sk = 1 : corps de requin. Bibos finit en requin (Requin → Grand blanc → Mégalodon). ---- */
+const SH0={bibos:{P:PROF[0],q:.5,dh:.28,tl:1,pf:.2}},GDEF={vh:.13,er:.06,dh:.28,tl:1,pf:.2,q:.5,spk:0,th:0};
+const GROW={
+ bibos:[[0,{P:[.14,.50,.56,.44,.24,.10,.04],q:.6,dh:.16,tl:.6,pf:.12,er:.095}],[2,{}],[4,{P:[.09,.38,.58,.56,.38,.17,.06],q:.55,dh:.34,tl:1.05,pf:.24,vh:.18,er:.06}],
+  [5,{sk:1,P:[.05,.26,.40,.38,.27,.13,.05],q:.85,dh:.30,tl:1,pf:.24,er:.045}],[7,{sk:1,P:[.05,.27,.44,.44,.32,.15,.05],q:.9,dh:.46,tl:1.1,pf:.34,er:.04}]],
+ clown:[[0,{P:[.14,.52,.60,.46,.26,.10,.04],q:.7,dh:.16,tl:.55,pf:.12,er:.10}],[3,{P:[.11,.46,.60,.52,.32,.14,.05],q:.6,dh:.26,tl:.8,pf:.18,er:.075}],
+  [7,{P:[.10,.42,.62,.60,.42,.20,.08],q:.5,dh:.46,tl:1.2,pf:.32,vh:.26,er:.06}]],
+ puff:[[0,{P:[.16,.60,.80,.70,.40,.14,.06],q:.85,dh:.06,tl:.38,pf:.08,er:.11,spk:0}],[3,{spk:2,er:.08}],
+  [7,{P:[.22,.80,1.05,.98,.62,.22,.09],q:1,dh:.2,tl:.75,pf:.22,er:.07,spk:9,vh:.2}]],
+ surg:[[0,{P:[.10,.46,.62,.52,.30,.12,.05],q:.5,dh:.2,tl:.7,pf:.14,vh:.1,er:.085}],[3,{}],
+  [7,{P:[.07,.38,.66,.66,.42,.18,.08],q:.38,dh:.55,tl:1.5,pf:.34,vh:.34}]],
+ lion:[[0,{P:[.12,.42,.52,.42,.26,.11,.05],spk:0,dh:.1,pf:.22,tl:.7,er:.085}],[2,{spk:3,dh:.15,pf:.36,tl:.85}],[4,{spk:6,pf:.6}],
+  [7,{P:[.10,.36,.54,.50,.34,.16,.07],q:.5,spk:10,dh:.3,pf:.85,tl:1.2}]],
+ barr:[[0,{P:[.08,.28,.40,.40,.30,.14,.05],q:.85,dh:.10,tl:.55,pf:.10,er:.075}],[4,{P:[.06,.22,.34,.34,.27,.12,.04],q:.7,dh:.12,tl:.75,th:2}],
+  [7,{P:[.05,.17,.27,.29,.24,.10,.035],q:.6,dh:.2,tl:1.05,pf:.2,th:4,er:.05}]],
+ pira:[[0,{P:[.12,.46,.62,.52,.30,.12,.05],q:.55,dh:.16,tl:.7,pf:.12,er:.08,th:0}],[3,{th:2,dh:.22,tl:.85}],
+  [7,{P:[.14,.58,.80,.72,.40,.14,.05],q:.58,dh:.36,tl:1.05,pf:.24,th:5,er:.07}]],
+ moon:[[0,{P:[.16,.60,.86,.74,.36,.12,.05],q:.4,dh:.28,tl:.4,pf:.1,vh:.28,er:.08}],
+  [7,{P:[.14,.66,.98,.94,.52,.20,.07],q:.3,dh:.78,tl:.6,pf:.2,vh:.8,er:.06}]]};
+const lerpv=(a,b,t)=>Array.isArray(a)?a.map((v,i)=>v+(b[i]-v)*t):a+(b-a)*t;
+function growShape(id,si){const base=SHAPES[id]||SH0[id],kf=GROW[id];let a=kf[0],b=kf[kf.length-1];
+ for(let i=0;i<kf.length;i++){if(kf[i][0]<=si)a=kf[i];if(kf[i][0]>=si){b=kf[i];break}}
+ const t=b[0]===a[0]?0:(si-a[0])/(b[0]-a[0]),o={...base},g=(e,k)=>e[1][k]!==undefined?e[1][k]:(base[k]!==undefined?base[k]:GDEF[k]);
+ new Set([...Object.keys(a[1]),...Object.keys(b[1])]).forEach(k=>{if(k==="sk"){o.sk=a[1].sk||0;return}o[k]=lerpv(g(a,k),g(b,k),t)});
+ o.spk=Math.round(o.spk||0);o.th=Math.round(o.th||0);return o}
+const shapeFor=key=>{const q=key.slice(1).split("#");return q.length>1&&GROW[q[0]]?growShape(q[0],+q[1]||0):SHAPES[q[0]]};
+const shK=(sh,m)=>{const id=sh==="f0"?"bibos":String(sh).slice(1);return GROW[id]?"s"+id+"#"+stg(m):sh};   // clé du modèle selon l'espèce et le niveau
 const LIGHT=(()=>{const l=[.35,.85,.4],n=Math.hypot(...l);return l.map(v=>v/n)})();
 const mixc=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];
 const rgbs=a=>`rgb(${a[0]|0},${a[1]|0},${a[2]|0})`;
@@ -151,6 +181,7 @@ function fishGeom(sh,so){
  [-1,1].forEach(s=>{fan(mb,[[s*r1*q*.9,-r1*.2,z1],[s*(r1*q+pfw),-.12,z1-.2],[s*r1*q*.9,r1*.1,z1-.12]],FN,Z);   // pectorales
   const er=so?(so.er||.06):(sh?.045:.06),ex=s*r1*q*.92,ey=r1*.3,ez=z1+.03;sph(mb,ex,ey,ez,er,er,er,6,8,[2,0,0],Z,false);sph(mb,ex+s*er*.55,ey,ez,er*.55,er*.55,er*.55,5,6,[3,0,0],Z,false)});
  sph(mb,0,-.012,.51,.04,.032,.04,5,8,[4,0,0],[0,-.012,.51],false);   // bouche (s'ouvre à la morsure)
+  if(so&&so.th)for(let sd=-1;sd<=1;sd+=2)for(let i=0;i<so.th;i++){const bx=sd*(.016+i*.014),z0=.485-i*.006;fan(mb,[[bx-.007,-.034,z0],[bx+.007,-.034,z0],[bx*.9,-.058,z0+.065]],[2,0,0],Z)}   // crocs (barracuda, piranha)
  return mb}
 function terrGeom(){const mb=MB(),N=56,S=R2/N;   // UNE tuile = exactement la carte [-R,R]² ; on la répète autour de la caméra
  for(let i=0;i<=N;i++)for(let j=0;j<=N;j++){const x0=-R+i*S,z0=-R+j*S,h=gh(x0,z0),e=.5,dx=(gh(x0+e,z0)-gh(x0-e,z0))/(2*e),dz=(gh(x0,z0+e)-gh(x0,z0-e))/(2*e),nz=hash2(i%N,j%N),lowf=clamp((3.4-h)/2.4,0,1);
@@ -272,7 +303,7 @@ function glBuild(cvs){
    fw=[sy*cp,sp_,cy*cp],r0=[cy,0,-sy],u0=[-sp_*sy,cp,-sp_*cy],rt=[r0[0]*cl+u0[0]*sl,r0[1]*cl+u0[1]*sl,r0[2]*cl+u0[2]*sl],up=[u0[0]*cl-r0[0]*sl,u0[1]*cl-r0[1]*sl,u0[2]*cl-r0[2]*sl];
   MAT.set([rt[0]*Lm,rt[1]*Lm,rt[2]*Lm,0,up[0]*Lm,up[1]*Lm,up[2]*Lm,0,fw[0]*Lm,fw[1]*Lm,fw[2]*Lm,0,px,r.y,pz,1]);
   f1(PS,"u_ph",r.ph);f1(PS,"u_bw",r.boost?1.5:1);f1(PS,"u_bite",r.bt?2:.001);f1(PS,"u_bands",sp.bands|0);f3(PS,"u_cb",n255(sp.b));f3(PS,"u_cl",n255(sp.bl));f3(PS,"u_cf",n255(sp.fn));f3(PS,"u_base",n255(sp.bd));
-  solid(M[key]||(M[key]=mesh(fishGeom(0,SHAPES[key.slice(1)]))),2,MAT,1,0)};
+  solid(M[key]||(()=>{const so=shapeFor(key);return M[key]=mesh(fishGeom(so&&so.sk?1:0,so))})(),2,MAT,1,0)};
  G.ball=(px,py,pz,rd,col)=>{MAT.set([rd,0,0,0,0,rd,0,0,0,0,rd,0,px,py,pz,1]);f3(PS,"u_base",col);solid(M.ball,5,MAT,1,0)};
  G.meat=(px,py,pz,rd,sp)=>{const c=Math.cos(sp)*rd,s=Math.sin(sp)*rd;MAT.set([c,0,-s,0,0,rd,0,0,s,0,c,0,px,py,pz,1]);solid(M.meat,0,MAT,1,0)};
  G.trans=()=>{gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false)};
@@ -365,10 +396,10 @@ export function createFishClient(env){
    const cp=Math.cos(pit),tx=x1+Math.sin(yaw)*cp*spd*ex,ty=y1+Math.sin(pit)*spd*ex,tz=z1+Math.cos(yaw)*cp*spd*ex,kk=1-Math.exp(-dt*14);
    const ddx=dwr(tx-r.x),ddz=dwr(tz-r.z);if(Math.abs(ddx)>6||Math.abs(ddz)>6){r.x=wrp(tx);r.y=ty;r.z=wrp(tz)}else{r.x=wrp(r.x+ddx*kk);r.y+=(ty-r.y)*kk;r.z=wrp(r.z+ddz*kk)}   // lissage qui traverse le bord sans traîner à travers la carte
    const oy_=r.yaw;r.yaw+=angd(yaw-r.yaw)*Math.min(1,dt*12);r.roll=(r.roll||0)+(clamp(-angd(r.yaw-oy_)/dt*.22,-.6,.6)-(r.roll||0))*Math.min(1,dt*8);r.pitch+=(pit-r.pitch)*Math.min(1,dt*12);r.m=m;r.k=k;r.spd=spd;r.bt=bt;r.ph+=dt*(3+spd*1.1);r.sp=sp;return r};
-  S.p.forEach(t=>{if(t[0]===me||!t[7])return;const r=upd(t[0],0,t[1],t[2],t[3],t[4],t[5],t[6],0,t[11],t[14],spF(t[17]|0,t[10]));r.shp=SPI(t[17]|0).sh;r.n=t[9];r.pl=1;vis.push(r)});
+  S.p.forEach(t=>{if(t[0]===me||!t[7])return;const r=upd(t[0],0,t[1],t[2],t[3],t[4],t[5],t[6],0,t[11],t[14],spF(t[17]|0,t[10]));r.shp=shK(SPI(t[17]|0).sh,t[6]);r.n=t[9];r.pl=1;vis.push(r)});
   S.f.forEach(t=>{const id=t[0],n=parseInt(id.slice(1))||0,sh=t[7]===1,r=upd(id,0,t[1],t[2],t[3],t[4],t[5],t[6],t[7],t[8],t[9],sh?specOf("s",[110,128,148],1):specOf("n"+(n%PAL.length),PAL[n%PAL.length],0));r.pl=0;r.n="";vis.push(r)});
   const mine=S.p.find(t=>t[0]===me);
-  if(mine&&L.a){const r=rend.get("me")||{ph:0};r.x=L.x;r.y=L.y;r.z=L.z;r.yaw=L.yaw;r.pitch=L.pitch;r.roll=L.roll;r.m=L.m;r.k=0;r.spd=L.spd;r.boost=L.boost;r.bt=L.bt>0?1:0;r.ph+=dt*(3+L.spd*1.1);r.sp=spF(selIdx(),mine[10]);r.shp=SPI(selIdx()).sh;r.n=mine[9];r.pl=1;r.me=1;rend.set("me",r);vis.push(r)}}
+  if(mine&&L.a){const r=rend.get("me")||{ph:0};r.x=L.x;r.y=L.y;r.z=L.z;r.yaw=L.yaw;r.pitch=L.pitch;r.roll=L.roll;r.m=L.m;r.k=0;r.spd=L.spd;r.boost=L.boost;r.bt=L.bt>0?1:0;r.ph+=dt*(3+L.spd*1.1);r.sp=spF(selIdx(),mine[10]);r.shp=shK(SPI(selIdx()).sh,L.m);r.n=mine[9];r.pl=1;r.me=1;rend.set("me",r);vis.push(r)}}
  function stepLocal(dt){
   const mine=S&&S.p.find(q=>q[0]===me);if(!mine)return;
   if(L.rc!==mine[13]){L.rc=mine[13];L.x=mine[1];L.y=mine[2];L.z=mine[3];L.yaw=mine[4];L.pitch=mine[5];L.st=100;L.lun=0;L.tired=0;L.yv=L.pv=L.roll=0;cam.yaw=L.yaw;cam.pitch=L.pitch*.75}
@@ -480,7 +511,7 @@ export function createFishClient(env){
   if(L.hurt>0){x.fillStyle=`rgba(255,20,40,${L.hurt*.5})`;x.fillRect(0,0,W,H)}
   if(dg!==null){const a=.1+.1*Math.sin(now/90)+(1-dg/20)*.12;x.fillStyle=`rgba(255,40,70,${a})`;x.fillRect(0,0,W,12);x.fillRect(0,H-12,W,12);x.fillRect(0,0,12,H);x.fillRect(W-12,0,12,H)}
   const m=mine?mine[6]:1.6,si=stg(m),nx=STG[si+1],prog=nx?clamp((m-STG[si][0])/(nx[0]-STG[si][0]),0,1):1;
-  if(si!==lastSt){if(lastSt>=0&&si>lastSt){lvT=now;lvTxt="NIVEAU "+(si+1)+" · "+STG[si][1];addCoins(3*si,now);vib([20,40,20])}lastSt=si}
+  if(si!==lastSt){if(lastSt>=0&&si>lastSt){lvT=now;lvTxt="NIVEAU "+(si+1)+" · "+stN(selIdx(),si);addCoins(3*si,now);vib([20,40,20]);try{burst(L.x,L.y,L.z,BUB,30,2.4)}catch{}}lastSt=si}
   if(mine){if(pmh&&mine[6]>pmh+.25&&L.a)pops.push({t:now,v:"+"+Math.round((mine[6]-pmh)*10)+" xp.",dx:(Math.random()-.5)*70,xp:1});pmh=mine[6]}
   if(mine){if(pkl>=0&&mine[12]>pkl&&L.a)addCoins((mine[12]-pkl)*(1+si),now);pkl=mine[12]}   // 1 pièce par poisson tué (× ton niveau)
   if(S&&S.dg)for(const d of S.dg){if(seenDg.has(d[0]))continue;seenDg.add(d[0]);if(d[1]!==me)continue;const tr=rend.get(d[2]);
@@ -492,7 +523,7 @@ export function createFishClient(env){
     for(let k=0;k<2;k++){const sg=k?1:-1;for(let i=0;i<7;i++){const t=i/6,c=1-Math.pow(2*t-1,2),px=cx0+(t-.5)*aw,py=cy1+sg*(gap+c*bul),s=sz[i]*u;x.beginPath();x.ellipse(px,py,s*.62,s*1.15,-sg*(t-.5)*1.1,0,7);x.fill();x.stroke()}}
     x.globalAlpha=1}}
   /* haut : espèce, niveau, compteur de croissance, serveur */
-  ot(STG[si][1].toUpperCase(),lft,top+18*u,F(900,18),"#fff");
+  ot(stN(selIdx(),si).toUpperCase(),lft,top+18*u,F(900,18),"#fff");
   if(cp){ot("NIV "+(si+1)+" · "+fmtm(m)+"/"+(nx?nx[0]:"MAX"),lft,top+36*u,F(900,12),"#7dffa1");
    if(S){const rank=S.p.slice().sort((a,b)=>b[6]-a[6]).findIndex(q=>q[0]===me)+1;ot(getCode()+" · "+S.p.length+" {fish}"+(rank?" · #"+rank:""),lft,top+53*u,F(800,11),"#cfe9f5",0,3*u)}}
   else{ot("NIVEAU "+(si+1),lft,top+36*u,F(800,12),"#9be37a");ot("CROISSANCE "+fmtm(m)+"/"+(nx?nx[0]:"MAX"),W/2,top+16*u,F(900,15),"#7dffa1","center");
@@ -641,7 +672,7 @@ export function createFishClient(env){
  ".fm .cn i{width:20px;height:20px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff3a0,#ffd23f 55%,#b58a12);border:1.5px solid #8a6508}"+
  ".fm .grid{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;max-width:min(780px,96vw)}"+
  ".fm .card{width:min(172px,44vw);padding:12px;border-radius:16px;background:#0b2436dd;border:2px solid #ffffff30;display:flex;flex-direction:column;gap:6px;align-items:center}.fm .card.sel{border-color:#7ccf1b;box-shadow:0 0 18px #7ccf1b66}.fm .card.lock{opacity:.6}"+
- ".fm .ic{font-size:clamp(34px,9vw,52px);line-height:1}.fm .card p{margin:0;font-size:12px;font-weight:600;color:#cfe9f5;line-height:1.3}"+
+ ".fm .ic{font-size:clamp(34px,9vw,52px);line-height:1}.fm .card p.fin{color:#9be37a;font-weight:800;font-size:11px}.fm .card p{margin:0;font-size:12px;font-weight:600;color:#cfe9f5;line-height:1.3}"+
  ".fm .card .a{width:100%;padding:8px;border-radius:10px;font-size:13px;background:#2f86c6}.fm .card.sel .a{background:#4f9e12}.fm .card .a[disabled]{background:#3a4a56;color:#9fb0bc}"+
  ".fm .back{background:#ffffff1f;padding:9px 22px;border-radius:12px;font-size:14px}"+
  ".fm .row{display:flex;justify-content:space-between;align-items:center;gap:14px;width:min(420px,90vw);padding:12px 16px;border-radius:14px;background:#0b2436dd;border:2px solid #ffffff26;font-weight:800;font-size:15px;text-align:left;box-sizing:border-box}"+
@@ -654,7 +685,7 @@ function render(){if(!menuEl)return;const keepY=lastScr===scr?menuEl.scrollTop:0
   if(scr==="main")h+=`<h1><small>MODA</small>FEED &amp; GROW<br>FISH</h1><button class="b p" data-a="play">${ico("play")} JOUER</button><button class="b" data-a="fish">${ico("fish")} POISSONS</button><button class="b" data-a="set">${ico("gear")} PARAMÈTRES</button><div class="tip">Poisson choisi : ${fishSvg(cur).replace('width="86" height="54"','width="34" height="21"')} ${cur.name}</div>${fbBad?`<div class="tip">${ico("warn")} Pièces non enregistrées sur ton compte (hors ligne ?)</div>`:""}`;
   else if(scr==="fish"){h+=`<h1 style="font-size:clamp(22px,5vw,34px)">POISSONS</h1><div class="grid">`+FISHES.map(f=>{const own=owned.includes(f.id),sel=f.id===selId,can=own||(f.price!=null&&coins>=f.price);
     const lab=f.soon?"Bientôt":sel?ico("check")+" Sélectionné":own?"Choisir":f.price==null?"Bientôt":"Acheter · "+f.price+" "+ico("coin"),dis=f.soon||sel||(!own&&!can);
-    return `<div class="card${sel?" sel":""}${f.soon?" lock":""}"><div class="ic">${fishSvg(f)}</div><b>${f.name}</b><p>${f.desc}</p>${statsH(f)}<button class="a" data-a="${own?"pick":"buy"}" data-id="${f.id}"${dis?" disabled":""}>${lab}</button></div>`}).join("")+`</div><div class="tip">Gagne des pièces ${ico("coin")} en tuant des poissons (plus ton niveau est haut, plus ça rapporte) et en montant de niveau.</div><button class="back" data-a="main">← Retour</button>`}
+    return `<div class="card${sel?" sel":""}${f.soon?" lock":""}"><div class="ic">${fishSvg(f)}</div><b>${f.name}</b><p>${f.desc}</p><p class="fin">${f.st?f.st[0]+" → "+f.st[f.st.length-1]:""}</p>${statsH(f)}<button class="a" data-a="${own?"pick":"buy"}" data-id="${f.id}"${dis?" disabled":""}>${lab}</button></div>`}).join("")+`</div><div class="tip">Gagne des pièces ${ico("coin")} en tuant des poissons (plus ton niveau est haut, plus ça rapporte) et en montant de niveau.</div><button class="back" data-a="main">← Retour</button>`}
   else h+=`<h1 style="font-size:clamp(22px,5vw,34px)">PARAMÈTRES</h1><div class="row">${ico("mouse","1.3em")} Pilotage à la souris<button class="tg${msOn?" on":""}" data-a="tgm">${msOn?"OUI":"NON"}</button></div><div class="row">${ico("vib","1.3em")} Vibrations<button class="tg${vibOn?" on":""}" data-a="tgv">${vibOn?"OUI":"NON"}</button></div><div class="tip">Le son se coupe avec le bouton ${ico("snd")} en haut à droite.<br>← → tourner · ↑ ↓ monter/descendre · Espace : mordre · Maj : sprint · C : freiner · M : souris</div><button class="back" data-a="main">← Retour</button>`;
   menuEl.innerHTML=h;lastScr=scr;menuEl.scrollTop=keepY}
  function act(a,id){if(!menuOn)return;
